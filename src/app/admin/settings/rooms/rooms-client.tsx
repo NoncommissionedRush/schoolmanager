@@ -61,14 +61,10 @@ function RoomDialog({
 }) {
   const t = useTranslations("rooms");
   const render = useMessage();
-  const [kind, setKind] = useState<string>(room?.kind ?? "PHYSICAL");
   return (
     <FormDialog
       open={open}
-      onOpenChange={(next) => {
-        if (next) setKind(room?.kind ?? "PHYSICAL");
-        onOpenChange(next);
-      }}
+      onOpenChange={onOpenChange}
       title={room ? t("editTitle") : t("newTitle")}
       submitLabel={room ? t("editSubmit") : t("create")}
       schema={roomSchema}
@@ -79,6 +75,17 @@ function RoomDialog({
         for (const warning of data.warnings) toast.warning(render(warning));
       }}
     >
+      <RoomFields room={room} />
+    </FormDialog>
+  );
+}
+
+/** Mounted on every opening, so the kind starts from the saved value. */
+function RoomFields({ room }: { room?: Room }) {
+  const t = useTranslations("rooms");
+  const [kind, setKind] = useState<string>(room?.kind ?? "PHYSICAL");
+  return (
+    <>
       <TextField
         name="name"
         label={t("field.name")}
@@ -116,7 +123,7 @@ function RoomDialog({
           defaultValue={room?.meetingUrl}
         />
       </div>
-    </FormDialog>
+    </>
   );
 }
 

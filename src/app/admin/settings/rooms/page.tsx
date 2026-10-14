@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { DoorOpen, ExternalLink, Video } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
@@ -26,12 +27,11 @@ import { listRooms } from "@/server/admin/rooms/service";
 import { schoolToday } from "@/server/admin/shared";
 
 import { NewRoomButton, RoomRowActions } from "./rooms-client";
+import { TableSkeleton } from "@/components/admin/table-skeleton";
 
 const PATH = "/admin/settings/rooms";
 
-export default async function RoomsPage({
-  searchParams,
-}: PageProps<"/admin/settings/rooms">) {
+async function RoomsPage({ searchParams }: PageProps<"/admin/settings/rooms">) {
   const { db, viewer } = await adminContext();
   const t = await getTranslations("rooms");
   const tc = await getTranslations("common");
@@ -183,5 +183,15 @@ export default async function RoomsPage({
         </>
       )}
     </div>
+  );
+}
+
+// Own Suspense boundary: client navigations between admin pages re-render
+// below the shared layout, so the shell's boundary doesn't cover them.
+export default function Page(props: Parameters<typeof RoomsPage>[0]) {
+  return (
+    <Suspense fallback={<TableSkeleton />}>
+      <RoomsPage {...props} />
+    </Suspense>
   );
 }

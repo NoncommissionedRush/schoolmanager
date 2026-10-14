@@ -1,1 +1,72 @@
-{}
+{
+  "title": "Students",
+  "count": "{count, plural, one {# active student} other {# active students}}",
+  "new": "New student",
+  "newTitle": "New student",
+  "create": "Create student",
+  "search": "Search by name, email or phone",
+  "entities": "students",
+  "caption": "{count, plural, one {Students, # result} other {Students, # results}}",
+  "back": "Students",
+  "filter": {
+    "level": "Level",
+    "noLevel": "No level",
+    "group": "Group",
+    "noGroup": "Not in any group",
+    "any": "Any"
+  },
+  "col": {
+    "name": "Name",
+    "email": "Email",
+    "level": "Level",
+    "groups": "Groups",
+    "phone": "Phone"
+  },
+  "field": {
+    "level": "Level",
+    "levelHint": "Used to match replacement lessons to the right level.",
+    "noLevel": "No level",
+    "phone": "Phone",
+    "addToGroup": "Add to group",
+    "noGroup": "Don't add to a group yet",
+    "group": "Group",
+    "showAllLevels": "Show groups of all levels",
+    "chooseGroup": "Choose a group"
+  },
+  "tab": {
+    "profile": "Profile",
+    "groups": "Groups"
+  },
+  "groups": {
+    "current": "Current groups",
+    "past": "Past groups",
+    "group": "Group",
+    "type": "Type",
+    "level": "Level",
+    "teachers": "Teachers",
+    "joined": "Joined",
+    "left": "Left",
+    "remove": "Remove from group",
+    "removeFrom": "Remove from {group}",
+    "removeTitle": "Remove {name} from {group}?",
+    "removeDate": "Last day in the group",
+    "add": "Add to group",
+    "addTitle": "Add {name} to a group",
+    "addSubmit": "Add to group",
+    "noneCurrent": "{name} isn't in any group yet.",
+    "nonePast": "No past groups.",
+    "noneAvailable": "No group with free places matches. Show all levels or increase a group's capacity."
+  },
+  "levelMismatch": "{name} is in {group} ({level}). Changing the level doesn't move them to another group.",
+  "archive": {
+    "leavesGroups": "{firstName} will leave: {groups}."
+  },
+  "warning": {
+    "notAddedToGroup": "The student was created, but the group filled up in the meantime. Add them to another group."
+  },
+  "empty": {
+    "title": "No students yet",
+    "description": "Add students, then enrol them in groups.",
+    "action": "Add student"
+  }
+}

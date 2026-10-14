@@ -9,7 +9,15 @@ import {
 
 describe("navigationFor", () => {
   it("shows only shipped items (P0: the dashboards)", () => {
-    expect(navigationFor("ADMIN", 0).map((i) => i.href)).toEqual(["/admin"]);
+    // The admin data screens (CARM-24) ship ahead of the rest of P1.
+    expect(navigationFor("ADMIN", 0).map((i) => i.href)).toEqual([
+      "/admin",
+      "/admin/students",
+      "/admin/teachers",
+      "/admin/groups",
+      "/admin/levels",
+      "/admin/settings",
+    ]);
     expect(navigationFor("TEACHER", 0).map((i) => i.href)).toEqual([
       "/teacher",
     ]);

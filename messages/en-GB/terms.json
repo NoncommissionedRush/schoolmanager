@@ -1,1 +1,59 @@
-{}
+{
+  "title": "Terms & holidays",
+  "description": "Terms set the dates your timetable runs; holidays skip lessons.",
+  "termsHeading": "Terms",
+  "new": "New term",
+  "newTitle": "New term",
+  "editTitle": "Edit term",
+  "create": "Create term",
+  "editSubmit": "Save changes",
+  "caption": "Terms, {count} results",
+  "field": {
+    "name": "Name",
+    "namePlaceholder": "e.g. Autumn 2026",
+    "start": "First day",
+    "end": "Last day"
+  },
+  "col": {
+    "name": "Name",
+    "dates": "Dates",
+    "status": "Status",
+    "slots": "Slots",
+    "holidays": "Holidays"
+  },
+  "status": {
+    "draft": "Draft",
+    "published": "Published",
+    "current": "Current"
+  },
+  "openTimetable": "Open timetable",
+  "error": {
+    "endBeforeStart": "The last day must be on or after the first day.",
+    "cannotRemovePast": "A published term can't start or end before today."
+  },
+  "warning": {
+    "overlap": "Overlaps with {term}. Lessons of both terms will run in parallel."
+  },
+  "impact": {
+    "datesChanged": "Lessons outside the new dates are removed (or cancelled if they have history); new dates get lessons."
+  },
+  "delete": {
+    "cascade": "Its {slots, plural, one {# slot} other {# slots}} and {holidays, plural, one {# term holiday} other {# term holidays}} are deleted too. School-wide holidays stay.",
+    "publishedHint": "Published terms can't be deleted"
+  },
+  "empty": {
+    "title": "No terms yet",
+    "description": "A term sets the dates your timetable runs. Start with the current one.",
+    "action": "Add term"
+  },
+  "toast": {
+    "saved": "Term saved."
+  },
+  "result": {
+    "toast": "{action} {changes}.",
+    "created": "{count, plural, one {# lesson created} other {# lessons created}}",
+    "removed": "{count, plural, one {# future lesson removed} other {# future lessons removed}}",
+    "cancelled": "{count, plural, one {# cancelled because it has history} other {# cancelled because they have history}}",
+    "none": "No lessons changed"
+  }
+}

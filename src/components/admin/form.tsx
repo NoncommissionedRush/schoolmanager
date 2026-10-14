@@ -99,18 +99,25 @@ export function AdminForm<T>({
     return result.ok ? {} : result.fieldErrors;
   }
 
+  /**
+   * On blur: show the field's error if it's invalid, but never clear one —
+   * removing an error line shrinks the dialog, and a click on Save that
+   * caused the blur would then miss the moved button. Errors clear while
+   * typing instead (`clearFixedError`).
+   */
   function validateField(name: string) {
-    const fieldErrors = validate();
-    const without = (errors: FieldErrors) =>
+    const error = validate()[name];
+    if (error) setClientErrors((current) => ({ ...current, [name]: error }));
+  }
+
+  function clearFixedError(name: string) {
+    if (!errors[name] || validate()[name]) return;
+    const without = (current: FieldErrors) =>
       Object.fromEntries(
-        Object.entries(errors).filter(([key]) => key !== name),
+        Object.entries(current).filter(([key]) => key !== name),
       );
     setServerErrors(without);
-    setClientErrors((current) =>
-      fieldErrors[name]
-        ? { ...without(current), [name]: fieldErrors[name] }
-        : without(current),
-    );
+    setClientErrors(without);
   }
 
   const formError =
@@ -124,6 +131,10 @@ export function AdminForm<T>({
         action={formAction}
         noValidate
         className={className}
+        onChange={(event) => {
+          const name = (event.target as unknown as HTMLInputElement).name;
+          if (name) clearFixedError(name);
+        }}
         onSubmit={(event) => {
           const fieldErrors = validate();
           setClientErrors(fieldErrors);

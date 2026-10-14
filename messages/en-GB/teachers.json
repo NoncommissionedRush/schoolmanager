@@ -1,4 +1,71 @@
 {
+  "title": "Teachers",
+  "count": "{count, plural, one {# active teacher} other {# active teachers}}",
+  "entities": "teachers",
+  "new": "New teacher",
+  "newTitle": "New teacher",
+  "create": "Create teacher",
+  "editTitle": "Edit teacher",
+  "search": "Search by name or email",
+  "caption": "Teachers, {count} results",
+  "col": {
+    "name": "Name",
+    "email": "Email",
+    "groups": "Groups",
+    "lessonsPerWeek": "Lessons / week",
+    "status": "Status"
+  },
+  "field": {
+    "color": "Timetable colour",
+    "colorHint": "Used for the dot next to {name} in timetable views.",
+    "bio": "Bio"
+  },
+  "color": {
+    "blue": "Blue",
+    "teal": "Teal",
+    "green": "Green",
+    "orange": "Orange",
+    "rose": "Rose",
+    "purple": "Purple",
+    "slate": "Slate",
+    "amber": "Amber",
+    "custom": "Custom colour"
+  },
+  "tab": {
+    "label": "Teacher details",
+    "profile": "Profile",
+    "availability": "Availability",
+    "groups": "Groups"
+  },
+  "action": {
+    "edit": "Edit",
+    "availability": "Availability",
+    "more": "More actions for {name}"
+  },
+  "profile": {
+    "title": "Profile"
+  },
+  "groups": {
+    "empty": "{name} has no groups in {term}.",
+    "noTerms": "No terms yet. Add a term to plan the timetable.",
+    "term": "Term",
+    "caption": "Groups of {name} in {term}",
+    "col": {
+      "group": "Group",
+      "level": "Level",
+      "time": "Weekday and time",
+      "room": "Room"
+    },
+    "time": "{weekday} {from}–{to}",
+    "validFrom": "from {date}",
+    "validUntil": "until {date}",
+    "noRoom": "No room"
+  },
+  "empty": {
+    "title": "No teachers yet",
+    "description": "Add your teachers so you can assign them to groups and the timetable.",
+    "action": "Add teacher"
+  },
   "blocked": {
     "hasSlots": "{name} still teaches {count, plural, one {# timetable slot} other {# timetable slots}} in current or upcoming terms. End or reassign them in the timetable first.",
     "openTimetable": "Open timetable",

@@ -1,6 +1,20 @@
 {
   "title": "Administrators",
+  "description": "{count, plural, one {# active administrator} other {# active administrators}}",
+  "entities": "administrators",
   "new": "New administrator",
+  "newTitle": "New administrator",
+  "create": "Create administrator",
+  "search": "Search by name or email",
+  "caption": "Administrators, {count} results",
+  "col": {
+    "name": "Name",
+    "email": "Email",
+    "status": "Status"
+  },
+  "archive": {
+    "consequenceAccess": "They lose access to all admin screens."
+  },
   "error": {
     "lastAdmin": "You can't archive the last administrator.",
     "self": "You can't archive your own account."

@@ -1,1 +1,45 @@
-{}
+{
+  "title": "Holidays",
+  "new": "Add holiday",
+  "newTitle": "New holiday",
+  "editTitle": "Edit holiday",
+  "create": "Add holiday",
+  "editSubmit": "Save changes",
+  "caption": "Holidays, {count} results",
+  "field": {
+    "name": "Name",
+    "namePlaceholder": "e.g. Christmas break",
+    "start": "First day",
+    "end": "Last day",
+    "scope": "Applies to",
+    "term": "Term",
+    "termPlaceholder": "Choose a term"
+  },
+  "col": {
+    "name": "Name",
+    "dates": "Dates",
+    "appliesTo": "Applies to"
+  },
+  "scope": {
+    "school": "All terms (school-wide)",
+    "term": "Only {term}",
+    "onlyTerm": "Only one term",
+    "allTerms": "All terms"
+  },
+  "filter": {
+    "label": "Applies to",
+    "all": "All",
+    "school": "School-wide"
+  },
+  "outsideTerm": "Outside term dates",
+  "confirm": {
+    "add": "Lessons on these dates from today on are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled (\"Holiday\").",
+    "delete": "Lessons on these dates come back from today on."
+  },
+  "toast": {
+    "saved": "Holiday saved.",
+    "deleted": "Holiday deleted."
+  },
+  "empty": "No holidays yet.",
+  "noMatch": "No holidays match this filter."
+}
