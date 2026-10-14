@@ -69,6 +69,13 @@ Lesson blocks use a tinted surface, a 3 px left border and dark text. The
 
 All text/surface pairs above are ≥ 7:1.
 
+**Generator tokens (P4)** — defined in `timetable-generator.md` §3.3:
+`generated-draft` (indigo-50 surface, indigo-800 band with white text,
+2 px dashed indigo-600 grid frame, indigo-900 text, icon `wand-sparkles`)
+marks anything that shows a generated draft; `diff-new` (green-700 outline),
+`diff-moved` (blue-700 outline) and `diff-removed` (slate dashed ghost
+block) mark compare states, always with a text badge.
+
 ### 1.3 Dark mode (not in v1 — reference only)
 
 Decided 2026-10-14: v1 ships light only. Kept for later; when implemented, use `next-themes`
