@@ -1,7 +1,14 @@
 "use client";
 
 import { cn } from "cn";
-import { Ban, CalendarX, User, UserRoundCog, Users } from "lucide-react";
+import {
+  Ban,
+  CalendarX,
+  Repeat,
+  User,
+  UserRoundCog,
+  Users,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import type { LessonView, ViewerKind } from "@/server/timetable/week";
@@ -14,16 +21,22 @@ export type LessonTone =
   | "substitute"
   | "cancelled"
   | "covered"
-  | "notAttending";
+  | "notAttending"
+  | "replacement";
 
 /** The signed-in student cancelled this lesson (absences.md §5.8). */
 export const isNotAttending = (lesson: LessonView) =>
   lesson.attendance?.cancelled != null;
 
+/** The signed-in student's replacement or rescheduled lesson (§5.8). */
+export const isBooking = (lesson: LessonView) =>
+  lesson.attendance?.booking != null && lesson.status !== "CANCELLED";
+
 /** Token family of a lesson block (timetable.md §6.2). */
 export function lessonTone(lesson: LessonView): LessonTone {
   if (isNotAttending(lesson)) return "notAttending";
   if (lesson.status === "CANCELLED") return "cancelled";
+  if (isBooking(lesson)) return "replacement";
   if (lesson.teacherRole === "covered") return "covered";
   if (lesson.substitute) return "substitute";
   return lesson.group.type === "ONE_ON_ONE" ? "individual" : "group";
@@ -41,6 +54,8 @@ export const toneClasses: Record<LessonTone, string> = {
     "border-lesson-cancelled bg-lesson-cancelled-surface text-lesson-cancelled-text",
   notAttending:
     "border-lesson-cancelled bg-lesson-cancelled-surface text-lesson-cancelled-text",
+  replacement:
+    "border-lesson-replacement bg-lesson-replacement-surface text-lesson-replacement-text",
 };
 
 export function ToneIcon({
@@ -53,13 +68,15 @@ export function ToneIcon({
   const Icon =
     tone === "notAttending"
       ? CalendarX
-      : tone === "cancelled"
-        ? Ban
-        : tone === "substitute" || tone === "covered"
-          ? UserRoundCog
-          : type === "ONE_ON_ONE"
-            ? User
-            : Users;
+      : tone === "replacement"
+        ? Repeat
+        : tone === "cancelled"
+          ? Ban
+          : tone === "substitute" || tone === "covered"
+            ? UserRoundCog
+            : type === "ONE_ON_ONE"
+              ? User
+              : Users;
   return <Icon aria-hidden="true" className="size-3.5 shrink-0" />;
 }
 
@@ -67,6 +84,8 @@ export function ToneIcon({
 export function useLessonText(role: ViewerKind) {
   const t = useTranslations("timetable");
   const ta = useTranslations("absences");
+  const tr = useTranslations("replacements");
+  const ts = useTranslations("reschedule");
   return (lesson: LessonView) => {
     const time = `${formatMinutes(lesson.startMinute)}–${formatMinutes(lesson.endMinute)}`;
     const oneOnOne = lesson.group.type === "ONE_ON_ONE";
@@ -99,6 +118,12 @@ export function useLessonText(role: ViewerKind) {
     if (isNotAttending(lesson)) badges.push(ta("notAttending"));
     else if (lesson.status === "CANCELLED") {
       badges.push(t("status.cancelled"));
+    } else if (isBooking(lesson)) {
+      badges.push(
+        lesson.attendance!.booking!.kind === "replacement"
+          ? tr("badge")
+          : ts("badge"),
+      );
     }
     if (lesson.teacherRole === "substituting")
       badges.push(t("substitute.youAre"));

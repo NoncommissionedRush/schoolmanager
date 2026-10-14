@@ -20,6 +20,10 @@ import type { LessonNotes } from "@/server/notes/teacher-notes";
 import type { LessonRosterView } from "@/server/replacements/views";
 
 import { loadEarlierNotesAction } from "../actions";
+import {
+  AdminRescheduleActions,
+  type AdminRescheduleInfo,
+} from "./reschedule-dialog";
 
 /**
  * Admin lesson page body (lessons.md §7): the teacher page's layout, read
@@ -33,6 +37,7 @@ export function AdminLessonClient({
   query,
   timetableHref,
   slotHref,
+  reschedule,
 }: {
   lesson: LessonPage;
   internalNotes: LessonNotes;
@@ -43,6 +48,8 @@ export function AdminLessonClient({
   query: string;
   timetableHref: string;
   slotHref: string | null;
+  /** 1-on-1 lessons: the admin reschedule (replacements.md §7). */
+  reschedule: AdminRescheduleInfo | null;
 }) {
   const t = useTranslations("lessons");
   const tl = useTranslations("lessonLog");
@@ -93,6 +100,7 @@ export function AdminLessonClient({
             {t("admin.openSlot")}
           </Link>
         )}
+        {reschedule && <AdminRescheduleActions info={reschedule} />}
       </div>
       <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
         <div className="flex flex-col gap-6 lg:col-span-8">

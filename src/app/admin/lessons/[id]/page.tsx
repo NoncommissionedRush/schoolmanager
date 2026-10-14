@@ -6,6 +6,7 @@ import { LessonPageSkeleton } from "@/components/lessons/lesson-page-skeleton";
 import { adminContext } from "@/server/admin/context";
 import { loadAdminLesson } from "@/server/lessons/admin";
 import { loadLessonNotes } from "@/server/notes/teacher-notes";
+import { loadAdminRescheduleInfo } from "@/server/replacements/reschedule";
 import { loadLessonRoster } from "@/server/replacements/views";
 import { mondayOf } from "@/server/timetable/week";
 
@@ -21,9 +22,10 @@ async function AdminLesson({
   const now = new Date();
   const lesson = await loadAdminLesson(db, id, now, viewer.school.timezone);
   if (!lesson) notFound();
-  const [internalNotes, roster] = await Promise.all([
+  const [internalNotes, roster, reschedule] = await Promise.all([
     loadLessonNotes(db, { role: viewer.role }, lesson.id, now),
     loadLessonRoster(db, lesson.id, now),
+    loadAdminRescheduleInfo(db, lesson.id, now),
   ]);
 
   const t = await getTranslations("lessons.back");
@@ -41,6 +43,7 @@ async function AdminLesson({
       back={back}
       query={fromList ? "?from=list" : ""}
       timetableHref={timetableHref}
+      reschedule={reschedule}
       slotHref={
         lesson.slotId
           ? `/admin/timetable/edit?term=${lesson.termId}&slot=${lesson.slotId}&asOf=${lesson.date}`

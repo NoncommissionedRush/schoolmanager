@@ -26,7 +26,9 @@
   "cancelReasons": {
     "HOLIDAY": "Holiday",
     "TIMETABLE_CHANGED": "Timetable changed",
-    "STUDENT_CANCELLED": "Cancelled by student"
+    "STUDENT_CANCELLED": "Cancelled by student",
+    "RESCHEDULED": "Rescheduled",
+    "SCHOOL_CANCELLED": "Cancelled by the school"
   },
   "errors": {
     "NOT_FOUND": "This item no longer exists. Reload the page and try again.",

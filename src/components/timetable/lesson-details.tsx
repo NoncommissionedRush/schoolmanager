@@ -5,12 +5,15 @@ import {
   ClipboardList,
   ExternalLink,
   NotebookPen,
+  Repeat,
 } from "lucide-react";
 import Link from "next/link";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { useState } from "react";
 
+import { CancelBookingDialog } from "@/components/absences/cancel-booking-dialog";
 import { CancelLessonDialog } from "@/components/absences/cancel-lesson-dialog";
+import { RescheduleSheet } from "@/components/absences/reschedule-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -40,6 +43,7 @@ export function LessonDetailsSheet({
   const tc = useTranslations("common");
   const tr = useTranslations("scheduling.cancelReasons");
   const tl = useTranslations("lessons");
+  const tb = useTranslations("bookings");
   const formatDate = useDateFormat();
   const mobile = useIsMobile();
   // "View lesson" only once the lesson has started (lessons.md §2); the
@@ -106,6 +110,30 @@ export function LessonDetailsSheet({
                     </span>
                   )}
               </dd>
+              {attendance?.booking && lesson.status !== "CANCELLED" && (
+                <>
+                  <dt className="text-muted-foreground">{tb("row")}</dt>
+                  <dd className="flex items-start gap-2">
+                    <Repeat
+                      aria-hidden="true"
+                      className="mt-1 size-4 shrink-0 text-lesson-replacement"
+                    />
+                    {attendance.booking.kind === "replacement"
+                      ? tb("rowText", {
+                          date: formatDate(
+                            attendance.booking.originalDate,
+                            "weekdayLong",
+                          ),
+                        })
+                      : tb("rowTextRescheduled", {
+                          date: formatDate(
+                            attendance.booking.originalDate,
+                            "weekdayLong",
+                          ),
+                        })}
+                  </dd>
+                </>
+              )}
               <dt className="text-muted-foreground">{t("details.when")}</dt>
               <dd>
                 {t("details.whenValue", {
@@ -269,7 +297,11 @@ function NotAttending({
   );
 }
 
-/** "Can't attend?" with the cutoff caption, and the cancel dialog (§5.1). */
+/**
+ * "Can't attend?" with the cutoff caption (§5.1): the cancel dialog for a
+ * group lesson, the Reschedule sheet for a 1-on-1 before its cutoff (§5.3),
+ * and "Cancel booking" for a replacement (§5.7).
+ */
 function CantAttend({
   lesson,
   open,
@@ -280,9 +312,12 @@ function CantAttend({
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("absences");
+  const tb = useTranslations("bookings");
   const format = useFormatter();
   const now = useNow({ updateInterval: 30_000 });
+  const [rescheduling, setRescheduling] = useState(false);
   const attendance = lesson.attendance!;
+  const booking = attendance.booking;
   const cutoff = new Date(attendance.cutoffAt);
   const dateTime = format.dateTime(cutoff, {
     weekday: "short",
@@ -292,12 +327,58 @@ function CantAttend({
     minute: "2-digit",
   });
   const before = now.getTime() <= cutoff.getTime();
+  const oneOnOne = lesson.group.type === "ONE_ON_ONE";
+  if (booking?.kind === "replacement" && booking.bookingId) {
+    return (
+      <div className="flex flex-col items-start gap-2 px-4 pb-4">
+        <Button variant="outline" size="lg" onClick={() => onOpenChange(true)}>
+          <CalendarX aria-hidden="true" />
+          {tb("cancelBooking")}
+        </Button>
+        <p className={before ? "text-sm text-info" : "text-sm text-warning"}>
+          {before
+            ? attendance.cutoffMinutes === 0
+              ? t("cutoff.beforeZero")
+              : t("cutoff.before", { dateTime })
+            : t("cutoff.after", { dateTime })}
+        </p>
+        <CancelBookingDialog
+          open={open}
+          onOpenChange={onOpenChange}
+          booking={{
+            bookingId: booking.bookingId,
+            groupName: lesson.group.name,
+            date: lesson.date,
+            startMinute: lesson.startMinute,
+            endMinute: lesson.endMinute,
+            startsAt: lesson.startsAt,
+            cutoffAt: attendance.cutoffAt,
+            credit: booking.credit,
+          }}
+        />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-start gap-2 px-4 pb-4">
-      <Button variant="outline" size="lg" onClick={() => onOpenChange(true)}>
+      <Button
+        variant="outline"
+        size="lg"
+        onClick={() =>
+          oneOnOne && before ? setRescheduling(true) : onOpenChange(true)
+        }
+      >
         <CalendarX aria-hidden="true" />
         {t("cantAttend")}
       </Button>
+      {oneOnOne && (
+        <RescheduleSheet
+          source={{ lessonId: lesson.id }}
+          open={rescheduling}
+          onOpenChange={setRescheduling}
+          onCancelLater={() => onOpenChange(true)}
+        />
+      )}
       <p className={before ? "text-sm text-info" : "text-sm text-warning"}>
         {before
           ? attendance.cutoffMinutes === 0

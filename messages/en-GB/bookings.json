@@ -1,0 +1,19 @@
+{
+  "section": "Upcoming bookings ({count})",
+  "cancelBooking": "Cancel booking",
+  "cancelAnyway": "Cancel booking anyway",
+  "keep": "Keep my booking",
+  "row": "Booking",
+  "rowText": "Replacement for your lesson on {date}",
+  "rowTextRescheduled": "Rescheduled from your lesson on {date}",
+  "cancel": {
+    "title": "Cancel your booking for {group} on {date}?",
+    "creditBack": "Your credit from {sourceDate} comes back, valid until {expiry}.",
+    "creditLost": "It's after the cutoff, so your credit is used up.",
+    "creditExpired": "Your credit expired on {date}, so it won't come back.",
+    "lateNotice": "Your teacher will see that you're not coming.",
+    "doneBack": "Booking cancelled. Your credit is back.",
+    "done": "Booking cancelled.",
+    "started": "This lesson has already started, so the booking can't be cancelled."
+  }
+}

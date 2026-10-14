@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CircleCheck, Circle, School } from "lucide-react";
+import { CircleCheck, Circle, Repeat, School } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { adminContext } from "@/server/admin/context";
 import { loadSetupCounts, setupChecklist } from "@/server/admin/setup";
+import { countReviewQueue } from "@/server/replacements/booking";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 
 async function AdminDashboardPage() {
@@ -21,9 +22,28 @@ async function AdminDashboardPage() {
   const { db, viewer } = await adminContext();
   const t = await getTranslations("dashboard.admin");
   const checklist = setupChecklist(await loadSetupCounts(db));
+  const toReview = await countReviewQueue(db, new Date());
   return (
     <div className="mx-auto flex max-w-screen-2xl flex-col gap-6">
       <DashboardHeader viewer={viewer} />
+      {toReview > 0 && (
+        <Card className="max-w-2xl">
+          <CardHeader>
+            <CardTitle>
+              <h2>{t("attention")}</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href="/admin/absences?tab=review"
+              className="flex items-center gap-2 text-sm underline-offset-4 hover:underline"
+            >
+              <Repeat aria-hidden="true" className="size-4 text-warning" />
+              {t("toReview", { count: toReview })}
+            </Link>
+          </CardContent>
+        </Card>
+      )}
       {checklist.complete ? (
         <EmptyState
           icon={School}

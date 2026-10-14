@@ -13,5 +13,7 @@
   "oneOnOneCancelled": "{student} cancelled this lesson",
   "reportAbsence": "Report absence…",
   "actionsFor": "Actions for {name}",
-  "oneOnOneCancelledReason": "{student} cancelled this lesson · “{reason}”"
+  "oneOnOneCancelledReason": "{student} cancelled this lesson · “{reason}”",
+  "replacement": "Replacement",
+  "review": "Review replacements"
 }
