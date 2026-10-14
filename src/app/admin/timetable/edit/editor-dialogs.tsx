@@ -32,7 +32,11 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { Message } from "@/server/admin/result";
-import { issueRows, publishSummary } from "@/server/timetable/editor";
+import {
+  earliestEndDate,
+  issueRows,
+  publishSummary,
+} from "@/server/timetable/editor";
 import type { EditorData, EditorSlot } from "@/server/timetable/editor-data";
 import type { LessonChanges } from "@/server/timetable/service";
 
@@ -354,7 +358,7 @@ export function EndSlotDialog({
               id={id}
               type="date"
               value={date}
-              min={data.today}
+              min={earliestEndDate(data.today, data.term?.publishedAt != null)}
               max={data.term?.endDate}
               onChange={(e) => setDate(e.target.value || defaultDate)}
             />
@@ -368,11 +372,14 @@ export function EndSlotDialog({
       run={async () => {
         const result = await endSlotAction({ slotId: slot.id, lastDate: date });
         if (result.ok) {
+          const { outcome, lastDate, lessons } = result.data;
           toast.success(
-            t("toast.slotEndedResult", {
-              date: formatDate(date, "short"),
-              result: lessonResult(result.data.lessons),
-            }),
+            outcome === "deleted"
+              ? t("toast.slotEndedDeleted", { result: lessonResult(lessons) })
+              : t("toast.slotEndedResult", {
+                  date: formatDate(lastDate, "short"),
+                  result: lessonResult(lessons),
+                }),
           );
         }
         return result.ok ? { ok: true, data: undefined } : result;

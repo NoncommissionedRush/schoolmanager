@@ -8,6 +8,7 @@ import type { Conflict } from "@/server/scheduling";
 import {
   deleteSlot,
   endSlot,
+  type EndSlotResult,
   type LessonChanges,
   publishTerm,
   regenerateLessons,
@@ -82,9 +83,7 @@ export async function saveSlotAction(
 
 export async function endSlotAction(
   input: unknown,
-): Promise<
-  ActionResult<{ outcome: "ended" | "deleted"; lessons: LessonChanges }>
-> {
+): Promise<ActionResult<EndSlotResult>> {
   return runAdminAction(async ({ db, actor }) => {
     const parsed = endSlotSchema.safeParse(input);
     if (!parsed.success) return invalid;

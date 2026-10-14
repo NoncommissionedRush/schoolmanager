@@ -198,6 +198,7 @@
     "slotEnded": "Slot ends on {date}.",
     "slotSavedResult": "Slot saved. {result}",
     "slotEndedResult": "Slot ends on {date}. {result}",
+    "slotEndedDeleted": "Slot deleted: it had not started yet. {result}",
     "regenerated": "Lessons checked. {result}"
   },
   "end": {
