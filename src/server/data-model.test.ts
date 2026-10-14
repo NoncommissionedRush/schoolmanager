@@ -48,6 +48,8 @@ describe("data model tenancy", () => {
       ];
       for (const [line, target, args] of relations) {
         if (!tenantModelNames.has(target)) continue;
+        // The other side of a named self- or 1:1 relation defines no keys.
+        if (!args.includes("fields:")) continue;
         expect(args, line.trim()).toMatch(/references: \[schoolId, id\]/);
         expect(args, line.trim()).toMatch(/fields: \[schoolId, \w+\]/);
       }
