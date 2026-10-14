@@ -138,15 +138,15 @@ Teacher
 
 Student (bottom tabs marked ★)
 
-| Item                      | i18n key                         | Icon             | Phase                           |
-| ------------------------- | -------------------------------- | ---------------- | ------------------------------- |
-| ★ Home                    | `nav.home`                       | `house`          | P0                              |
-| ★ Timetable               | `nav.timetable`                  | `calendar-days`  | P1                              |
-| ★ Homework                | `nav.homework`                   | `clipboard-list` | P2                              |
-| ★ Absences & replacements | `nav.absencesShort` → "Absences" | `calendar-x`     | P3                              |
-| Attendance                | `nav.attendance`                 | `list-checks`    | P2                              |
-| Payments                  | `nav.payments`                   | `wallet`         | P6                              |
-| ★/More                    | `nav.more`                       | `menu`           | P0 (shown once > 4 items exist) |
+| Item                      | i18n key                         | Icon             | Phase                                           |
+| ------------------------- | -------------------------------- | ---------------- | ----------------------------------------------- |
+| ★ Home                    | `nav.home`                       | `house`          | P0                                              |
+| ★ Timetable               | `nav.timetable`                  | `calendar-days`  | P1                                              |
+| ★ Homework                | `nav.homework`                   | `clipboard-list` | P2                                              |
+| ★ Absences & replacements | `nav.absencesShort` → "Absences" | `calendar-x`     | P3                                              |
+| Lesson history            | `nav.lessonHistory`              | `history`        | P2 (replaces _Attendance_, see `lessons.md` §6) |
+| Payments                  | `nav.payments`                   | `wallet`         | P6                                              |
+| ★/More                    | `nav.more`                       | `menu`           | P0 (shown once > 4 items exist)                 |
 
 Until P1 ships, the student bottom bar is hidden (only one destination).
 

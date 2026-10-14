@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — Homework & text submissions (CARM-34)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .internal {
+        background: #f8fafc;
+        border: 1px dashed #475569;
+      }
+      .internal-band {
+        background: #1e293b;
+        color: #fff;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Homework</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* --------------------------------------------------------------- helpers */
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          destructive: "bg-destructive text-white",
+          disabled: "bg-slate-200 text-slate-500 cursor-not-allowed",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const badge = (t, tone = "muted") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+          dark: "bg-slate-800 text-white border-slate-800",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border ${c}">${t}</span>`;
+      };
+      const alert = (t, tone = "info") => {
+        const c = {
+          info: "bg-blue-50 text-blue-800 border-blue-300",
+          warning: "bg-amber-50 text-amber-800 border-amber-300",
+          danger: "bg-red-50 text-red-800 border-red-300",
+        }[tone];
+        return `<div role="${tone === "danger" ? "alert" : "status"}" class="rounded-md border px-3 py-2 ${c}">${t}</div>`;
+      };
+      const card = (inner, extra = "") =>
+        `<section class="rounded-lg border border-border bg-white p-6 ${extra}">${inner}</section>`;
+      const ATT = {
+        P: ["✓ Present", "bg-green-50 text-green-700 border-green-600"],
+        A: ["✗ Absent", "bg-red-50 text-red-700 border-red-600"],
+        E: ["⊘ Excused", "bg-blue-50 text-blue-700 border-blue-600"],
+      };
+      const attBadge = (s) =>
+        s === "P"
+          ? badge("✓ Present", "success")
+          : s === "A"
+            ? badge("✗ Absent", "danger")
+            : s === "E"
+              ? badge("⊘ Excused", "info")
+              : badge("Not recorded");
+      const STUDENTS = [
+        ["Eva Novak", "P", ""],
+        ["Jan Kos", "A", ""],
+        ["Lea Horak", "P", "Arrived 20 minutes late"],
+        ["Mia Lunt", "E", ""],
+        ["Petr Sova", "", ""],
+        ["Tom Bily", "", ""],
+      ];
+      function toggle(name, val, disabled, big) {
+        return `<div role="radiogroup" aria-label="Attendance for ${name}" class="inline-flex rounded-md border border-input overflow-hidden ${disabled ? "opacity-50" : ""}">${[
+          "P",
+          "A",
+          "E",
+        ]
+          .map(
+            (k, i) =>
+              `<button role="radio" aria-checked="${val === k}" ${disabled ? "disabled" : ""} class="${big ? "h-11" : "h-9"} px-3 text-sm font-medium ${i ? "border-l border-input" : ""} ${val === k ? ATT[k][1] + " border-2" : "bg-white text-slate-700"}">${ATT[k][0]}</button>`,
+          )
+          .join("")}</div>`;
+      }
+
+      /* ------------------------------------------------------------- screens */
+      const field = (label, control, hint = "", err = "") =>
+        `<div class="space-y-2"><label class="block font-medium">${label}</label>${control}${hint ? `<p class="text-xs text-muted-foreground">${hint}</p>` : ""}${err ? `<p class="text-xs text-destructive">${err}</p>` : ""}</div>`;
+      const input = (v = "", ph = "", err = false) =>
+        `<input class="h-9 w-full rounded-md border ${err ? "border-destructive" : "border-input"} px-3" value="${v}" placeholder="${ph}" />`;
+      const radio = (label, on, extra = "", disabled = false) =>
+        `<label class="flex items-start gap-2 ${disabled ? "opacity-50" : ""}"><span class="mt-0.5 w-4 h-4 rounded-full border-2 ${on ? "border-primary bg-primary ring-2 ring-white ring-inset" : "border-input"}"></span><span>${label}${extra}</span></label>`;
+      const desktopFrame = (inner) =>
+        `<div class="w-[1180px] bg-muted rounded-lg border border-slate-300 p-6 space-y-4 relative">${inner}</div>`;
+      const overlay = (inner) =>
+        `<div class="absolute inset-0 bg-black/50 rounded-lg flex items-start justify-center pt-16">${inner}</div>`;
+
+      function dialog(i) {
+        // create | from list | validation | edit with answers | delete with answers | no next lesson
+        const edit = i === 3;
+        if (i === 4)
+          return desktopFrame(
+            `<h1 class="text-2xl font-semibold">Workbook p. 34, ex. 1–3</h1><div class="h-64"></div>` +
+              overlay(
+                `<div role="alertdialog" class="bg-white rounded-lg shadow-lg p-6 w-[440px] space-y-3"><h2 class="text-lg font-semibold">Delete "Workbook p. 34, ex. 1–3"?</h2><p class="text-muted-foreground">4 student answers will be deleted too. This can't be undone.</p><div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Delete homework and answers", "destructive")}</div></div>`,
+              ),
+          );
+        const dueBlock =
+          i === 5
+            ? radio(
+                "Next lesson",
+                false,
+                `<span class="block text-xs text-muted-foreground">This group has no upcoming lesson. Choose a date.</span>`,
+                true,
+              ) +
+              radio("Another lesson", false, "", true) +
+              radio(
+                "On a date",
+                true,
+                `<button class="mt-1 block h-9 rounded-md border border-input px-3">📅 Fri 31 Oct 2026</button><span class="block text-xs text-muted-foreground">Due at 23:59 on this day.</span>`,
+              )
+            : radio(
+                "Next lesson",
+                !edit,
+                ` <span class="text-muted-foreground tnum">(Wed 22 Oct, 17:00)</span>`,
+              ) +
+              radio(
+                "Another lesson",
+                edit,
+                edit
+                  ? `<button class="mt-1 block h-9 rounded-md border border-input px-3 tnum">Mon 27 Oct, 17:00 ▾</button>`
+                  : "",
+              ) +
+              radio("On a date", false);
+        return desktopFrame(
+          `<h1 class="text-2xl font-semibold">B1 Evening — lesson page</h1><div class="h-[520px]"></div>` +
+            overlay(`<div role="dialog" aria-labelledby="hd" class="bg-white rounded-lg shadow-lg p-6 w-[520px] space-y-4">
+              <h2 id="hd" class="text-lg font-semibold">${edit ? "Edit homework" : "Set homework"}</h2>
+              ${edit ? alert("4 students have already answered. They'll see the updated instructions.") : ""}
+              ${i === 1 ? field("Group (required)", `<button class="h-9 w-full rounded-md border border-input px-3 text-left">B1 Evening ▾</button>`) : `<p class="text-muted-foreground">B1 Evening · Set in lesson Mon 20 Oct</p>`}
+              ${field("Title (required)", input(i === 0 || i === 5 ? "" : edit ? "Workbook p. 34, ex. 1–3" : "", "e.g. Workbook p. 34, exercises 1–3", i === 2), "", i === 2 ? "Enter a title." : "")}
+              ${field("Instructions (optional)", `<textarea rows="4" class="w-full rounded-md border border-input p-2">${edit ? "Do exercises 1–3. Write full sentences." : ""}</textarea>`, "Students see this. Describe what to do and how to answer.")}
+              <fieldset class="space-y-2"><legend class="font-medium mb-2">Due (required)</legend>${dueBlock}${i === 2 ? `<p class="text-xs text-destructive">Choose a due lesson or date in the future.</p>` : ""}</fieldset>
+              ${edit ? `<p class="text-xs text-muted-foreground">Moving the deadline later lets students edit answers that haven't been reviewed.</p>` : ""}
+              <div class="flex justify-end gap-2 pt-2">${btn("Cancel", "outline")}${btn(edit ? "Save changes" : "Set homework")}</div></div>`),
+        );
+      }
+
+      function teacherList(i) {
+        const tabs = ["To review (2)", "Open", "Past"];
+        const sel = Math.min(i, 2);
+        const rows = [
+          [
+            "Essay: my last holiday",
+            "B1 Evening",
+            "Mon 20 Oct, 17:00 · lesson",
+            "5 / 6",
+            badge("3", "warning"),
+          ],
+          [
+            "Listening: podcast notes",
+            "A2 Kids",
+            "Fri 17 Oct",
+            "8 / 8",
+            badge("1", "warning"),
+          ],
+        ];
+        const openRows = [
+          [
+            "Workbook p. 34, ex. 1–3",
+            "B1 Evening",
+            "Wed 22 Oct, 17:00 · next lesson",
+            "2 / 6",
+            "—",
+          ],
+          [
+            "Present perfect quiz",
+            "Eva Novak 1-on-1",
+            "Fri 24 Oct",
+            "0 / 1",
+            "—",
+          ],
+        ];
+        const body =
+          i === 3
+            ? `<tr><td colspan="6" class="py-12 text-center"><p class="text-lg font-semibold">No answers waiting for review.</p></td></tr>`
+            : (sel === 1 ? openRows : rows)
+                .map(
+                  (r) =>
+                    `<tr class="border-t border-border hover:bg-accent">${r.map((c, j) => `<td class="px-3 py-2 ${j === 2 || j === 3 ? "tnum" : ""}">${j === 0 ? `<a class="text-primary" href="#">${c}</a>` : c}</td>`).join("")}<td class="px-3 py-2"><button aria-label="Actions" class="h-8 w-8 rounded hover:bg-muted">⋯</button></td></tr>`,
+                )
+                .join("");
+        return desktopFrame(`<div class="flex items-center"><h1 class="text-2xl font-semibold">Homework</h1><div class="ml-auto">${btn("+ New homework")}</div></div>
+          <div class="flex gap-3 items-center"><div role="tablist" class="inline-flex rounded-md bg-white border border-border p-1">${tabs.map((t, j) => `<button role="tab" aria-selected="${j === sel}" class="px-3 h-8 rounded ${j === sel ? "bg-primary text-white" : ""}">${i === 3 && j === 0 ? "To review (0)" : t}</button>`).join("")}</div><button class="h-9 rounded-md border border-input bg-white px-3">Group: All ▾</button></div>
+          ${card(`<table class="w-full text-left"><thead class="bg-muted"><tr>${["Title", "Group", "Due", "Answers", "To review", ""].map((h) => `<th class="px-3 py-2">${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`, "p-0 overflow-hidden")}`);
+      }
+
+      function review(i) {
+        // to review | reviewed | not submitted | late | admin read-only | loading
+        const people = [
+          ["Eva Novak", badge("To review", "warning")],
+          ["Jan Kos", badge("Late", "warning")],
+          ["Lea Horak", badge("To review", "warning")],
+          ["Mia Lunt", badge("✓ Reviewed", "success")],
+          ["Petr Sova", badge("Not submitted")],
+          ["Tom Bily", badge("Not submitted")],
+        ];
+        const selIdx = [0, 3, 4, 1, 0, 0][i];
+        const name = people[selIdx][0];
+        let panel;
+        if (i === 5)
+          panel = `<div class="skeleton h-6 w-40 mb-3"></div><div class="skeleton h-40"></div>`;
+        else if (i === 2)
+          panel = `<h2 class="text-lg font-semibold">${name}</h2><p class="text-muted-foreground">No answer yet.</p>${badge("Overdue", "danger")}`;
+        else {
+          const answer = `<div class="rounded-md border border-border bg-white p-4 text-base whitespace-pre-wrap">Last summer I went to Croatia with my family. We have stayed in a small village near Split…\n\nI have never seen such clear water.</div>`;
+          const status =
+            i === 3
+              ? badge("Late", "warning")
+              : i === 1
+                ? badge("✓ Reviewed", "success")
+                : badge("Submitted on time", "success");
+          const meta = `<p class="text-xs text-muted-foreground tnum">Submitted ${i === 3 ? "Mon 20 Oct, 19:02 (after the deadline)" : "Sun 19 Oct, 20:14 · Edited Sun 19 Oct, 21:03"}</p>`;
+          const form =
+            i === 4
+              ? ""
+              : i === 1
+                ? `<div class="rounded-md border border-blue-300 bg-blue-50 p-3"><p class="font-medium">Teacher's comment</p><p>Nice use of the present perfect! Watch "we have stayed" → "we stayed".</p><p class="text-xs text-muted-foreground mt-1">Reviewed by Tomas Horvat, Tue 21 Oct, 09:12</p></div><div class="flex gap-3">${btn("Edit comment", "outline")}${btn("⋯", "ghost")}</div>`
+                : `<label class="block font-medium" for="rc">Comment to ${name.split(" ")[0]} (optional, they see it)</label><textarea id="rc" rows="3" class="w-full rounded-md border border-input p-2"></textarea>
+                  <div class="flex items-center gap-2">${btn("Mark reviewed")}<span class="ml-auto"></span>${btn("‹ Previous answer", "ghost")}${btn("Next answer ›", "ghost")}</div>`;
+          panel = `<div class="flex items-center gap-3"><h2 class="text-lg font-semibold">${name}</h2>${status}</div>${meta}${answer}${form}`;
+        }
+        return desktopFrame(`<a href="#" class="text-primary">‹ Homework</a>
+          <div class="flex items-center gap-3"><h1 class="text-2xl font-semibold">Essay: my last holiday</h1><div class="ml-auto flex gap-2">${i === 4 ? "" : btn("Edit", "outline") + btn("⋯", "ghost")}</div></div>
+          <p class="text-muted-foreground tnum">B1 Evening · Due Mon 20 Oct, 17:00 (lesson) · Set in Wed 15 Oct</p>
+          ${i === 4 ? alert("Admins can view homework and answers. Teachers review them.") : ""}
+          <details open class="rounded-lg border border-border bg-white p-4"><summary class="font-medium cursor-pointer">Instructions</summary><p class="mt-2">Write 150–200 words about your last holiday. Use at least five verbs in the present perfect.</p></details>
+          <div class="grid grid-cols-12 gap-6 items-start">
+            <nav aria-label="Answers" class="col-span-4 rounded-lg border border-border bg-white">
+              <div class="p-4 border-b border-border space-y-2"><p class="font-semibold">Answers <span class="font-normal text-muted-foreground tnum">4 / 6 · 2 to review</span></p><button class="h-9 w-full rounded-md border border-input px-3 text-left">All ▾</button></div>
+              <ul>${people.map(([n, b], j) => `<li><a href="#" ${j === selIdx ? 'aria-current="true"' : ""} class="flex items-center justify-between px-4 py-2 ${j === selIdx ? "bg-accent font-medium" : "hover:bg-muted"}">${n}${b}</a></li>`).join("")}</ul></nav>
+            <section class="col-span-8 rounded-lg border border-border bg-white p-6 space-y-3">${panel}</section>
+          </div>`);
+      }
+
+      function phone(inner, tab = 2) {
+        return `<div class="w-[390px] min-h-[760px] bg-white rounded-[24px] border-4 border-slate-800 overflow-hidden flex flex-col text-base">
+          <div class="h-14 border-b border-border flex items-center px-4 gap-3"><span>☰</span><span class="font-medium">Lingua Language School</span><span class="ml-auto w-8 h-8 rounded-full bg-slate-300"></span></div>
+          <main class="flex-1 p-4 space-y-4">${inner}</main>
+          <nav aria-label="Primary" class="h-16 border-t border-border grid grid-cols-4 text-xs shrink-0">${["Home", "Timetable", "Homework", "More"].map((t, i) => `<a href="#" class="flex flex-col items-center justify-center ${i === tab ? "text-primary font-medium" : "text-muted-foreground"}" ${i === tab ? 'aria-current="page"' : ""}><span class="text-lg">${["⌂", "▦", "☰", "≡"][i]}</span>${t}</a>`).join("")}</nav></div>`;
+      }
+      const seg = (a) =>
+        `<div role="tablist" class="grid grid-cols-2 rounded-md bg-muted p-1">${["To do (3)", "Done"].map((t, j) => `<button role="tab" aria-selected="${j === a}" class="h-11 rounded ${j === a ? "bg-white font-medium shadow-sm" : "text-muted-foreground"}">${t}</button>`).join("")}</div>`;
+      const hwCard = (top, title, meta, b) =>
+        `<a href="#" class="block rounded-lg border border-border p-4 space-y-1 min-h-[44px] hover:bg-accent"><div class="flex justify-between items-center gap-2"><span class="text-sm tnum">${top}</span>${b}</div><p class="font-medium">${title}</p><p class="text-sm text-muted-foreground">${meta}</p></a>`;
+
+      function studentList(i) {
+        if (i === 2)
+          return phone(
+            `<h1 class="text-2xl font-semibold">Homework</h1>${seg(0).replace("To do (3)", "To do (0)")}<div class="text-center py-12 space-y-2"><div class="text-4xl">✅</div><h2 class="text-lg font-semibold">No homework to do. Nice!</h2></div>`,
+          );
+        if (i === 3)
+          return phone(
+            `<div class="skeleton h-8 w-40"></div><div class="skeleton h-11"></div>${Array(3).fill('<div class="skeleton h-24"></div>').join("")}`,
+          );
+        if (i === 4)
+          return phone(
+            `<h1 class="text-2xl font-semibold">Hi, Jan</h1><div class="rounded-lg border border-border p-4 space-y-3"><div class="flex justify-between"><h2 class="text-lg font-semibold">Homework due</h2><a class="text-primary" href="#">See all</a></div>
+            <div class="border-t pt-2"><p class="text-red-700 text-sm">⚠ Overdue since Mon 20 Oct</p><p class="font-medium">Essay: my last holiday</p></div>
+            <div class="border-t pt-2"><p class="text-sm tnum">Due tomorrow, 17:00</p><p class="font-medium">Workbook p. 34, ex. 1–3</p></div>
+            <div class="border-t pt-2"><p class="text-sm tnum">Due Fri 24 Oct</p><p class="font-medium">Present perfect quiz</p></div></div>`,
+            0,
+          );
+        if (i === 1)
+          return phone(`<h1 class="text-2xl font-semibold">Homework</h1>${seg(1)}<h2 class="text-lg font-semibold">October</h2>
+            ${hwCard("Was due Mon 20 Oct", "Essay: my last holiday", "B1 Evening", badge("✓ Reviewed", "success") + badge("💬 Comment", "info"))}
+            ${hwCard("Was due Fri 17 Oct", "Listening: podcast notes", "B1 Evening", badge("Late", "warning"))}
+            ${hwCard("Was due Wed 15 Oct", "Unit 3 revision", "B1 Evening", badge("Submitted", "success"))}
+            ${hwCard("Was due Mon 6 Oct", "Vocabulary list", "B1 Evening", badge("Missed", "danger"))}`);
+        return phone(`<h1 class="text-2xl font-semibold">Homework</h1>${seg(0)}
+          ${hwCard("Was due Mon 20 Oct, 17:00", "Essay: my last holiday", "B1 Evening", badge("⚠ Overdue", "danger"))}
+          ${hwCard("Due tomorrow, 17:00", "Workbook p. 34, ex. 1–3", "B1 Evening · next lesson", badge("Draft on this device"))}
+          ${hwCard("Due Fri 24 Oct", "Present perfect quiz", "Eva Novak 1-on-1", badge("✓ Submitted", "success"))}`);
+      }
+
+      function studentDetail(i) {
+        // not started | draft | submitted editable | editing | overdue | locked late | reviewed | sending error
+        const states = [
+          ["Not started", "muted"],
+          ["Draft on this device", "muted"],
+          ["✓ Submitted", "success"],
+          ["✓ Submitted", "success"],
+          ["⚠ Overdue", "danger"],
+          ["Late", "warning"],
+          ["✓ Reviewed", "success"],
+          ["Not started", "muted"],
+        ];
+        const ta = (v, label = "Your answer") =>
+          `<label for="ans" class="block font-medium">${label}</label><textarea id="ans" rows="6" class="w-full rounded-md border border-input p-3 text-base">${v}</textarea>`;
+        const text = "Last summer I went to Croatia with my family…";
+        const ro = `<div class="rounded-md border border-border bg-muted p-3 whitespace-pre-wrap">${text}</div>`;
+        const answer = [
+          `${ta("")}<p class="text-sm text-muted-foreground">You can edit your answer until Wed 22 Oct, 17:00.</p>${btn("Submit answer", "primary", "w-full justify-center h-11")}`,
+          `${ta(text)}<p class="text-sm text-muted-foreground">Draft saved on this device 20:41</p>${btn("Submit answer", "primary", "w-full justify-center h-11")}`,
+          `<h2 class="text-lg font-semibold">Your answer</h2>${ro}<p class="text-sm text-muted-foreground tnum">Submitted Tue 21 Oct, 20:14 · You can edit your answer until Wed 22 Oct, 17:00.</p>${btn("Edit answer", "outline", "w-full justify-center h-11")}`,
+          `${ta(text + " We swam every day.")}<div class="grid grid-cols-2 gap-2">${btn("Cancel", "outline", "justify-center h-11")}${btn("Save changes", "primary", "justify-center h-11")}</div>`,
+          `${alert("This homework was due Mon 20 Oct, 17:00. You can still send an answer once; it will be marked late.", "warning")}${ta("")}${btn("Submit late answer", "primary", "w-full justify-center h-11")}`,
+          `<h2 class="text-lg font-semibold">Your answer</h2>${ro}<p class="text-sm text-muted-foreground tnum">Submitted Mon 20 Oct, 19:02 ${badge("Late", "warning")}</p><p class="text-sm text-muted-foreground">The deadline has passed, so you can't change your answer.</p>`,
+          `<h2 class="text-lg font-semibold">Your answer</h2>${ro}<div class="rounded-md border border-blue-300 bg-blue-50 p-3"><p class="font-medium">Teacher's comment</p><p>Nice use of the present perfect! Watch "we have stayed" → "we stayed".</p><p class="text-xs text-muted-foreground mt-1">Tomas Horvat, Tue 21 Oct, 09:12</p></div>`,
+          `${alert("Your answer couldn't be sent. Check your connection and try again. Your text is kept.", "danger")}${ta(text)}${btn("Submit answer", "primary", "w-full justify-center h-11")}`,
+        ][i];
+        const due =
+          i === 4 || i === 5 || i === 6
+            ? "Due Mon 20 Oct, 17:00 (lesson)"
+            : "Due Wed 22 Oct, 17:00 (next lesson) · tomorrow";
+        return phone(`<a href="#" class="text-primary">‹ Homework</a>
+          <div class="space-y-1"><h1 class="text-2xl font-semibold">${i >= 4 && i <= 6 ? "Essay: my last holiday" : "Workbook p. 34, ex. 1–3"}</h1>${badge(...states[i])}<p class="text-muted-foreground tnum">B1 Evening · Tomas Horvat<br/>${due}</p></div>
+          <section class="space-y-2"><h2 class="text-lg font-semibold">Instructions</h2><p>Do exercises 1–3. Write full sentences.</p></section>
+          <section class="space-y-3">${answer}</section>`);
+      }
+
+      /* ---------------------------------------------------------------- render */
+      const SCREENS = [
+        {
+          k: "dialog",
+          label: "Set / edit homework",
+          states: [
+            "create from lesson",
+            "create from list",
+            "validation",
+            "edit with answers",
+            "delete with answers",
+            "no next lesson",
+          ],
+          fn: dialog,
+        },
+        {
+          k: "tlist",
+          label: "Teacher list",
+          states: ["to review", "open", "past", "nothing to review"],
+          fn: teacherList,
+        },
+        {
+          k: "review",
+          label: "Teacher review",
+          states: [
+            "to review",
+            "reviewed",
+            "not submitted",
+            "late",
+            "admin read-only",
+            "loading",
+          ],
+          fn: review,
+        },
+        {
+          k: "slist",
+          label: "Student list",
+          states: ["to do", "done", "empty", "loading", "home card"],
+          fn: studentList,
+        },
+        {
+          k: "sdetail",
+          label: "Student homework",
+          states: [
+            "not started",
+            "draft",
+            "submitted (editable)",
+            "editing",
+            "overdue",
+            "locked · late",
+            "reviewed",
+            "send error",
+          ],
+          fn: studentDetail,
+        },
+      ];
+      let cur = { screen: "dialog", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>

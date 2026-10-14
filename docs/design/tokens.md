@@ -57,14 +57,15 @@ Status tokens (extend the shadcn set; used by `Badge`, `Alert`, toasts). Every f
 Lesson blocks use a tinted surface, a 3 px left border and dark text. The
 **type label/icon is always shown** — color only reinforces it.
 
-| Token                | Surface             | Left border                 | Text                              | Icon (lucide)    | Meaning                                                         | Phase |
-| -------------------- | ------------------- | --------------------------- | --------------------------------- | ---------------- | --------------------------------------------------------------- | ----- |
-| `lesson-group`       | `#eff6ff` blue-50   | `#2563eb` blue-600          | `#1e3a8a` blue-900                | `users`          | Group lesson                                                    | P1    |
-| `lesson-individual`  | `#f5f3ff` violet-50 | `#7c3aed` violet-600        | `#4c1d95` violet-900              | `user`           | 1-on-1 lesson                                                   | P1    |
-| `lesson-replacement` | `#fffbeb` amber-50  | `#d97706` amber-600         | `#78350f` amber-900               | `repeat`         | Student attends as a replacement                                | P3    |
-| `lesson-substitute`  | `#ecfeff` cyan-50   | `#0891b2` cyan-600          | `#164e63` cyan-900                | `user-round-cog` | Substitute teacher                                              | P5    |
-| `lesson-cancelled`   | `#f8fafc` slate-50  | `#94a3b8` slate-400, dashed | `#475569` slate-600, line-through | `ban`            | Cancelled lesson                                                | P2    |
-| `lesson-now`         | —                   | —                           | —                                 | —                | Current-time line: 2 px `#dc2626` red-600 across today's column | P1    |
+| Token                | Surface             | Left border                                   | Text                                                                          | Icon (lucide)    | Meaning                                                            | Phase |
+| -------------------- | ------------------- | --------------------------------------------- | ----------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------ | ----- |
+| `lesson-group`       | `#eff6ff` blue-50   | `#2563eb` blue-600                            | `#1e3a8a` blue-900                                                            | `users`          | Group lesson                                                       | P1    |
+| `lesson-individual`  | `#f5f3ff` violet-50 | `#7c3aed` violet-600                          | `#4c1d95` violet-900                                                          | `user`           | 1-on-1 lesson                                                      | P1    |
+| `lesson-replacement` | `#fffbeb` amber-50  | `#d97706` amber-600                           | `#78350f` amber-900                                                           | `repeat`         | Student attends as a replacement                                   | P3    |
+| `lesson-substitute`  | `#ecfeff` cyan-50   | `#0891b2` cyan-600                            | `#164e63` cyan-900                                                            | `user-round-cog` | Substitute teacher                                                 | P5    |
+| `lesson-cancelled`   | `#f8fafc` slate-50  | `#94a3b8` slate-400, dashed                   | `#475569` slate-600, line-through                                             | `ban`            | Cancelled lesson                                                   | P2    |
+| `internal`           | `#f8fafc` slate-50  | `#475569` slate-600, dashed (1 px, all sides) | `#0f172a` slate-900; header band `#1e293b` slate-800 with white text (14.6:1) | `lock`           | Internal TeacherNotes — teachers and admins only (`lessons.md` §4) | P2    |
+| `lesson-now`         | —                   | —                                             | —                                                                             | —                | Current-time line: 2 px `#dc2626` red-600 across today's column    | P1    |
 
 All text/surface pairs above are ≥ 7:1.
 
@@ -225,6 +226,9 @@ Tailwind defaults: `sm 640 · md 768 · lg 1024 · xl 1280 · 2xl 1536`.
   --lesson-replacement: #d97706;
   --lesson-replacement-surface: #fffbeb;
   --lesson-replacement-text: #78350f;
+  --internal: #475569;
+  --internal-surface: #f8fafc;
+  --internal-band: #1e293b;
 
   /* shadcn Sidebar */
   --sidebar: #ffffff;
