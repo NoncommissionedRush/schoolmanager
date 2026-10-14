@@ -40,6 +40,26 @@ export function isUniqueViolation(error: unknown): boolean {
   );
 }
 
+/**
+ * Postgres refused a row under the exclusion constraint `constraint`
+ * (SQLSTATE 23P01; the pg adapter reports it as P2039 with the driver
+ * error attached).
+ */
+export function isExclusionViolation(
+  error: unknown,
+  constraint: string,
+): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  const cause = (
+    error.meta?.driverAdapterError as
+      { cause?: { code?: string; message?: string } } | undefined
+  )?.cause;
+  return (
+    cause?.code === "23P01" &&
+    (cause.message?.includes(`"${constraint}"`) ?? false)
+  );
+}
+
 /** `validation.unique` on `field`, e.g. Name "Room 1" is already used. */
 export function uniqueError(field: string, label: string, value: string) {
   return new AdminError(
