@@ -23,6 +23,14 @@ pnpm dev                     # http://localhost:3000
 
 Stop the database with `docker compose down` (add `-v` to wipe its data).
 
+### Demo data
+
+`pnpm db:seed` is idempotent and creates "Demo Language School": 1 admin
+(`admin@demo-school.test`), 8 teachers, 40 students, levels A1–C1, group and
+1-on-1 lessons, rooms, the "Autumn 2026" term with holidays and a published
+timetable with generated lessons. Other users are `first.last@demo-school.test`
+(see `prisma/seed/data.ts`). Data model: `docs/architecture/data-model.md`.
+
 ## Scripts
 
 | Script                   | What it does                                    |
