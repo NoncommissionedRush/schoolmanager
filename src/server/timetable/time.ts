@@ -57,7 +57,12 @@ function timeZoneOffsetMinutes(instant: Date, timeZone: string): number {
 
 /**
  * The instant at which the wall-clock time `minutes` after midnight on
- * `isoDate` occurs in `timeZone`. Handles DST shifts.
+ * `isoDate` occurs in `timeZone`. Handles DST shifts:
+ * - a wall-clock time in the spring-forward gap (e.g. 02:30 on the last
+ *   Sunday of March in Europe) does not exist and is shifted forward by the
+ *   gap (→ 03:30 summer time);
+ * - an ambiguous time in the fall-back overlap resolves to the later
+ *   (standard-time) instant.
  */
 export function zonedTimeToUtc(
   isoDate: IsoDate,

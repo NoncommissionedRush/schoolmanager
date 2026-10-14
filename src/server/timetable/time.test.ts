@@ -44,3 +44,31 @@ describe("zonedTimeToUtc", () => {
     );
   });
 });
+
+describe("zonedTimeToUtc around DST switches (Europe/Bratislava)", () => {
+  const tz = "Europe/Bratislava";
+  // Spring forward: 2027-03-28 02:00 CET jumps to 03:00 CEST.
+  it("shifts non-existent times in the spring-forward gap forward", () => {
+    expect(zonedTimeToUtc("2027-03-28", 1 * 60, tz).toISOString()).toBe(
+      "2027-03-28T00:00:00.000Z", // 01:00 CET
+    );
+    expect(zonedTimeToUtc("2027-03-28", 2 * 60, tz).toISOString()).toBe(
+      "2027-03-28T01:00:00.000Z", // 02:00 → 03:00 CEST
+    );
+    expect(zonedTimeToUtc("2027-03-28", 2 * 60 + 30, tz).toISOString()).toBe(
+      "2027-03-28T01:30:00.000Z", // 02:30 → 03:30 CEST
+    );
+    // 03:00 is real and equals the shifted 02:00 — a 02:00–03:00 window
+    // collapses, which is why lesson end times are derived from the duration.
+    expect(zonedTimeToUtc("2027-03-28", 3 * 60, tz).toISOString()).toBe(
+      "2027-03-28T01:00:00.000Z",
+    );
+  });
+
+  it("resolves ambiguous fall-back times to the later (standard-time) instant", () => {
+    // 2026-10-25 03:00 CEST falls back to 02:00 CET; 02:30 happens twice.
+    expect(zonedTimeToUtc("2026-10-25", 2 * 60 + 30, tz).toISOString()).toBe(
+      "2026-10-25T01:30:00.000Z", // 02:30 CET
+    );
+  });
+});
