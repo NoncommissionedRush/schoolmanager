@@ -3,11 +3,9 @@
 **Status: Phase 3. Implemented: settings (§2), reporting and deleting
 absences (§3) and credit creation and expiry (§4) in CARM-42; replacement
 booking and review (§5–§6), 1-on-1 and admin reschedule (§7), credit
-release (§4) and the rest of the schema (§9) in CARM-43. Still proposed:
-the slot-split carry-over (§5 _Slot splits_) and counting replacements in
-`checkLesson`'s room-capacity check (§9 _Changes outside the new module_);
-until then a lesson cancelled by a timetable change releases its bookings
-with grace.** This page
+release (§4) and the rest of the schema (§9) in CARM-43; the slot-split
+carry-over (§5 _Slot splits_) and counting absences and replacements in
+`checkLesson` (§9 _Changes outside the new module_) in CARM-46.** This page
 defines the rules the Phase 3 booking flow enforces and the schema changes
 it needs. The screens are specified in `docs/design/absences.md` (CARM-39);
 where the two disagree, raise it on the issue rather than picking one.
@@ -276,17 +274,21 @@ An absence belongs to the **weekly occurrence**, not to the row. So in a
 split, every old-slot lesson `L` from D on that is being cancelled or is
 already `STUDENT_CANCELLED` or `RESCHEDULED` (admin reschedule, §7) is matched with its **successor** `S`. `S` is
 the new slot's occurrence in the same ISO week, in the school's time zone,
-if there is one. A weekday change still matches, because a weekly slot
-has one occurrence per week. `planSlotEdit` returns these pairs as
-`carryOver: { fromLessonId, toSlotId, toDate }[]`. It is pure and
-deterministic, and I'll add it to `lesson-sync.ts`. In the same
-transaction the service then does the following:
+if there is one and it hasn't started. A weekday change still matches,
+because a weekly slot has one occurrence per week. A split that changes
+the slot's **group** carries nothing over: absences and bookings belong to
+the old group's lesson. `planSlotCarryOver` in `lesson-sync.ts` returns
+these pairs as `{ fromLessonId, toSlotId, toDate, cancelSuccessor }[]`. It
+is pure and deterministic. In the same transaction the service
+(`saveSlot`) deletes the old untouched lessons, creates the new slot and its
+lessons, and then does the following before it reconciles the rest of the
+old lessons:
 
 | What `L` has                                  | What happens with successor `S`                                                                                                                                                                                                                                                                            |
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Absence reports (group lesson)                | Moved to `S`, with their credits' `sourceLessonId` and the `originalLessonId` of their replacements. No new credit is earned, and `expiresAt` stays the same. The student is absent from `S`, so they don't count in its seats or their clashes.                                                           |
 | `STUDENT_CANCELLED` or `RESCHEDULED` (1-on-1) | `S` is created already `CANCELLED` with the same reason as `L`. Any absence and credit on `L`, and the ad-hoc lesson's `rescheduledFromId`, are moved to `S`. That keeps lesson generation idempotent through the existing `(slot, occurrenceDate)` row, so the student never gets the week's lesson back. |
-| Active replacements **into** `L`              | Moved to `S` if `reviewReplacement` on `S` (§6) has no failing reasons. Otherwise they are released (`CANCELLED`, `LESSON_CANCELLED`) and the credit is returned with grace (§4).                                                                                                                          |
+| Active replacements **into** `L`              | Moved to `S`, oldest booking first, if `reviewReplacement` on `S` (§6) has no failing reasons (audited `replacement.moved`). Otherwise they are released (`CANCELLED`, `LESSON_CANCELLED`) and the credit is returned with grace (§4).                                                                     |
 
 Once everything is moved, `L` is judged by the existing rule: it is
 deleted if it is untouched, and cancelled (`TIMETABLE_CHANGED`) otherwise,
@@ -609,16 +611,20 @@ absence and credit parts; CARM-43 the replacement and reschedule parts).
 
 **`AuditLog`** — new actions: `school.settings.updated`, `absence.reported`,
 `absence.deleted`, `replacement.booked | cancelled | approved | rejected |
-overridden`, `lesson.rescheduled`.
+overridden | moved`, `lesson.rescheduled`. `replacement.moved` (CARM-46)
+records a booking that followed its lesson to a slot split's successor;
+the slot's `timetable_slot.updated` entry lists every carried-over lesson.
 
 ### Changes outside the new module
 
-- `checkLesson` / `buildCalendar`: let the room-capacity and
-  student-clash checks count replacement students (`seatsTaken`) and treat
-  a student's replacement targets as their lessons. Proposed shape: an
-  optional `replacements: { lessonId, studentId }[]` and `absences` in
-  `SchedulingContext`; `checkSlot` keeps counting enrolled students (a
-  weekly slot has no per-date replacements). I own this change.
+- `checkLesson` / `buildCalendar` (CARM-46): the room-capacity and
+  student-clash checks count `seatsTaken` and treat a student's
+  replacement targets as their lessons and their absences as not theirs,
+  through the optional `absences` and `replacements: { lessonId,
+studentId }[]` in `SchedulingContext` (`scheduling.md`, _Who attends_).
+  `checkSlot` keeps counting enrolled students (a weekly slot has no
+  per-date replacements). Members are the currently enrolled students, as
+  everywhere in the checker, not `members(L)` at the lesson's start.
 - `planSlotEdit` / `planLessonSync`: return the `carryOver` pairs for a
   split (§5, _Slot splits_), and create successors of `STUDENT_CANCELLED`
   lessons as cancelled. When the plan cancels a lesson without a
@@ -670,11 +676,14 @@ replacement students`, replacement students marked. _Not coming_ = the
     lesson and the credit `USED`.
 - Property (seeded realistic schools from `testing/`, 20 teachers, 60
   groups, 15 rooms, ~330 students): apply a random sequence of absences,
-  bookings, cancellations, rejections and room moves through the rules, and
-  assert that `seatsTaken ≤ capacity` holds for every lesson booked without
-  an override, no credit backs two active replacements, no student is ever
-  booked into overlapping lessons, every `rescheduleOptions` result passes
+  bookings, cancellations, rejections, room moves and 1-on-1 reschedules
+  through the rules, and assert that `seatsTaken ≤ capacity` holds for
+  every lesson, no credit backs two active replacements, no student is ever
+  booked into overlapping lessons, every active booking passes
+  `reviewReplacement`, every `rescheduleOptions` result passes
   `checkLesson` with no conflicts, and results don't depend on input order.
+  Implemented in `replacements.property.test.ts` (CARM-46); the slot-split
+  cases are in `src/server/timetable/split.db.test.ts`.
 - Unit, admin reschedule: allowed after the cutoff and on a lesson with a
   late absence; no credit created or spent; credit link moved when the
   source is itself a reschedule; blocking conflicts refused; overridable
