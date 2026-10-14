@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  CalendarClock,
   CalendarX,
   CircleAlert,
   EllipsisVertical,
   ExternalLink,
   Loader2,
+  Repeat,
   Trash2,
   User,
 } from "lucide-react";
@@ -15,6 +17,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { RescheduleDialog } from "@/app/admin/lessons/[id]/reschedule-dialog";
 import { ToneAlert } from "@/components/absences/tone";
 import { useMessage } from "@/components/admin/use-message";
 import {
@@ -44,6 +47,7 @@ import type { Message } from "@/server/admin/result";
 import type { Conflict } from "@/server/scheduling";
 
 import { deleteAbsenceAction } from "./actions";
+import { BookForStudentDialog } from "./credit-dialogs";
 import { ReportAbsenceDialog } from "./report-absence-dialog";
 
 /** "Report absence" primary button on the Absences tab (§7.5). */
@@ -159,12 +163,35 @@ type AbsenceRow = {
   date: string;
   oneOnOne: boolean;
   creditUsed: boolean;
+  /** An AVAILABLE credit the admin can spend for the student (CARM-47). */
+  availableCredit: {
+    id: string;
+    validUntil: string;
+    /** Defaults of a 1-on-1's new lesson: the missed one's time and room. */
+    suggestedDate: string;
+    startMinute: number;
+    durationMinutes: number;
+    roomId: string | null;
+  } | null;
 };
 
-/** Row menu of the Absences tab (§7.2): open lesson / student, delete. */
-export function AbsenceRowActions({ absence }: { absence: AbsenceRow }) {
+/**
+ * Row menu of the Absences tab (§7.2): open lesson / student, spend an
+ * available credit for the student (Book replacement… for a group lesson,
+ * Book 1-on-1 with credit… for a 1-on-1), delete.
+ */
+export function AbsenceRowActions({
+  absence,
+  rooms,
+}: {
+  absence: AbsenceRow;
+  rooms: { id: string; name: string }[];
+}) {
   const t = useTranslations("adminAbsences");
+  const tr = useTranslations("reschedule.admin");
   const [deleting, setDeleting] = useState(false);
+  const [spending, setSpending] = useState(false);
+  const credit = absence.availableCredit;
   return (
     <>
       <DropdownMenu>
@@ -192,6 +219,16 @@ export function AbsenceRowActions({ absence }: { absence: AbsenceRow }) {
             <User aria-hidden="true" />
             {t("openStudent")}
           </DropdownMenuItem>
+          {credit && (
+            <DropdownMenuItem onClick={() => setSpending(true)}>
+              {absence.oneOnOne ? (
+                <CalendarClock aria-hidden="true" />
+              ) : (
+                <Repeat aria-hidden="true" />
+              )}
+              {absence.oneOnOne ? tr("actionCredit") : t("book.action")}
+            </DropdownMenuItem>
+          )}
           {absence.creditUsed ? (
             <p className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">
               {t("delete.creditUsed")}
@@ -212,6 +249,32 @@ export function AbsenceRowActions({ absence }: { absence: AbsenceRow }) {
         open={deleting}
         onOpenChange={setDeleting}
       />
+      {spending && credit && absence.oneOnOne && (
+        <RescheduleDialog
+          info={{
+            lessonId: absence.lessonId,
+            date: credit.suggestedDate,
+            startMinute: credit.startMinute,
+            durationMinutes: credit.durationMinutes,
+            roomId: credit.roomId,
+            rooms,
+          }}
+          credit={{
+            id: credit.id,
+            studentName: absence.studentName,
+            sourceDate: absence.date,
+            validUntil: credit.validUntil,
+          }}
+          onClose={() => setSpending(false)}
+        />
+      )}
+      {spending && credit && !absence.oneOnOne && (
+        <BookForStudentDialog
+          creditId={credit.id}
+          studentName={absence.studentName}
+          onClose={() => setSpending(false)}
+        />
+      )}
     </>
   );
 }

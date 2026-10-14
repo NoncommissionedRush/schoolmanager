@@ -136,5 +136,20 @@
   "changedMeanwhile": "This booking changed while you were reviewing it. Reload to see the current state.",
   "openReplacements": "Open replacements",
   "entitiesReplacements": "replacements",
-  "noRoom": "No room"
+  "noRoom": "No room",
+  "book": {
+    "action": "Book replacement…",
+    "title": "Book a replacement for {student}",
+    "description": "Spends {student}'s makeup credit from {sourceDate} (valid until {validUntil}). The booking is approved right away.",
+    "options": "Lessons",
+    "showAll": "Show all lessons",
+    "none": "No lessons without issues. Turn on “Show all lessons” to see the others.",
+    "loading": "Loading lessons…",
+    "note": "Note (optional)",
+    "notePlaceholder": "e.g. Phoned the office",
+    "noteHint": "The student sees this note.",
+    "blocked": "This lesson can't be booked:",
+    "confirm": "Book replacement",
+    "done": "Replacement booked for {dateTime}."
+  }
 }
