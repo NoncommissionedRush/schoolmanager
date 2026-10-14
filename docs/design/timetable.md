@@ -39,7 +39,7 @@ students.
 | --------------- | ----------------------------------------- | --------------------------------------------------------------------------------------- |
 | `TimetableSlot` | **Slot** (`timetable.editor.slot`)        | "B1 Evening, every Monday 17:00–18:30, Tomas, Room 3" within a term, from/until a date. |
 | `Lesson`        | **Lesson** (`timetable.lesson`)           | One dated occurrence, e.g. Mon 20 Oct 17:00. What teachers/students see.                |
-| Draft term      | **Draft** badge                           | `timetablePublishedAt` null. Only admins see it; no lessons exist yet.                  |
+| Draft term      | **Draft** badge                           | `timetablePublishedAt` null. Only admins see it (not teachers); no lessons exist yet.   |
 | Published term  | **Published** badge                       | Lessons generated; teachers and students see them; edits apply from a date onwards.     |
 | Conflict        | **Issue** (`scheduling.conflicts.<TYPE>`) | Returned by the scheduling module (CARM-23). Two severities, below.                     |
 
@@ -72,6 +72,7 @@ and `time` stay `HH:MM–HH:MM`.
 | `INVALID_TIME`                | blocking    | — (also caught by field validation, shown on the time field) |
 | `OUTSIDE_TERM`                | blocking    | — (shown on the date fields)                                 |
 | `GROUP_ARCHIVED`              | blocking    | _Choose another group_ (focus Group field)                   |
+| `ROOM_ARCHIVED`               | blocking    | _Choose another room_ (focus Room field)                     |
 | `TEACHER_DOUBLE_BOOKED`       | blocking    | _Show slot_ (highlight `refs.counterpart`)                   |
 | `ROOM_DOUBLE_BOOKED`          | blocking    | _Show slot_                                                  |
 | `GROUP_DOUBLE_BOOKED`         | blocking    | _Show slot_                                                  |
@@ -97,6 +98,12 @@ and `time` stay `HH:MM–HH:MM`.
 - **Unknown types** (module added one, UI not updated yet) fall back to
   `timetable.conflict.generic` "This slot has a scheduling issue." with the
   module severity, so a module update never breaks the UI.
+- **`ROOM_ARCHIVED`** (CARM-27, owner decision 5) blocks a **new** slot in an
+  archived room, and blocks **moving** a slot into one. A slot that already
+  uses a room that's archived later keeps running and isn't flagged when
+  other fields change. The copy key `scheduling.conflicts.ROOM_ARCHIVED`
+  comes from the module. Rooms are hidden from the pickers once archived, so
+  the admin normally only sees this after a race or a copy (§5.9).
 - Holidays are not a conflict for slots: the slot sheet shows the number of
   lessons the slot will produce ("15 lessons, 2 dates skipped for
   holidays").
@@ -193,7 +200,11 @@ Two views (`ToggleGroup`, `timetable.editor.view.*`), choice kept in the URL:
    by teacher, the teacher's weekly unavailability is drawn as hatched
    background (`aria-hidden`; the slot check is the accessible source).
 
-Filters (`Combobox`, archived excluded): **Teacher**, **Room**, **Group**. In
+Filters (`Combobox`, archived excluded, except archived ones that still
+have slots in this term, which are listed last with an `Archived` badge):
+**Teacher**, **Room**, **Group**. In _By room_ view, an archived room gets a
+column only if it has slots on that day, with "Archived" in muted text
+under the name. In
 _By room_ view, filters dim non-matching slots (opacity 40 %, still visible
 for context) rather than hiding them, so space conflicts stay obvious; a
 _Hide others_ checkbox removes them. _Clear_ resets.
@@ -249,7 +260,7 @@ under the fields. Title "New slot" / "Edit slot".
 | -------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Group          | `Combobox` (name, type, level, members) | required. Archived excluded (the module still reports `GROUP_ARCHIVED` if it happens).                                                                                       |
 | Teacher        | `Combobox`                              | required. After choosing a group, defaults to the teacher of that group's other slots in this term.                                                                          |
-| Room           | `Combobox` (+ "No room")                | optional. Shows capacity / "Online".                                                                                                                                         |
+| Room           | `Combobox` (+ "No room")                | optional. Shows capacity / "Online". Archived rooms excluded; an existing slot's archived room stays as the current value with an `Archived` badge (`admin-data.md` §5.3).   |
 | Day            | `Select` (school days; others marked)   | required.                                                                                                                                                                    |
 | Start · End    | time `Select`s, 15-min steps            | required; end > start (`validation.timeOrder`). Duration shown as text ("90 min"). Quick chips 45 · 60 · 90 min set the end.                                                 |
 | Effective from | date picker (**published term only**)   | required; default **today**; past dates disabled (`scheduling.errors.EFFECTIVE_DATE_IN_PAST` if the server disagrees, e.g. after midnight). Dates outside the term disabled. |
@@ -375,7 +386,8 @@ Button **Publish** (draft term) → `Dialog` `timetable.publish.title`
   published. Changes apply to future lessons from the date you choose and are
   visible to teachers and students right away."
 
-Unpublishing is not offered in v1 (Q1).
+Unpublishing is not offered in v1 (owner decision 2). After publishing, the
+timetable is changed slot by slot, from an effective date.
 
 ### 5.8 Check & regenerate lessons (published)
 
@@ -387,17 +399,17 @@ Idempotent (module guarantee), so no further confirmation.
 
 ### 5.9 Empty & other states
 
-| State                  | UI                                                                                                                                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No terms               | Empty card `timetable.editor.empty.noTerm` "Create a term first" / "The timetable belongs to a term with start and end dates." / _Go to Terms & holidays_.                                     |
-| Missing basics         | Info `Alert` listing what's missing (no groups / teachers / rooms) with links; the grid is still shown. `timetable.editor.missing` "To add slots you need at least one group and one teacher." |
-| Term without slots     | Grid with an overlay card: `timetable.editor.empty.title` "No slots yet" / "Click a free time in the grid or use New slot." Actions: _New slot_, _Copy from {previous term}_ (if one exists).  |
-| Copy from another term | Dialog: source term `Select`; "Copy {n} slots (archived groups and teachers are skipped: {m})". Copied slots land as-is and are checked like new ones; result opens the issues panel if any.   |
-| Loading                | Toolbar rendered, grid skeleton (time axis + 4 grey blocks).                                                                                                                                   |
-| Load error             | Destructive `Alert` + _Try again_ instead of the grid.                                                                                                                                         |
-| Save failed (network)  | `Alert` inside the sheet `common.error.network`; values kept.                                                                                                                                  |
-| Concurrent edit        | On save, if the slot changed since opening: `common.error.staleData` + _Reload_ in the sheet.                                                                                                  |
-| < 1024 px              | Read-only weekly view + `layout.desktopRecommended`.                                                                                                                                           |
+| State                  | UI                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No terms               | Empty card `timetable.editor.empty.noTerm` "Create a term first" / "The timetable belongs to a term with start and end dates." / _Go to Terms & holidays_.                                                                                                                                                                                                                                                               |
+| Missing basics         | Info `Alert` listing what's missing (no groups / teachers / rooms) with links; the grid is still shown. `timetable.editor.missing` "To add slots you need at least one group and one teacher."                                                                                                                                                                                                                           |
+| Term without slots     | Grid with an overlay card: `timetable.editor.empty.title` "No slots yet" / "Click a free time in the grid or use New slot." Actions: _New slot_, _Copy from {previous term}_ (if one exists).                                                                                                                                                                                                                            |
+| Copy from another term | **P1 nice-to-have** (owner decision 3): build it last in the editor issue; it can move to a follow-up without blocking stage 3. Dialog: source term `Select`; "Copy {n} slots", skipping slots whose group or teacher is archived and copying slots whose room is archived **without a room** (counts shown). Copied slots land as-is and are checked like new ones; the result opens the issues panel if there are any. |
+| Loading                | Toolbar rendered, grid skeleton (time axis + 4 grey blocks).                                                                                                                                                                                                                                                                                                                                                             |
+| Load error             | Destructive `Alert` + _Try again_ instead of the grid.                                                                                                                                                                                                                                                                                                                                                                   |
+| Save failed (network)  | `Alert` inside the sheet `common.error.network`; values kept.                                                                                                                                                                                                                                                                                                                                                            |
+| Concurrent edit        | On save, if the slot changed since opening: `common.error.staleData` + _Reload_ in the sheet.                                                                                                                                                                                                                                                                                                                            |
+| < 1024 px              | Read-only weekly view + `layout.desktopRecommended`.                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### 5.10 Result messages after a change (published term)
 
@@ -604,116 +616,116 @@ counts: §5.10.
 
 ### Editor
 
-| Key                                         | Copy                                                                                                                                                                    |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `timetable.editor.title`                    | Timetable editor                                                                                                                                                        |
-| `timetable.editor.term`                     | Term                                                                                                                                                                    |
-| `timetable.editor.draft`                    | Draft                                                                                                                                                                   |
-| `timetable.editor.published`                | Published {date}                                                                                                                                                        |
-| `timetable.editor.asOf`                     | As of                                                                                                                                                                   |
-| `timetable.editor.view.byRoom`              | By room                                                                                                                                                                 |
-| `timetable.editor.view.week`                | Week                                                                                                                                                                    |
-| `timetable.editor.noRoom`                   | No room                                                                                                                                                                 |
-| `timetable.editor.seats`                    | {count} seats                                                                                                                                                           |
-| `timetable.editor.online`                   | Online                                                                                                                                                                  |
-| `timetable.editor.weekNeedsFilter`          | Choose a teacher, room or group to see their week.                                                                                                                      |
-| `timetable.editor.hideOthers`               | Hide others                                                                                                                                                             |
-| `timetable.editor.newSlot`                  | New slot                                                                                                                                                                |
-| `timetable.editor.issues`                   | Issues                                                                                                                                                                  |
-| `timetable.editor.noIssues`                 | No issues                                                                                                                                                               |
-| `timetable.editor.fromDate`                 | From {date}                                                                                                                                                             |
-| `timetable.editor.untilDate`                | Until {date}                                                                                                                                                            |
-| `timetable.editor.acknowledgedBy`           | Warning acknowledged by {name} on {date}                                                                                                                                |
-| `timetable.editor.publishedBanner`          | This timetable is published. Changes apply to future lessons from the date you choose and are visible to teachers and students right away.                              |
-| `timetable.editor.copyFrom`                 | Copy slots from another term…                                                                                                                                           |
-| `timetable.editor.copyFromTerm`             | Copy from {term}                                                                                                                                                        |
-| `timetable.editor.copySummary`              | Copy {count} slots. {skipped, plural, =0 {} other {# with archived groups or teachers are skipped.}}                                                                    |
-| `timetable.editor.regenerate`               | Check & regenerate lessons                                                                                                                                              |
-| `timetable.editor.viewPublished`            | View published timetable                                                                                                                                                |
-| `timetable.editor.missing`                  | To add slots you need at least one group and one teacher.                                                                                                               |
-| `timetable.editor.empty.noTerm.title`       | Create a term first                                                                                                                                                     |
-| `timetable.editor.empty.noTerm.description` | The timetable belongs to a term with start and end dates.                                                                                                               |
-| `timetable.editor.empty.noTerm.action`      | Go to Terms & holidays                                                                                                                                                  |
-| `timetable.editor.empty.title`              | No slots yet                                                                                                                                                            |
-| `timetable.editor.empty.description`        | Click a free time in the grid or use New slot.                                                                                                                          |
-| `timetable.slot.newTitle`                   | New slot                                                                                                                                                                |
-| `timetable.slot.editTitle`                  | Edit slot                                                                                                                                                               |
-| `timetable.slot.group`                      | Group                                                                                                                                                                   |
-| `timetable.slot.teacher`                    | Teacher                                                                                                                                                                 |
-| `timetable.slot.room`                       | Room                                                                                                                                                                    |
-| `timetable.slot.day`                        | Day                                                                                                                                                                     |
-| `timetable.slot.start`                      | Start                                                                                                                                                                   |
-| `timetable.slot.end`                        | End                                                                                                                                                                     |
-| `timetable.slot.duration`                   | {minutes} min                                                                                                                                                           |
-| `timetable.slot.effectiveFrom`              | Effective from                                                                                                                                                          |
-| `timetable.slot.effectiveFromHint`          | Lessons before this date stay as they are.                                                                                                                              |
-| `timetable.slot.runs`                       | Every {weekday}, {start} – {end} ({count, plural, one {# lesson} other {# lessons}})                                                                                    |
-| `timetable.slot.runsSkipped`                | {count, plural, =0 {} one {# date skipped for holidays} other {# dates skipped for holidays}}                                                                           |
-| `timetable.slot.splitNote`                  | From {date} this continues as a changed slot. Lessons before {date} stay as they were.                                                                                  |
-| `timetable.slot.saveAnyway`                 | Save anyway                                                                                                                                                             |
-| `timetable.slot.history`                    | History                                                                                                                                                                 |
-| `timetable.slot.historyRow`                 | Until {date}: {teacher}, {room}, {weekday} {time}                                                                                                                       |
-| `timetable.slot.endInstead`                 | End slot instead                                                                                                                                                        |
-| `timetable.slot.moreOptions`                | More options                                                                                                                                                            |
-| `timetable.slot.validFrom`                  | First lesson                                                                                                                                                            |
-| `timetable.slot.validUntil`                 | Last lesson                                                                                                                                                             |
-| `timetable.slot.notSchoolDay`               | {weekday} (no school)                                                                                                                                                   |
-| `timetable.slot.save`                       | Save slot                                                                                                                                                               |
-| `timetable.slot.duplicate`                  | Duplicate                                                                                                                                                               |
-| `timetable.slot.move`                       | Move…                                                                                                                                                                   |
-| `timetable.slot.end`                        | End slot…                                                                                                                                                               |
-| `timetable.slot.delete`                     | Delete slot                                                                                                                                                             |
-| `timetable.severity.blocking`               | Conflict                                                                                                                                                                |
-| `timetable.severity.warning`                | Warning                                                                                                                                                                 |
-| `timetable.severity.newBadge`               | New                                                                                                                                                                     |
-| `timetable.check.title`                     | Check                                                                                                                                                                   |
-| `timetable.check.checking`                  | Checking…                                                                                                                                                               |
-| `timetable.check.ok`                        | No conflicts.                                                                                                                                                           |
-| `timetable.check.summary`                   | {conflicts, plural, one {# conflict} other {# conflicts}} · {warnings, plural, one {# warning} other {# warnings}}                                                      |
-| `timetable.check.fixFirst`                  | Fix the conflicts before saving.                                                                                                                                        |
-| `timetable.check.changed`                   | Something changed since the last check. Review the issues again.                                                                                                        |
-| `timetable.check.showSlot`                  | Show slot                                                                                                                                                               |
-| `timetable.check.availability`              | Availability                                                                                                                                                            |
-| `timetable.check.members`                   | Members                                                                                                                                                                 |
-| `timetable.check.room`                      | Room                                                                                                                                                                    |
-| `timetable.check.schoolSettings`            | School settings                                                                                                                                                         |
-| `timetable.check.chooseGroup`               | Choose another group                                                                                                                                                    |
-| `timetable.check.showDates`                 | Show dates                                                                                                                                                              |
-| `timetable.check.moreDates`                 | +{count} more                                                                                                                                                           |
-| `timetable.override.reason`                 | Reason (optional)                                                                                                                                                       |
-| `timetable.override.acknowledge`            | I've checked this                                                                                                                                                       |
-| `timetable.override.required`               | Tick each warning to save anyway.                                                                                                                                       |
-| `timetable.conflict.generic`                | This slot has a scheduling issue.                                                                                                                                       |
-| `timetable.toast.slotSaved`                 | Slot saved                                                                                                                                                              |
-| `timetable.toast.slotMoved`                 | Moved {group} to {weekday} {time}                                                                                                                                       |
-| `timetable.toast.slotDeleted`               | Slot deleted                                                                                                                                                            |
-| `timetable.toast.slotEnded`                 | Slot ends on {date}.                                                                                                                                                    |
-| `timetable.toast.slotSavedResult`           | Slot saved. {result}                                                                                                                                                    |
-| `timetable.editor.changedOn`                | Changed on {date}                                                                                                                                                       |
-| `timetable.end.title`                       | End {group} on {weekday}s?                                                                                                                                              |
-| `timetable.end.lastLesson`                  | Last lesson                                                                                                                                                             |
-| `timetable.end.hint`                        | Want to change the teacher, room or time instead? Edit the slot and choose from which date.                                                                             |
-| `timetable.end.description`                 | Lessons after {date} are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled ("Timetable changed"), so no one loses information. |
-| `timetable.end.confirm`                     | End slot                                                                                                                                                                |
-| `timetable.delete.title`                    | Delete this slot?                                                                                                                                                       |
-| `timetable.issues.title`                    | Issues in {term}                                                                                                                                                        |
-| `timetable.issues.includeAcknowledged`      | Include acknowledged warnings                                                                                                                                           |
-| `timetable.issues.empty`                    | No issues in this term.                                                                                                                                                 |
-| `timetable.publish.action`                  | Publish                                                                                                                                                                 |
-| `timetable.publish.title`                   | Publish {term}?                                                                                                                                                         |
-| `timetable.publish.description`             | Teachers and students will see their lessons right away. You can still change slots later; changes apply from a date you choose.                                        |
-| `timetable.publish.slots`                   | {count, plural, one {# slot} other {# slots}}                                                                                                                           |
-| `timetable.publish.range`                   | Lessons will be created from {start} to {end}                                                                                                                           |
-| `timetable.publish.warnings`                | {count, plural, one {# warning acknowledged} other {# warnings acknowledged}}                                                                                           |
-| `timetable.publish.review`                  | Review                                                                                                                                                                  |
-| `timetable.publish.blocked`                 | Fix {count, plural, one {# conflict} other {# conflicts}} before publishing.                                                                                            |
-| `timetable.publish.showIssues`              | Show issues                                                                                                                                                             |
-| `timetable.publish.confirm`                 | Publish timetable                                                                                                                                                       |
-| `timetable.publish.running`                 | Publishing… creating lessons                                                                                                                                            |
-| `timetable.publish.failed`                  | Couldn't publish. Nothing was changed. Try again.                                                                                                                       |
-| `timetable.publish.done`                    | {term} published. {count, plural, one {# lesson} other {# lessons}} created.                                                                                            |
-| `timetable.regenerate.description`          | Makes sure every slot has its lessons from today on, without duplicates. Earlier lessons are not touched.                                                               |
-| `timetable.regenerate.run`                  | Run                                                                                                                                                                     |
+| Key                                         | Copy                                                                                                                                                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timetable.editor.title`                    | Timetable editor                                                                                                                                                              |
+| `timetable.editor.term`                     | Term                                                                                                                                                                          |
+| `timetable.editor.draft`                    | Draft                                                                                                                                                                         |
+| `timetable.editor.published`                | Published {date}                                                                                                                                                              |
+| `timetable.editor.asOf`                     | As of                                                                                                                                                                         |
+| `timetable.editor.view.byRoom`              | By room                                                                                                                                                                       |
+| `timetable.editor.view.week`                | Week                                                                                                                                                                          |
+| `timetable.editor.noRoom`                   | No room                                                                                                                                                                       |
+| `timetable.editor.seats`                    | {count} seats                                                                                                                                                                 |
+| `timetable.editor.online`                   | Online                                                                                                                                                                        |
+| `timetable.editor.weekNeedsFilter`          | Choose a teacher, room or group to see their week.                                                                                                                            |
+| `timetable.editor.hideOthers`               | Hide others                                                                                                                                                                   |
+| `timetable.editor.newSlot`                  | New slot                                                                                                                                                                      |
+| `timetable.editor.issues`                   | Issues                                                                                                                                                                        |
+| `timetable.editor.noIssues`                 | No issues                                                                                                                                                                     |
+| `timetable.editor.fromDate`                 | From {date}                                                                                                                                                                   |
+| `timetable.editor.untilDate`                | Until {date}                                                                                                                                                                  |
+| `timetable.editor.acknowledgedBy`           | Warning acknowledged by {name} on {date}                                                                                                                                      |
+| `timetable.editor.publishedBanner`          | This timetable is published. Changes apply to future lessons from the date you choose and are visible to teachers and students right away.                                    |
+| `timetable.editor.copyFrom`                 | Copy slots from another term…                                                                                                                                                 |
+| `timetable.editor.copyFromTerm`             | Copy from {term}                                                                                                                                                              |
+| `timetable.editor.copySummary`              | Copy {count} slots. {skipped, plural, =0 {} other {# with archived groups or teachers are skipped.}} {noRoom, plural, =0 {} other {# lose their room because it's archived.}} |
+| `timetable.editor.regenerate`               | Check & regenerate lessons                                                                                                                                                    |
+| `timetable.editor.viewPublished`            | View published timetable                                                                                                                                                      |
+| `timetable.editor.missing`                  | To add slots you need at least one group and one teacher.                                                                                                                     |
+| `timetable.editor.empty.noTerm.title`       | Create a term first                                                                                                                                                           |
+| `timetable.editor.empty.noTerm.description` | The timetable belongs to a term with start and end dates.                                                                                                                     |
+| `timetable.editor.empty.noTerm.action`      | Go to Terms & holidays                                                                                                                                                        |
+| `timetable.editor.empty.title`              | No slots yet                                                                                                                                                                  |
+| `timetable.editor.empty.description`        | Click a free time in the grid or use New slot.                                                                                                                                |
+| `timetable.slot.newTitle`                   | New slot                                                                                                                                                                      |
+| `timetable.slot.editTitle`                  | Edit slot                                                                                                                                                                     |
+| `timetable.slot.group`                      | Group                                                                                                                                                                         |
+| `timetable.slot.teacher`                    | Teacher                                                                                                                                                                       |
+| `timetable.slot.room`                       | Room                                                                                                                                                                          |
+| `timetable.slot.day`                        | Day                                                                                                                                                                           |
+| `timetable.slot.start`                      | Start                                                                                                                                                                         |
+| `timetable.slot.end`                        | End                                                                                                                                                                           |
+| `timetable.slot.duration`                   | {minutes} min                                                                                                                                                                 |
+| `timetable.slot.effectiveFrom`              | Effective from                                                                                                                                                                |
+| `timetable.slot.effectiveFromHint`          | Lessons before this date stay as they are.                                                                                                                                    |
+| `timetable.slot.runs`                       | Every {weekday}, {start} – {end} ({count, plural, one {# lesson} other {# lessons}})                                                                                          |
+| `timetable.slot.runsSkipped`                | {count, plural, =0 {} one {# date skipped for holidays} other {# dates skipped for holidays}}                                                                                 |
+| `timetable.slot.splitNote`                  | From {date} this continues as a changed slot. Lessons before {date} stay as they were.                                                                                        |
+| `timetable.slot.saveAnyway`                 | Save anyway                                                                                                                                                                   |
+| `timetable.slot.history`                    | History                                                                                                                                                                       |
+| `timetable.slot.historyRow`                 | Until {date}: {teacher}, {room}, {weekday} {time}                                                                                                                             |
+| `timetable.slot.endInstead`                 | End slot instead                                                                                                                                                              |
+| `timetable.slot.moreOptions`                | More options                                                                                                                                                                  |
+| `timetable.slot.validFrom`                  | First lesson                                                                                                                                                                  |
+| `timetable.slot.validUntil`                 | Last lesson                                                                                                                                                                   |
+| `timetable.slot.notSchoolDay`               | {weekday} (no school)                                                                                                                                                         |
+| `timetable.slot.save`                       | Save slot                                                                                                                                                                     |
+| `timetable.slot.duplicate`                  | Duplicate                                                                                                                                                                     |
+| `timetable.slot.move`                       | Move…                                                                                                                                                                         |
+| `timetable.slot.end`                        | End slot…                                                                                                                                                                     |
+| `timetable.slot.delete`                     | Delete slot                                                                                                                                                                   |
+| `timetable.severity.blocking`               | Conflict                                                                                                                                                                      |
+| `timetable.severity.warning`                | Warning                                                                                                                                                                       |
+| `timetable.severity.newBadge`               | New                                                                                                                                                                           |
+| `timetable.check.title`                     | Check                                                                                                                                                                         |
+| `timetable.check.checking`                  | Checking…                                                                                                                                                                     |
+| `timetable.check.ok`                        | No conflicts.                                                                                                                                                                 |
+| `timetable.check.summary`                   | {conflicts, plural, one {# conflict} other {# conflicts}} · {warnings, plural, one {# warning} other {# warnings}}                                                            |
+| `timetable.check.fixFirst`                  | Fix the conflicts before saving.                                                                                                                                              |
+| `timetable.check.changed`                   | Something changed since the last check. Review the issues again.                                                                                                              |
+| `timetable.check.showSlot`                  | Show slot                                                                                                                                                                     |
+| `timetable.check.availability`              | Availability                                                                                                                                                                  |
+| `timetable.check.members`                   | Members                                                                                                                                                                       |
+| `timetable.check.room`                      | Room                                                                                                                                                                          |
+| `timetable.check.schoolSettings`            | School settings                                                                                                                                                               |
+| `timetable.check.chooseGroup`               | Choose another group                                                                                                                                                          |
+| `timetable.check.showDates`                 | Show dates                                                                                                                                                                    |
+| `timetable.check.moreDates`                 | +{count} more                                                                                                                                                                 |
+| `timetable.override.reason`                 | Reason (optional)                                                                                                                                                             |
+| `timetable.override.acknowledge`            | I've checked this                                                                                                                                                             |
+| `timetable.override.required`               | Tick each warning to save anyway.                                                                                                                                             |
+| `timetable.conflict.generic`                | This slot has a scheduling issue.                                                                                                                                             |
+| `timetable.toast.slotSaved`                 | Slot saved                                                                                                                                                                    |
+| `timetable.toast.slotMoved`                 | Moved {group} to {weekday} {time}                                                                                                                                             |
+| `timetable.toast.slotDeleted`               | Slot deleted                                                                                                                                                                  |
+| `timetable.toast.slotEnded`                 | Slot ends on {date}.                                                                                                                                                          |
+| `timetable.toast.slotSavedResult`           | Slot saved. {result}                                                                                                                                                          |
+| `timetable.editor.changedOn`                | Changed on {date}                                                                                                                                                             |
+| `timetable.end.title`                       | End {group} on {weekday}s?                                                                                                                                                    |
+| `timetable.end.lastLesson`                  | Last lesson                                                                                                                                                                   |
+| `timetable.end.hint`                        | Want to change the teacher, room or time instead? Edit the slot and choose from which date.                                                                                   |
+| `timetable.end.description`                 | Lessons after {date} are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled ("Timetable changed"), so no one loses information.       |
+| `timetable.end.confirm`                     | End slot                                                                                                                                                                      |
+| `timetable.delete.title`                    | Delete this slot?                                                                                                                                                             |
+| `timetable.issues.title`                    | Issues in {term}                                                                                                                                                              |
+| `timetable.issues.includeAcknowledged`      | Include acknowledged warnings                                                                                                                                                 |
+| `timetable.issues.empty`                    | No issues in this term.                                                                                                                                                       |
+| `timetable.publish.action`                  | Publish                                                                                                                                                                       |
+| `timetable.publish.title`                   | Publish {term}?                                                                                                                                                               |
+| `timetable.publish.description`             | Teachers and students will see their lessons right away. You can still change slots later; changes apply from a date you choose.                                              |
+| `timetable.publish.slots`                   | {count, plural, one {# slot} other {# slots}}                                                                                                                                 |
+| `timetable.publish.range`                   | Lessons will be created from {start} to {end}                                                                                                                                 |
+| `timetable.publish.warnings`                | {count, plural, one {# warning acknowledged} other {# warnings acknowledged}}                                                                                                 |
+| `timetable.publish.review`                  | Review                                                                                                                                                                        |
+| `timetable.publish.blocked`                 | Fix {count, plural, one {# conflict} other {# conflicts}} before publishing.                                                                                                  |
+| `timetable.publish.showIssues`              | Show issues                                                                                                                                                                   |
+| `timetable.publish.confirm`                 | Publish timetable                                                                                                                                                             |
+| `timetable.publish.running`                 | Publishing… creating lessons                                                                                                                                                  |
+| `timetable.publish.failed`                  | Couldn't publish. Nothing was changed. Try again.                                                                                                                             |
+| `timetable.publish.done`                    | {term} published. {count, plural, one {# lesson} other {# lessons}} created.                                                                                                  |
+| `timetable.regenerate.description`          | Makes sure every slot has its lessons from today on, without duplicates. Earlier lessons are not touched.                                                                     |
+| `timetable.regenerate.run`                  | Run                                                                                                                                                                           |
 
 ## 9. Accessibility
 
@@ -745,6 +757,9 @@ counts: §5.10.
   before `leftAt`.
 - **Group archived with ended slots**: past lessons still render with the
   group name.
+- **Room archived with running slots**: slots and lessons keep the room, and
+  the room keeps being checked for double bookings and capacity. Read-only
+  views show the room name as usual; students don't see that it's archived.
 - **Term overlap**: two published terms in the same week → both terms'
   lessons appear in read-only views; the editor works on one term at a
   time, but cross-term double bookings are still reported (module checks
@@ -770,15 +785,23 @@ overridable, per-conflict acknowledgement, the type list in §3.2, effective
 dates defaulting to today, slot split on edit, delete-or-cancel of unwanted
 lessons, publish refused only by blocking conflicts.
 
-- **Q1 — Unpublish.** Not offered in v1: once lessons exist, a published
-  term is changed slot by slot. Fine?
-- **Q2 — Copy slots from a previous term.** Cheap and saves the admin a
-  lot of work each term; included as a P1 nice-to-have. Keep it in P1 or
-  defer?
+Owner decisions (2026-10-14, CARM-22):
+
+1. **Severities:** as in §3.1–3.2. The Scheduling Engineer and Designer agreed
+   on these, and the owner raised no objection.
+2. **Unpublish:** not offered in v1 (§5.7).
+3. **Copy slots from a previous term:** stays in P1 as a nice-to-have (§5.9).
+4. **Drafts:** teachers don't see a draft timetable, the same as students (§2).
+5. **Archive rooms and levels:** yes, with a blocking `ROOM_ARCHIVED` conflict
+   (§3.2, `admin-data.md` §5.3). The schema change is CARM-27.
+6. **Password reset:** doesn't sign people out of open sessions
+   (`admin-data.md` §5.4).
+
+Still open:
+
 - **Q3 — Dry-run counts (CARM-23).** Before saving, the UI can only state
   the rule ("lessons after {date} are removed, ones with history are
   cancelled"). A count from `validateSlot` / an end preview would let the
   dialog say "8 lessons removed, 1 cancelled" up front. Nice-to-have, not
-  required for P1.
-- **Q4 — Draft visibility for teachers.** Proposed: teachers see nothing until
-  publish (same as students), so they never act on a draft. OK?
+  required for P1. The Scheduling Engineer will add it as a follow-up
+  after CARM-23. Until then the UI shows the rule.

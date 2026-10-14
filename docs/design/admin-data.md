@@ -157,32 +157,41 @@ flowchart TD
 
 ### 5.3 Archive, restore, delete
 
-The schema soft-deletes only `User` and `Group` (history must survive). The
-UI follows that and is explicit about the rest:
+`User`, `Group`, `Room` and `Level` are soft-deleted, because history must
+survive. Rooms and levels get `archivedAt` (owner decision 5, CARM-27). Everything
+else is hard-deleted, and only while unused:
 
-| Entity            | Action in UI          | Stored as                                         | Allowed when                                                                                           |
-| ----------------- | --------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Teacher           | **Archive** / Restore | `User.deletedAt` (sign-in disabled)               | No slots in a current or future term (blocked dialog lists them, link to timetable).                   |
-| Student           | **Archive** / Restore | `User.deletedAt`; active memberships get `leftAt` | Always; confirm lists groups they will leave.                                                          |
-| Administrator     | **Archive** / Restore | `User.deletedAt`                                  | Not yourself; at least one active admin must remain.                                                   |
-| Group             | **Archive** / Restore | `Group.deletedAt`                                 | No slots in a current or future term (end them first in the editor).                                   |
-| Level             | **Delete**            | hard delete                                       | Not used by any student, course or group. Otherwise menu item disabled with tooltip "In use by {n} …". |
-| Room              | **Delete**            | hard delete                                       | Not used by any slot or lesson. Otherwise disabled with tooltip; see open question Q1.                 |
-| Course            | **Delete**            | hard delete                                       | No groups use it.                                                                                      |
-| Term              | **Delete**            | hard delete                                       | Timetable not published and no lessons. Otherwise disabled.                                            |
-| Holiday           | **Delete**            | hard delete                                       | Always (published term: confirm shows impact, §6.8).                                                   |
-| Availability rule | **Delete**            | hard delete                                       | Always.                                                                                                |
+| Entity            | Action in UI          | Stored as                                         | Allowed when                                                                                            |
+| ----------------- | --------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Teacher           | **Archive** / Restore | `User.deletedAt` (sign-in disabled)               | No slots in a current or future term (blocked dialog lists them, link to timetable).                    |
+| Student           | **Archive** / Restore | `User.deletedAt`; active memberships get `leftAt` | Always; confirm lists groups they will leave.                                                           |
+| Administrator     | **Archive** / Restore | `User.deletedAt`                                  | Not yourself; at least one active admin must remain.                                                    |
+| Group             | **Archive** / Restore | `Group.deletedAt`                                 | No slots in a current or future term (end them first in the editor).                                    |
+| Level             | **Archive** / Restore | `Level.archivedAt`                                | Always. Confirm lists the students and groups that keep it (§6.7). _Delete_ only while unused.          |
+| Room              | **Archive** / Restore | `Room.archivedAt`                                 | Always. Confirm says how many slots still use it; they keep running (§6.9). _Delete_ only while unused. |
+| Course            | **Delete**            | hard delete                                       | No groups use it.                                                                                       |
+| Term              | **Delete**            | hard delete                                       | Timetable not published and no lessons. Otherwise disabled.                                             |
+| Holiday           | **Delete**            | hard delete                                       | Always (published term: confirm shows impact, §6.8).                                                    |
+| Availability rule | **Delete**            | hard delete                                       | Always.                                                                                                 |
 
 - Archive confirm: `AlertDialog`, title "Archive {name}?", body lists the
   consequences (sign-in disabled; leaves groups; hidden from pickers), primary
   `destructive` "Archive". Toast with **Undo** (restores) for 10 s.
 - Delete confirm: "Delete {name}?" + "This can't be undone." Only for
-  unused records, so no consequences list.
+  unused records, so no consequences list. Rooms and levels offer both
+  _Archive_ and _Delete_ in the row menu. _Delete_ is disabled with the
+  tooltip "In use by {n} …" (`common.inUse`) once the record is used,
+  so archiving is the normal way to retire one.
 - **Blocked** state: `AlertDialog` with a single _OK_ / _Go to …_ action:
   "{name} can't be archived yet" + the reason + list (max 5, "+N more").
 - Archived records: hidden from every picker (comboboxes in forms and the
   timetable editor) and from default lists; shown with an `Archived` badge
   (muted) when listed; existing lessons/history still show their names.
+- **Exception: the current value.** When a form already points at an
+  archived record, the picker keeps it as the selected value with an
+  `Archived` badge. Examples: a student's level, a group's level, or a slot's
+  room. Saving with that value unchanged is allowed. Once the admin picks
+  something else, the archived record can't be picked again.
 - Archived users who try to sign in get `auth.login.error.disabled`.
 
 ### 5.4 Password handling (all user types)
@@ -201,8 +210,10 @@ No email in v1, so the admin sets passwords and hands them over.
   be shown again. Ask {firstName} to keep it safe." Single _Done_ button.
   Passwords are never displayed anywhere else, never logged, never in the
   audit log `data`.
-- Setting a new password does not sign out existing sessions in v1
-  (stateless JWT); the UI doesn't mention sessions. See Q3.
+- Setting a new password does not sign out sessions that are already open in v1
+  (stateless JWT). The owner accepted this on 2026-10-14 (decision 6). The UI
+  doesn't mention sessions. To lock someone out at once, the admin archives
+  them, because archiving takes effect on the next request.
 - Admins change their own password via _My profile_ (user menu): current
   password + new password + confirm. Same rule.
 - Every set/reset writes an `AuditLog` row (`user.password_set`, actor, target).
@@ -365,6 +376,13 @@ Detail (`/admin/students/[id]`), header like teachers.
   `levels.error.codeTaken`), Name (required, ≤ 60). New levels go last.
 - Empty state offers a one-click preset: _Add CEFR levels (A1–C2)_
   (`levels.empty.preset`) next to _Add level_.
+- Status filter _Active_ (default) / _Archived_ / _All_. Archived levels keep
+  their `rank` and appear in that position with an `Archived` badge. _Move
+  up / down_ only swaps active levels.
+- **Archive** (row menu, always allowed): confirm `levels.archive.title`
+  "Archive {code}?" with `levels.archive.consequence` "{students} students
+  and {groups} groups keep this level. It's hidden when you pick a level for
+  new students, groups and courses." _Restore_ brings it back to the pickers.
 - Delete: only unused (§5.3).
 
 ### 6.8 Terms & holidays (`/admin/settings/terms`)
@@ -422,6 +440,19 @@ filter (_All_, _School-wide_, each term):
 - Lowering capacity below a group that uses the room → warning in the
   dialog "{group} has {n} students; the timetable will show a capacity
   warning." (Saving allowed.)
+- Status filter _Active_ (default) / _Archived_ / _All_. Archived rows have an
+  `Archived` badge.
+- **Archive** (row menu, always allowed): confirm `rooms.archive.title`
+  "Archive {name}?". If slots in current or future terms use the room, the
+  body adds `rooms.archive.slotsKeepRunning` "{count} slots still use this
+  room. They keep running and are still checked. To move them, edit them in
+  the timetable." with a link _Open timetable_ (filtered by this room).
+  Otherwise the body just says `rooms.archive.consequence` "It's hidden from the
+  timetable editor's room pickers. Past lessons keep it." _Restore_ brings
+  it back.
+- In the timetable editor, new slots can't use an archived room, and
+  existing slots can't be moved into one. The scheduling module blocks
+  this with `ROOM_ARCHIVED` (`timetable.md` §3.2).
 - Empty: "No rooms yet" / "Add classrooms and online rooms to use them in the
   timetable." / "Add room".
 
@@ -683,24 +714,26 @@ Namespaces map to files under `messages/en-GB/` (new: `people`, `teachers`,
 
 ### levels
 
-| Key                        | Copy                                                                              |
-| -------------------------- | --------------------------------------------------------------------------------- |
-| `levels.title`             | Skill levels                                                                      |
-| `levels.description`       | Levels order your groups and decide which replacement lessons a student can join. |
-| `levels.new`               | New level                                                                         |
-| `levels.col.order`         | Order                                                                             |
-| `levels.field.code`        | Code                                                                              |
-| `levels.field.codeHint`    | Short label, e.g. B1                                                              |
-| `levels.field.name`        | Name                                                                              |
-| `levels.col.students`      | Students                                                                          |
-| `levels.col.groups`        | Groups                                                                            |
-| `levels.moveUp`            | Move up                                                                           |
-| `levels.moveDown`          | Move down                                                                         |
-| `levels.error.codeTaken`   | Code "{code}" is already used.                                                    |
-| `levels.empty.title`       | No levels yet                                                                     |
-| `levels.empty.description` | Add the levels you teach, from easiest to hardest.                                |
-| `levels.empty.action`      | Add level                                                                         |
-| `levels.empty.preset`      | Add CEFR levels (A1–C2)                                                           |
+| Key                          | Copy                                                                                                                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `levels.title`               | Skill levels                                                                                                                                                                                         |
+| `levels.description`         | Levels order your groups and decide which replacement lessons a student can join.                                                                                                                    |
+| `levels.new`                 | New level                                                                                                                                                                                            |
+| `levels.col.order`           | Order                                                                                                                                                                                                |
+| `levels.field.code`          | Code                                                                                                                                                                                                 |
+| `levels.field.codeHint`      | Short label, e.g. B1                                                                                                                                                                                 |
+| `levels.field.name`          | Name                                                                                                                                                                                                 |
+| `levels.col.students`        | Students                                                                                                                                                                                             |
+| `levels.col.groups`          | Groups                                                                                                                                                                                               |
+| `levels.moveUp`              | Move up                                                                                                                                                                                              |
+| `levels.moveDown`            | Move down                                                                                                                                                                                            |
+| `levels.error.codeTaken`     | Code "{code}" is already used.                                                                                                                                                                       |
+| `levels.empty.title`         | No levels yet                                                                                                                                                                                        |
+| `levels.empty.description`   | Add the levels you teach, from easiest to hardest.                                                                                                                                                   |
+| `levels.empty.action`        | Add level                                                                                                                                                                                            |
+| `levels.empty.preset`        | Add CEFR levels (A1–C2)                                                                                                                                                                              |
+| `levels.archive.title`       | Archive {code}?                                                                                                                                                                                      |
+| `levels.archive.consequence` | {students, plural, one {# student} other {# students}} and {groups, plural, one {# group} other {# groups}} keep this level. It's hidden when you pick a level for new students, groups and courses. |
 
 ### terms / holidays
 
@@ -742,24 +775,28 @@ Namespaces map to files under `messages/en-GB/` (new: `people`, `teachers`,
 
 ### rooms
 
-| Key                                | Copy                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------- |
-| `rooms.title`                      | Rooms                                                                     |
-| `rooms.new`                        | New room                                                                  |
-| `rooms.search`                     | Search rooms                                                              |
-| `rooms.field.name`                 | Name                                                                      |
-| `rooms.field.kind`                 | Type                                                                      |
-| `rooms.kind.physical`              | Physical room                                                             |
-| `rooms.kind.online`                | Online room                                                               |
-| `rooms.field.capacity`             | Capacity                                                                  |
-| `rooms.field.capacityOnlineHint`   | Leave empty for no limit.                                                 |
-| `rooms.field.meetingUrl`           | Meeting link                                                              |
-| `rooms.col.usedIn`                 | Used in slots                                                             |
-| `rooms.noCapacity`                 | No limit                                                                  |
-| `rooms.warning.capacityBelowGroup` | {group} has {count} students; the timetable will show a capacity warning. |
-| `rooms.empty.title`                | No rooms yet                                                              |
-| `rooms.empty.description`          | Add classrooms and online rooms to use them in the timetable.             |
-| `rooms.empty.action`               | Add room                                                                  |
+| Key                                | Copy                                                                                                                                                             |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rooms.title`                      | Rooms                                                                                                                                                            |
+| `rooms.new`                        | New room                                                                                                                                                         |
+| `rooms.search`                     | Search rooms                                                                                                                                                     |
+| `rooms.field.name`                 | Name                                                                                                                                                             |
+| `rooms.field.kind`                 | Type                                                                                                                                                             |
+| `rooms.kind.physical`              | Physical room                                                                                                                                                    |
+| `rooms.kind.online`                | Online room                                                                                                                                                      |
+| `rooms.field.capacity`             | Capacity                                                                                                                                                         |
+| `rooms.field.capacityOnlineHint`   | Leave empty for no limit.                                                                                                                                        |
+| `rooms.field.meetingUrl`           | Meeting link                                                                                                                                                     |
+| `rooms.col.usedIn`                 | Used in slots                                                                                                                                                    |
+| `rooms.noCapacity`                 | No limit                                                                                                                                                         |
+| `rooms.warning.capacityBelowGroup` | {group} has {count} students; the timetable will show a capacity warning.                                                                                        |
+| `rooms.empty.title`                | No rooms yet                                                                                                                                                     |
+| `rooms.empty.description`          | Add classrooms and online rooms to use them in the timetable.                                                                                                    |
+| `rooms.empty.action`               | Add room                                                                                                                                                         |
+| `rooms.archive.title`              | Archive {name}?                                                                                                                                                  |
+| `rooms.archive.consequence`        | It's hidden from the timetable editor's room pickers. Past lessons keep it.                                                                                      |
+| `rooms.archive.slotsKeepRunning`   | {count, plural, one {# slot still uses} other {# slots still use}} this room. They keep running and are still checked. To move them, edit them in the timetable. |
+| `rooms.archive.openTimetable`      | Open timetable                                                                                                                                                   |
 
 ### groups / courses
 
@@ -871,6 +908,13 @@ Namespaces map to files under `messages/en-GB/` (new: `people`, `teachers`,
   change accordingly on next validation.
 - Levels: deleting is impossible while in use, so ranks never point at
   nothing; reorder swaps ranks in one transaction (unique `(schoolId, rank)`).
+  Archived levels keep their rank, so restoring one never collides.
+- Room archived while slots use it: the slots keep running and lessons are
+  still generated. The editor shows the room column/label with an `Archived`
+  badge. Editing such a slot keeps the room as the current value (§5.3), and
+  only moving it into a different archived room is blocked (`ROOM_ARCHIVED`).
+- Level archived while students and groups have it: their detail pages show
+  "B1 (archived)". Replacement-lesson matching (P3) still uses it.
 - Holiday spanning two terms with scope "all terms": affects both.
 - Term date edits that would orphan holidays outside the term: holidays stay
   (they're dates), shown with a muted "Outside term dates" note.
@@ -879,14 +923,15 @@ Namespaces map to files under `messages/en-GB/` (new: `people`, `teachers`,
 
 ## 10. Open questions
 
-- **Q1 — Archive rooms and levels?** The schema hard-deletes rooms and levels,
-  so a room used last term can never be removed from pickers. Proposal: add
-  `archivedAt` to `Room` (and later `Level`) so they behave like groups. Until
-  then, used rooms simply stay in pickers.
+Owner decisions (2026-10-14, CARM-22):
+
+- **Archive rooms and levels:** yes. `archivedAt` on `Room` and `Level` (schema
+  in CARM-27), plus a blocking `ROOM_ARCHIVED` conflict. See §5.3, §6.7, §6.9.
+- **Password reset doesn't sign out open sessions:** accepted for v1. Archiving
+  does sign the person out (§5.4).
+
+Still open:
+
 - **Q2 — Same person in two schools.** `User` is global and email unique.
   When an admin adds an email that exists in another school, v1 shows "already
   used". Fine while there is one school (P6 decides the multi-school flow).
-- **Q3 — Sign out other sessions after a password reset?** Sessions are
-  stateless JWTs, so a reset doesn't end an open session (archiving does,
-  because membership/`deletedAt` are re-read on every request). Acceptable
-  for v1?

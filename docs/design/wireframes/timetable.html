@@ -254,6 +254,11 @@
             <h3 class="font-semibold mt-2">Warnings <span class="font-normal text-muted-foreground">· Can be overridden</span></h3>
             <ul><li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>2 students (Mia Kovac, Jan Novak) also attend B1 Evening (17:00–18:30) on 15 dates, first on Mon 7 Sep 2026.</li></ul>
             <p class="text-xs text-muted-foreground">Warnings can be acknowledged once the conflict is fixed.</p>`,
+          archived: `<p class="font-medium">1 conflict · 0 warnings</p>
+            <div role="alert" class="text-red-700 font-medium">Fix the conflicts before saving.</div>
+            <h3 class="font-semibold mt-2">Conflicts <span class="font-normal text-muted-foreground">· Cannot be saved</span></h3>
+            <ul><li class="border border-red-300 bg-red-50 rounded-md p-3 text-red-900"><div class="font-medium">⛔ Conflict</div>Room 4 is archived. <a href="#" class="underline">Choose another room</a></li></ul>
+            <p class="text-xs text-muted-foreground">Shown when a slot is moved into an archived room, e.g. after a copy or when someone archived the room while this sheet was open. An existing slot that already uses an archived room is not flagged.</p>`,
         }[kind];
         return `<section aria-live="polite" class="border-t border-border pt-4 space-y-2"><h3 class="text-base font-semibold">Check</h3>${rows}</section>`;
       };
@@ -262,7 +267,7 @@
           published ? "Edit slot" : kind === "clean" ? "New slot" : "Edit slot",
           `${sel("Group (required)", kind === "block" ? "B1 Grammar 1-on-1 · B1 · 1/1" : "A2 Kids · A2 · 10/10")}
            ${sel("Teacher (required)", kind === "block" ? "Tomas Horvat" : "Ana Kral")}
-           ${sel("Room (optional)", kind === "block" ? "Room 2 · 10 seats" : "Room 3 · 8 seats")}
+           ${kind === "archived" ? `<div class="space-y-1"><label class="block font-medium">Room (optional)</label><button class="h-9 w-full rounded-md border border-destructive bg-white px-3 text-left">Room 4 · 6 seats <span class="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-sm border bg-slate-100 text-slate-700 border-slate-300">Archived</span> ▾</button></div>` : sel("Room (optional)", kind === "block" ? "Room 2 · 10 seats" : "Room 3 · 8 seats")}
            <div class="grid grid-cols-3 gap-2">${sel("Day", "Monday")}${sel("Start", kind === "block" ? "17:30" : "15:00")}${sel("End", kind === "block" ? "18:15" : "16:30")}</div>
            <div class="flex gap-2 items-center text-muted-foreground"><span class="tnum">${kind === "block" ? "45" : "90"} min</span>${["45", "60", "90"].map((m) => `<button class="h-7 px-2 rounded-md border border-input text-xs">${m} min</button>`).join("")}</div>
            ${
@@ -285,7 +290,7 @@
         ];
         const roomKeys = ["Room 1", "Room 2", "Room 3", "Online 1"];
         const loading = st === 1;
-        const empty = st === 10;
+        const empty = st === 10 || st === 14;
         const grid = loading
           ? `<div class="bg-white border border-border rounded-lg p-4 space-y-4">${[1, 2, 3, 4].map(() => `<div class="skeleton h-14 w-1/4"></div>`).join("")}</div>`
           : `<div class="relative bg-white border border-border rounded-lg overflow-hidden">
@@ -326,6 +331,16 @@
             btn("Cancel", "outline") + btn("Show issues"),
           );
         if (st === 7) overlay = slotSheet("clean", true);
+        if (st === 13) overlay = slotSheet("archived", false);
+        if (st === 14)
+          overlay = dialog(
+            "Copy slots from another term",
+            `${sel("Copy from", "Autumn 2026 · 24 slots")}
+             <div class="rounded-md bg-muted p-3 tnum">Copy 22 slots. 2 with archived groups or teachers are skipped. 1 loses its room because it's archived.</div>
+             <p class="text-muted-foreground">Copied slots are checked like new ones. Any issues open in the Issues panel.</p>
+             <p class="text-xs text-muted-foreground">P1 nice-to-have (owner decision 3).</p>`,
+            btn("Cancel", "outline") + btn("Copy 22 slots"),
+          );
         if (st === 8)
           overlay = dialog(
             "End B1 Evening on Mondays?",
@@ -522,6 +537,8 @@
             "empty term",
             "< 1024 px",
             "saved · result toast",
+            "slot · archived room",
+            "copy from term",
           ],
           fn: editor,
         },

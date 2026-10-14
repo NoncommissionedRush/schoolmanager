@@ -118,6 +118,7 @@
         ["Room 2", "Physical", "10", "", 5],
         ["Room 3", "Physical", "8", "", 4],
         ["Online 1", "Online", "No limit", "meet.example.com", 3],
+        ["Room 4", "Physical", "6", "", 1, true],
       ];
       const LEVELS = [
         ["A1", "Beginner", 6, 1],
@@ -125,6 +126,7 @@
         ["B1", "Intermediate", 21, 3],
         ["B2", "Upper intermediate", 9, 2],
         ["C1", "Advanced", 3, 0],
+        ["C2", "Proficiency", 0, 0, true],
       ];
 
       /* --------------------------------------------------------------- helpers */
@@ -487,16 +489,29 @@
                 "Add level",
                 btn("Add CEFR levels (A1–C2)", "outline"),
               )
-            : table(
+            : filterBar("Search levels", [], true).replace(
+                "Status: Active",
+                "Status: All",
+              ) +
+              table(
                 ["Order", "Code", "Name", "Students", "Groups"],
-                LEVELS.map(([c, n, s, g], i) => [
+                LEVELS.map(([c, n, s, g, a], i) => [
                   `${i + 1}`,
                   badge(c),
-                  n,
+                  a ? `${n} ${badge("Archived")}` : n,
                   s,
                   g,
                 ]),
               );
+        const overlay =
+          st === 2
+            ? dialog(
+                "Archive B2?",
+                `<p>9 students and 2 groups keep this level. It's hidden when you pick a level for new students, groups and courses.</p><p class="text-muted-foreground">You can restore it later.</p>`,
+                btn("Cancel", "outline") + btn("Archive", "destructive"),
+                "max-w-md",
+              )
+            : "";
         return shell(
           "levels",
           pageHeader(
@@ -507,7 +522,8 @@
             body +
             (st === 1
               ? ""
-              : `<p class="text-muted-foreground mt-3">Reorder with “Move up / Move down” in each row's menu. C1 can be deleted (unused); others show “In use by …”.</p>`),
+              : `<p class="text-muted-foreground mt-3">Reorder with “Move up / Move down” in each row's menu. Every level can be archived. Unused levels (C1) can also be deleted; for the others, Delete is disabled with “In use by …”. Archived levels keep their place in the order.</p>`),
+          overlay,
         );
       }
 
@@ -584,8 +600,8 @@
               )
             : table(
                 ["Name", "Type", "Capacity", "Meeting link", "Used in slots"],
-                ROOMS.map(([n, k, c, u, s]) => [
-                  n,
+                ROOMS.map(([n, k, c, u, s, a]) => [
+                  a ? `${n} ${badge("Archived")}` : n,
                   k === "Online" ? "🎥 Online" : "🚪 Physical",
                   c,
                   u
@@ -604,12 +620,21 @@
                   `<div class="border border-amber-300 bg-amber-50 text-amber-800 rounded-md p-3">B1 Evening has 10 students; the timetable will show a capacity warning.</div>`,
                 btn("Cancel", "outline") + btn("Save"),
               )
-            : "";
+            : st === 3
+              ? dialog(
+                  "Archive Room 3?",
+                  `<p>4 slots still use this room. They keep running and are still checked. To move them, edit them in the timetable.</p><p class="text-muted-foreground">New slots can't use an archived room. You can restore it later.</p>`,
+                  btn("Cancel", "outline") +
+                    btn("Open timetable", "outline") +
+                    btn("Archive", "destructive"),
+                  "max-w-md",
+                )
+              : "";
         return shell(
           "rooms",
           pageHeader("Settings", "") +
             sub +
-            `<div class="flex justify-between mb-3"><div class="flex gap-2"><input type="search" class="h-9 w-64 rounded-md border border-input px-3 bg-white" placeholder="Search rooms" /><button class="h-9 px-3 rounded-md border border-input bg-white">Type: All ▾</button></div>${btn("+ New room")}</div>` +
+            `<div class="flex justify-between mb-3"><div class="flex gap-2"><input type="search" class="h-9 w-64 rounded-md border border-input px-3 bg-white" placeholder="Search rooms" /><button class="h-9 px-3 rounded-md border border-input bg-white">Type: All ▾</button><button class="h-9 px-3 rounded-md border border-input bg-white">Status: All ▾</button></div>${btn("+ New room")}</div>` +
             body,
           overlay,
         );
@@ -693,7 +718,7 @@
         {
           k: "levels",
           label: "Levels",
-          states: ["list", "empty (preset)"],
+          states: ["list", "empty (preset)", "archive confirm"],
           fn: levels,
         },
         {
@@ -705,7 +730,12 @@
         {
           k: "rooms",
           label: "Rooms",
-          states: ["list", "empty", "edit · capacity warning"],
+          states: [
+            "list",
+            "empty",
+            "edit · capacity warning",
+            "archive confirm",
+          ],
           fn: rooms,
         },
       ];
