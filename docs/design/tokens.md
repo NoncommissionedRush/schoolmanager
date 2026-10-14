@@ -68,9 +68,9 @@ Lesson blocks use a tinted surface, a 3 px left border and dark text. The
 
 All text/surface pairs above are ≥ 7:1.
 
-### 1.3 Dark mode (optional for v1)
+### 1.3 Dark mode (not in v1 — reference only)
 
-Ship light only unless it comes for free. If implemented, use `next-themes`
+Decided 2026-10-14: v1 ships light only. Kept for later; when implemented, use `next-themes`
 with `class` strategy and these values; status/lesson tokens swap to their
 `-300` text on `-950`/`/20` surfaces.
 

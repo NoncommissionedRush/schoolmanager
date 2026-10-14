@@ -22,7 +22,7 @@ weekly timetable grid. Tokens: `docs/design/tokens.md`. Clickable wireframe:
 | Teacher | Desktop or tablet; phone between lessons | See own lessons, log lessons, attendance, homework, report absence |
 | Student | Phone (≈ 390 × 844) | See next lesson & timetable, homework, report absence, book replacement |
 
-v1 assumes **one role per user per school** (see Open questions).
+**One role per user** (decided 2026-10-14): a person is admin, teacher or student — never several. No role switcher.
 
 ## 3. User flow
 
@@ -55,7 +55,7 @@ and returns there after sign-in (if the role allows it).
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│ [≡] [logo] Lingua Language School            [🔔 P5]  [AV Anna ▾]     │  header h-14, sticky
+│ [≡] [LL] Lingua Language School              [🔔 P5]  [AV Anna ▾]     │  header h-14, sticky
 ├──────────────┬────────────────────────────────────────────────────────┤
 │ OVERVIEW     │  Breadcrumb (optional)                                  │
 │ ▣ Dashboard  │  H1 Page title                       [Primary action]  │
@@ -69,8 +69,9 @@ and returns there after sign-in (if the role allows it).
 ```
 
 - **Header** (`<header>`, sticky, `border-b`, `bg-background`):
-  sidebar toggle (icon button, `aria-label` `nav.toggleSidebar`) · school logo
-  (32 px, fallback = initials tile) + **school name** (truncate with tooltip) ·
+  sidebar toggle (icon button, `aria-label` `nav.toggleSidebar`) · school
+  **initials tile** (32 px, `bg-primary`, first letters of the school name — no
+  uploaded logos, see §9) + **school name** (truncate with tooltip) ·
   right side: notifications bell (**P5**, not rendered before) · **user menu**.
 - **User menu** (`DropdownMenu` on an `Avatar` + first name + chevron; on mobile avatar only):
   header shows full name, email and role badge · *My profile* (P1) ·
@@ -194,7 +195,7 @@ All copy below is English source for next-intl. `{name}` = ICU placeholder.
 ### 7.1 Login (`/login`, public)
 
 Layout: `bg-muted` full screen, centered card `max-w-sm`, `rounded-xl`, `p-6`.
-School logo + school name (display) above the card; v1 has one school, so the
+School initials tile + school name (display) above the card; v1 has one school, so the
 name comes from the single seeded school (multi-school login is P6).
 
 | Element | Key | Copy |
@@ -205,7 +206,7 @@ name comes from the single seeded school (multi-school login is P6).
 | Password label | `auth.login.password` | Password |
 | Show/hide password (icon button) | `auth.login.showPassword` / `auth.login.hidePassword` | Show password / Hide password |
 | Submit | `auth.login.submit` / `auth.login.submitting` | Sign in / Signing in… |
-| Forgot password link | `auth.login.forgot` | Forgot password? (**P5** — needs email; hidden in v1, see Open questions) |
+| Forgot password link | `auth.login.forgot` | Forgot password? — **not rendered in v1**; admins set passwords. Returns with email in P5. |
 | Invalid credentials | `auth.login.error.invalid` | Email or password is incorrect. |
 | Account disabled | `auth.login.error.disabled` | Your account is disabled. Contact the school office. |
 | Rate limited | `auth.login.error.rateLimited` | Too many attempts. Try again in a few minutes. |
@@ -293,7 +294,7 @@ Desktop week grid:
 
 - Columns: time axis (56 px) + one column per **school day** (Mon–Sat default;
   school setting). Today's column header highlighted (`bg-accent`, `aria-current="date"`).
-- Rows: school hours (default 08:00–21:00; language schools run evenings), 64 px
+- Rows: school hours (default 07:00–21:00; school setting), 64 px
   per hour, 15-min snapping, hairline every 30 min.
 - Lesson block (`button`, absolutely positioned by start/duration): time range,
   group/student name (bold), room · teacher (admin) or room · level (teacher),
@@ -328,11 +329,13 @@ States: loading (grid skeleton with 3–4 grey blocks) · empty week
 - Timezone: all times shown in the school's timezone (school setting), not the browser's.
 - 320 px width and 400 % zoom: header collapses to menu + avatar; tables become cards.
 
-## 9. Open questions (for the project owner)
+## 9. Decisions (project owner, 2026-10-14)
 
-1. **One role per user?** Can a person be both admin and teacher (common in small schools)? Proposal: v1 = one role per user per school; P6 adds a role switcher in the user menu.
-2. **Later-phase nav items**: hide until shipped (proposal) or show disabled "coming soon"?
-3. **Password reset** needs outbound email (P5 notifications). OK to ship v1 with admin-set passwords only and hide *Forgot password?*
-4. **School week**: default Mon–Sat, 08:00–21:00 — matches your school?
-5. **Brand**: any school logo/color to use instead of the neutral blue? The theme is a one-variable swap (`--primary`).
-6. **Dark mode**: skip for v1 (proposal) or include?
+1. **Roles**: one role per user. No multi-role users, no role switcher.
+2. **Later-phase nav items**: hidden until the feature ships (no "coming soon" items).
+3. **Passwords**: admins set passwords in v1; *Forgot password?* is not rendered until email exists (P5).
+4. **School week**: Mon–Sat, 07:00–21:00 by default (stored as a school setting, so other schools can change it).
+5. **Branding**: no school logos. The product is multi-school, so the UI stays neutral: the shared blue theme plus the school name and an initials tile. No per-school theming in v1.
+6. **Dark mode**: not in v1. Light theme only; the dark values in `tokens.md` stay as reference for later.
+
+No open questions remain for this spec.
