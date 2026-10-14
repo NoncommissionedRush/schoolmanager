@@ -94,8 +94,7 @@ test.describe("admin › students", () => {
     ["teacher", "/teacher"],
     ["student", "/student"],
   ] as const) {
-    // The status isn't asserted: the shell streams before the role check,
-    // so production answers 200 with the forbidden page (as in auth.spec).
+    // The proxy answers 403 here; permissions/roles.spec asserts the status.
     test(`a ${role} gets the forbidden page`, async ({ page }) => {
       await signIn(page, DEMO_LOGINS[role]);
       await page.waitForURL(home);
