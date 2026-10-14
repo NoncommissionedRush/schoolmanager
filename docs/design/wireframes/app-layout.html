@@ -1,221 +1,516 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wireframe — App layout (CARM-16)</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
-        colors: {
-          background: '#ffffff', foreground: '#0f172a',
-          muted: { DEFAULT: '#f1f5f9', foreground: '#475569' },
-          primary: { DEFAULT: '#2563eb', foreground: '#ffffff' },
-          accent: { DEFAULT: '#eff6ff', foreground: '#1e40af' },
-          destructive: { DEFAULT: '#dc2626', foreground: '#ffffff' },
-          border: '#e2e8f0', input: '#64748b', ring: '#2563eb',
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — App layout (CARM-16)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
         },
-        borderRadius: { lg: '0.5rem', md: '6px', sm: '4px' },
-      },
-    },
-  };
-</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  body { font-feature-settings: 'cv11'; }
-  .tnum { font-variant-numeric: tabular-nums; }
-  .focus-ring:focus-visible { outline: none; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2563eb; }
-  .skeleton { background: #e2e8f0; border-radius: 4px; }
-  .holiday { background: repeating-linear-gradient(135deg,#f8fafc 0 8px,#f1f5f9 8px 16px); }
-  [hidden] { display: none !important; }
-</style>
-</head>
-<body class="bg-slate-200 text-foreground font-sans text-sm">
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-feature-settings: "cv11";
+      }
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .focus-ring:focus-visible {
+        outline: none;
+        box-shadow:
+          0 0 0 2px #fff,
+          0 0 0 4px #2563eb;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .holiday {
+        background: repeating-linear-gradient(
+          135deg,
+          #f8fafc 0 8px,
+          #f1f5f9 8px 16px
+        );
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <!-- ===== Wireframe control bar (not part of the product) ===== -->
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · App layout</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex gap-1" id="wf-states"></div>
+      </div>
+      <label class="flex items-center gap-1"
+        ><input type="checkbox" id="wf-later" checked /> show later-phase nav
+        (IA review only)</label
+      >
+    </div>
 
-<!-- ===== Wireframe control bar (not part of the product) ===== -->
-<div class="sticky top-0 z-50 bg-slate-900 text-slate-100 px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-  <strong class="text-sm">Wireframe · App layout</strong>
-  <div class="flex flex-wrap gap-1" id="wf-screens"></div>
-  <div class="flex items-center gap-1">
-    <span class="text-slate-400">State:</span>
-    <div class="flex gap-1" id="wf-states"></div>
-  </div>
-  <label class="flex items-center gap-1"><input type="checkbox" id="wf-later" checked> show later-phase nav (IA review only)</label>
-</div>
+    <div id="stage" class="flex justify-center p-6"></div>
 
-<div id="stage" class="p-6 flex justify-center"></div>
+    <script>
+      /* ------------------------------------------------------------------ data */
+      const SCHOOL = "Lingua Language School";
+      const USERS = {
+        admin: {
+          first: "Anna",
+          full: "Anna Novak",
+          email: "admin@lingua.test",
+          initials: "AN",
+        },
+        teacher: {
+          first: "Tomas",
+          full: "Tomas Horvat",
+          email: "teacher@lingua.test",
+          initials: "TH",
+        },
+        student: {
+          first: "Mia",
+          full: "Mia Kovac",
+          email: "student@lingua.test",
+          initials: "MK",
+        },
+      };
+      const I = {
+        // tiny inline icons (lucide-like strokes)
+        dash: '<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>',
+        cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+        calx: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M10 14l4 4M14 14l-4 4"/>',
+        users:
+          '<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M16 3.1a4 4 0 0 1 0 7.8M22 21v-2a4 4 0 0 0-3-3.9"/>',
+        user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
+        cap: '<path d="M22 10 12 5 2 10l10 5 10-5zM6 12v5c3 2 9 2 12 0v-5"/>',
+        book: '<path d="M2 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z"/>',
+        signal: '<path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/>',
+        star: '<path d="m12 2 3 7 7 .6-5.3 4.7L18.2 22 12 18l-6.2 4 1.5-7.7L2 9.6 9 9z"/>',
+        wallet:
+          '<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 13h2M2 10h20"/>',
+        chart: '<path d="M3 3v18h18M8 17V9M13 17V5M18 17v-6"/>',
+        wand: '<path d="m15 4 5 5L9 20H4v-5zM19 2v3M21 4h-3"/>',
+        cog: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+        ucog: '<circle cx="10" cy="7" r="4"/><path d="M3 21v-1a6 6 0 0 1 9-5.2M18 15v.01M18 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>',
+        pen: '<path d="M4 4h12v16H4zM8 8h4M8 12h4M20 7l-6 6v3h3l6-6z"/>',
+        clip: '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 3v2h6V3M9 11h6M9 15h6"/>',
+        checks: '<path d="m3 7 2 2 4-4M3 17l2 2 4-4M13 6h8M13 12h8M13 18h8"/>',
+        house: '<path d="M3 10 12 3l9 7v11H3zM9 21v-7h6v7"/>',
+        menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+        bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+        chev: '<path d="m6 9 6 6 6-6"/>',
+        left: '<path d="m15 18-6-6 6-6"/>',
+        right: '<path d="m9 18 6-6-6-6"/>',
+        panel:
+          '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>',
+        out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+        alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+        x: '<path d="M18 6 6 18M6 6l12 12"/>',
+        eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+        sparkle:
+          '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+        repeat:
+          '<path d="m17 2 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>',
+        door: '<path d="M3 21h18M5 21V3h11v18M12 12h.01"/>',
+      };
+      const icon = (n, c = "w-4 h-4") =>
+        `<svg class="${c} shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
 
-<script>
-/* ------------------------------------------------------------------ data */
-const SCHOOL = 'Lingua Language School';
-const USERS = {
-  admin:   { first: 'Anna',  full: 'Anna Novak',   email: 'admin@lingua.test',   initials: 'AN' },
-  teacher: { first: 'Tomas', full: 'Tomas Horvat', email: 'teacher@lingua.test', initials: 'TH' },
-  student: { first: 'Mia',   full: 'Mia Kovac',    email: 'student@lingua.test', initials: 'MK' },
-};
-const I = { // tiny inline icons (lucide-like strokes)
-  dash:'<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>',
-  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-  calx:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M10 14l4 4M14 14l-4 4"/>',
-  users:'<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M16 3.1a4 4 0 0 1 0 7.8M22 21v-2a4 4 0 0 0-3-3.9"/>',
-  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
-  cap:'<path d="M22 10 12 5 2 10l10 5 10-5zM6 12v5c3 2 9 2 12 0v-5"/>',
-  book:'<path d="M2 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z"/>',
-  signal:'<path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/>',
-  star:'<path d="m12 2 3 7 7 .6-5.3 4.7L18.2 22 12 18l-6.2 4 1.5-7.7L2 9.6 9 9z"/>',
-  wallet:'<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 13h2M2 10h20"/>',
-  chart:'<path d="M3 3v18h18M8 17V9M13 17V5M18 17v-6"/>',
-  wand:'<path d="m15 4 5 5L9 20H4v-5zM19 2v3M21 4h-3"/>',
-  cog:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
-  ucog:'<circle cx="10" cy="7" r="4"/><path d="M3 21v-1a6 6 0 0 1 9-5.2M18 15v.01M18 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>',
-  pen:'<path d="M4 4h12v16H4zM8 8h4M8 12h4M20 7l-6 6v3h3l6-6z"/>',
-  clip:'<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 3v2h6V3M9 11h6M9 15h6"/>',
-  checks:'<path d="m3 7 2 2 4-4M3 17l2 2 4-4M13 6h8M13 12h8M13 18h8"/>',
-  house:'<path d="M3 10 12 3l9 7v11H3zM9 21v-7h6v7"/>',
-  menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
-  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
-  chev:'<path d="m6 9 6 6 6-6"/>', left:'<path d="m15 18-6-6 6-6"/>', right:'<path d="m9 18 6-6-6-6"/>',
-  panel:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>',
-  out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
-  alert:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
-  x:'<path d="M18 6 6 18M6 6l12 12"/>', eye:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
-  sparkle:'<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
-  repeat:'<path d="m17 2 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>',
-  door:'<path d="M3 21h18M5 21V3h11v18M12 12h.01"/>',
-};
-const icon = (n, c='w-4 h-4') => `<svg class="${c} shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+      const NAV = {
+        admin: [
+          {
+            items: [{ k: "dashboard", label: "Dashboard", icon: "dash", p: 0 }],
+          },
+          {
+            section: "Schedule",
+            items: [
+              { k: "timetable", label: "Timetable", icon: "cal", p: 1 },
+              { label: "Absences & replacements", icon: "calx", p: 3 },
+              { label: "Substitutions", icon: "ucog", p: 5 },
+              { label: "Auto-generate", icon: "wand", p: 4 },
+            ],
+          },
+          {
+            section: "People",
+            items: [
+              { label: "Students", icon: "cap", p: 1 },
+              { label: "Teachers", icon: "user", p: 1 },
+              { label: "Parents", icon: "users", p: 6 },
+            ],
+          },
+          {
+            section: "Academics",
+            items: [
+              { label: "Courses & groups", icon: "book", p: 1 },
+              { label: "Skill levels", icon: "signal", p: 1 },
+              { label: "Ratings", icon: "star", p: 5 },
+            ],
+          },
+          {
+            section: "Finance",
+            items: [
+              { label: "Payments", icon: "wallet", p: 6 },
+              { label: "Reports", icon: "chart", p: 6 },
+            ],
+          },
+        ],
+        teacher: [
+          {
+            items: [{ k: "dashboard", label: "Dashboard", icon: "dash", p: 0 }],
+          },
+          {
+            section: "Teaching",
+            items: [
+              { k: "timetable", label: "My timetable", icon: "cal", p: 1 },
+              { label: "My groups & students", icon: "users", p: 1 },
+              { label: "Lesson log", icon: "pen", p: 2 },
+              { label: "Homework", icon: "clip", p: 2 },
+              { label: "Ratings", icon: "star", p: 5 },
+            ],
+          },
+          {
+            section: "Me",
+            items: [
+              { label: "My absences", icon: "calx", p: 3 },
+              { label: "Substitutions", icon: "ucog", p: 5 },
+            ],
+          },
+        ],
+        student: [
+          {
+            items: [
+              { k: "dashboard", label: "Home", icon: "house", p: 0, tab: 1 },
+              { k: "timetable", label: "Timetable", icon: "cal", p: 1, tab: 1 },
+              { label: "Homework", icon: "clip", p: 2, tab: 1 },
+              { label: "Absences", icon: "calx", p: 3, tab: 1 },
+              { label: "Attendance", icon: "checks", p: 2 },
+              { label: "Payments", icon: "wallet", p: 6 },
+            ],
+          },
+        ],
+      };
+      const BOTTOM = {
+        admin: { label: "Settings", icon: "cog", p: 1 },
+        teacher: null,
+        student: null,
+      };
 
-const NAV = {
-  admin: [
-    { items: [{ k:'dashboard', label:'Dashboard', icon:'dash', p:0 }] },
-    { section:'Schedule', items: [
-      { k:'timetable', label:'Timetable', icon:'cal', p:1 },
-      { label:'Absences & replacements', icon:'calx', p:3 },
-      { label:'Substitutions', icon:'ucog', p:5 },
-      { label:'Auto-generate', icon:'wand', p:4 } ] },
-    { section:'People', items: [
-      { label:'Students', icon:'cap', p:1 }, { label:'Teachers', icon:'user', p:1 }, { label:'Parents', icon:'users', p:6 } ] },
-    { section:'Academics', items: [
-      { label:'Courses & groups', icon:'book', p:1 }, { label:'Skill levels', icon:'signal', p:1 }, { label:'Ratings', icon:'star', p:5 } ] },
-    { section:'Finance', items: [ { label:'Payments', icon:'wallet', p:6 }, { label:'Reports', icon:'chart', p:6 } ] },
-  ],
-  teacher: [
-    { items: [{ k:'dashboard', label:'Dashboard', icon:'dash', p:0 }] },
-    { section:'Teaching', items: [
-      { k:'timetable', label:'My timetable', icon:'cal', p:1 }, { label:'My groups & students', icon:'users', p:1 },
-      { label:'Lesson log', icon:'pen', p:2 }, { label:'Homework', icon:'clip', p:2 }, { label:'Ratings', icon:'star', p:5 } ] },
-    { section:'Me', items: [ { label:'My absences', icon:'calx', p:3 }, { label:'Substitutions', icon:'ucog', p:5 } ] },
-  ],
-  student: [
-    { items: [
-      { k:'dashboard', label:'Home', icon:'house', p:0, tab:1 }, { k:'timetable', label:'Timetable', icon:'cal', p:1, tab:1 },
-      { label:'Homework', icon:'clip', p:2, tab:1 }, { label:'Absences', icon:'calx', p:3, tab:1 },
-      { label:'Attendance', icon:'checks', p:2 }, { label:'Payments', icon:'wallet', p:6 } ] },
-  ],
-};
-const BOTTOM = { admin: { label:'Settings', icon:'cog', p:1 }, teacher: null, student: null };
+      /* Lessons for week 13–19 Oct 2026; day 0 = Mon. Today = Tue (day 1). */
+      const LESSONS = [
+        {
+          d: 0,
+          s: "09:00",
+          e: "10:30",
+          t: "English B1 · Group A",
+          room: "Room 2",
+          who: "T. Horvat",
+          type: "group",
+          lvl: "B1",
+        },
+        {
+          d: 0,
+          s: "17:00",
+          e: "18:30",
+          t: "German A2 · Evening",
+          room: "Room 1",
+          who: "L. Weber",
+          type: "group",
+          lvl: "A2",
+        },
+        {
+          d: 0,
+          s: "17:30",
+          e: "18:30",
+          t: "Mia Kovac",
+          room: "Room 3",
+          who: "T. Horvat",
+          type: "individual",
+          lvl: "B2",
+        },
+        {
+          d: 1,
+          s: "08:30",
+          e: "10:00",
+          t: "English A1 · Morning",
+          room: "Room 1",
+          who: "T. Horvat",
+          type: "group",
+          lvl: "A1",
+        },
+        {
+          d: 1,
+          s: "10:30",
+          e: "11:00",
+          t: "Peter Saric",
+          room: "Room 3",
+          who: "L. Weber",
+          type: "individual",
+          lvl: "C1",
+        },
+        {
+          d: 1,
+          s: "18:00",
+          e: "19:30",
+          t: "English B2 · Group C",
+          room: "Room 2",
+          who: "T. Horvat",
+          type: "replacement",
+          lvl: "B2",
+        },
+        {
+          d: 2,
+          s: "09:00",
+          e: "10:30",
+          t: "English B1 · Group A",
+          room: "Room 2",
+          who: "T. Horvat",
+          type: "group",
+          lvl: "B1",
+        },
+        {
+          d: 2,
+          s: "14:00",
+          e: "15:00",
+          t: "Spanish A1 · Kids",
+          room: "Room 1",
+          who: "R. Lopez",
+          type: "cancelled",
+          lvl: "A1",
+        },
+        {
+          d: 3,
+          s: "17:00",
+          e: "18:30",
+          t: "German A2 · Evening",
+          room: "Room 1",
+          who: "L. Weber",
+          type: "group",
+          lvl: "A2",
+        },
+        {
+          d: 3,
+          s: "19:00",
+          e: "20:30",
+          t: "English C1 · Business",
+          room: "Room 2",
+          who: "T. Horvat",
+          type: "group",
+          lvl: "C1",
+        },
+        {
+          d: 4,
+          s: "12:00",
+          e: "13:00",
+          t: "Mia Kovac",
+          room: "Room 3",
+          who: "T. Horvat",
+          type: "individual",
+          lvl: "B2",
+        },
+        {
+          d: 5,
+          s: "09:00",
+          e: "12:00",
+          t: "Exam prep · Cambridge",
+          room: "Room 2",
+          who: "R. Lopez",
+          type: "group",
+          lvl: "B2",
+        },
+      ];
+      const LT = {
+        group: {
+          bg: "bg-blue-50",
+          bd: "border-blue-600",
+          tx: "text-blue-900",
+          ic: "users",
+          sr: "Group lesson",
+        },
+        individual: {
+          bg: "bg-violet-50",
+          bd: "border-violet-600",
+          tx: "text-violet-900",
+          ic: "user",
+          sr: "1-on-1 lesson",
+        },
+        replacement: {
+          bg: "bg-amber-50",
+          bd: "border-amber-600",
+          tx: "text-amber-900",
+          ic: "repeat",
+          sr: "Replacement lesson (P3)",
+        },
+        cancelled: {
+          bg: "bg-slate-50",
+          bd: "border-slate-400 border-dashed",
+          tx: "text-slate-600 line-through",
+          ic: "x",
+          sr: "Cancelled (P2)",
+        },
+      };
+      const DAYS = ["Mon 13", "Tue 14", "Wed 15", "Thu 16", "Fri 17", "Sat 18"];
+      const TODAY = 1;
 
-/* Lessons for week 13–19 Oct 2026; day 0 = Mon. Today = Tue (day 1). */
-const LESSONS = [
-  { d:0, s:'09:00', e:'10:30', t:'English B1 · Group A', room:'Room 2', who:'T. Horvat', type:'group', lvl:'B1' },
-  { d:0, s:'17:00', e:'18:30', t:'German A2 · Evening', room:'Room 1', who:'L. Weber', type:'group', lvl:'A2' },
-  { d:0, s:'17:30', e:'18:30', t:'Mia Kovac', room:'Room 3', who:'T. Horvat', type:'individual', lvl:'B2' },
-  { d:1, s:'08:30', e:'10:00', t:'English A1 · Morning', room:'Room 1', who:'T. Horvat', type:'group', lvl:'A1' },
-  { d:1, s:'10:30', e:'11:00', t:'Peter Saric', room:'Room 3', who:'L. Weber', type:'individual', lvl:'C1' },
-  { d:1, s:'18:00', e:'19:30', t:'English B2 · Group C', room:'Room 2', who:'T. Horvat', type:'replacement', lvl:'B2' },
-  { d:2, s:'09:00', e:'10:30', t:'English B1 · Group A', room:'Room 2', who:'T. Horvat', type:'group', lvl:'B1' },
-  { d:2, s:'14:00', e:'15:00', t:'Spanish A1 · Kids', room:'Room 1', who:'R. Lopez', type:'cancelled', lvl:'A1' },
-  { d:3, s:'17:00', e:'18:30', t:'German A2 · Evening', room:'Room 1', who:'L. Weber', type:'group', lvl:'A2' },
-  { d:3, s:'19:00', e:'20:30', t:'English C1 · Business', room:'Room 2', who:'T. Horvat', type:'group', lvl:'C1' },
-  { d:4, s:'12:00', e:'13:00', t:'Mia Kovac', room:'Room 3', who:'T. Horvat', type:'individual', lvl:'B2' },
-  { d:5, s:'09:00', e:'12:00', t:'Exam prep · Cambridge', room:'Room 2', who:'R. Lopez', type:'group', lvl:'B2' },
-];
-const LT = {
-  group:       { bg:'bg-blue-50',   bd:'border-blue-600',   tx:'text-blue-900',   ic:'users',  sr:'Group lesson' },
-  individual:  { bg:'bg-violet-50', bd:'border-violet-600', tx:'text-violet-900', ic:'user',   sr:'1-on-1 lesson' },
-  replacement: { bg:'bg-amber-50',  bd:'border-amber-600',  tx:'text-amber-900',  ic:'repeat', sr:'Replacement lesson (P3)' },
-  cancelled:   { bg:'bg-slate-50',  bd:'border-slate-400 border-dashed', tx:'text-slate-600 line-through', ic:'x', sr:'Cancelled (P2)' },
-};
-const DAYS = ['Mon 13','Tue 14','Wed 15','Thu 16','Fri 17','Sat 18'];
-const TODAY = 1;
+      /* ------------------------------------------------------------- state */
+      const SCREENS = [
+        {
+          k: "login",
+          label: "Login",
+          states: [
+            "default",
+            "validation",
+            "submitting",
+            "auth error",
+            "session expired",
+          ],
+        },
+        {
+          k: "admin",
+          label: "Admin dashboard",
+          states: ["empty (P0)", "loading", "error"],
+        },
+        {
+          k: "teacher",
+          label: "Teacher dashboard",
+          states: ["empty (P0)", "loading", "error"],
+        },
+        {
+          k: "student",
+          label: "Student home · mobile",
+          states: ["empty (P0)", "loading", "error"],
+        },
+        {
+          k: "tt-admin",
+          label: "Timetable · admin desktop",
+          states: ["week", "loading", "empty week", "not published"],
+        },
+        {
+          k: "tt-student",
+          label: "Timetable · student mobile",
+          states: ["day", "loading", "empty day"],
+        },
+        { k: "tokens", label: "Tokens & components", states: ["—"] },
+      ];
+      let cur = {
+        screen: "login",
+        state: 0,
+        collapsed: false,
+        menu: false,
+        sheet: false,
+        lesson: null,
+        day: TODAY,
+      };
 
-/* ------------------------------------------------------------- state */
-const SCREENS = [
-  { k:'login',     label:'Login',                    states:['default','validation','submitting','auth error','session expired'] },
-  { k:'admin',     label:'Admin dashboard',          states:['empty (P0)','loading','error'] },
-  { k:'teacher',   label:'Teacher dashboard',        states:['empty (P0)','loading','error'] },
-  { k:'student',   label:'Student home · mobile',    states:['empty (P0)','loading','error'] },
-  { k:'tt-admin',  label:'Timetable · admin desktop',states:['week','loading','empty week','not published'] },
-  { k:'tt-student',label:'Timetable · student mobile',states:['day','loading','empty day'] },
-  { k:'tokens',    label:'Tokens & components',      states:['—'] },
-];
-let cur = { screen:'login', state:0, collapsed:false, menu:false, sheet:false, lesson:null, day:TODAY };
-
-/* ------------------------------------------------------------- shell */
-function navItem(it, role, active, collapsed, mobile) {
-  const showLater = document.getElementById('wf-later').checked;
-  const later = it.p > 0; // P0 = shipping now
-  if (later && !showLater) return '';
-  const isActive = it.k === active;
-  const target = it.k === 'timetable' ? (role === 'student' ? 'tt-student' : 'tt-admin') : it.k === 'dashboard' ? role : null;
-  const cls = isActive ? 'bg-accent text-accent-foreground font-medium' : 'text-slate-700 hover:bg-muted';
-  const badge = later ? `<span class="ml-auto text-[11px] font-medium px-1.5 rounded-sm bg-slate-100 text-slate-600 border border-slate-200">P${it.p}</span>` : '';
-  return `<a href="#" ${target ? `data-go="${target}"` : ''} ${isActive ? 'aria-current="page"' : ''} title="${collapsed ? it.label : ''}"
-    class="focus-ring flex items-center gap-3 rounded-md ${collapsed ? 'justify-center h-9 w-9 mx-auto' : 'px-3 h-9'} ${cls} ${later && !target ? 'opacity-60' : ''}">
-    ${icon(it.icon)}${collapsed ? '' : `<span class="truncate">${it.label}</span>${badge}`}</a>`;
-}
-function navList(role, active, collapsed, mobile) {
-  let h = '';
-  for (const g of NAV[role]) {
-    const items = g.items.map(it => navItem(it, role, active, collapsed, mobile)).join('');
-    if (!items) continue;
-    h += `<div class="py-2">${g.section && !collapsed ? `<div class="px-3 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">${g.section}</div>` : ''}<div class="space-y-0.5">${items}</div></div>`;
-  }
-  return h;
-}
-function userMenu(role, mobile) {
-  const u = USERS[role];
-  return `<div class="relative">
+      /* ------------------------------------------------------------- shell */
+      function navItem(it, role, active, collapsed, mobile) {
+        const showLater = document.getElementById("wf-later").checked;
+        const later = it.p > 0; // P0 = shipping now
+        if (later && !showLater) return "";
+        const isActive = it.k === active;
+        const target =
+          it.k === "timetable"
+            ? role === "student"
+              ? "tt-student"
+              : "tt-admin"
+            : it.k === "dashboard"
+              ? role
+              : null;
+        const cls = isActive
+          ? "bg-accent text-accent-foreground font-medium"
+          : "text-slate-700 hover:bg-muted";
+        const badge = later
+          ? `<span class="ml-auto text-[11px] font-medium px-1.5 rounded-sm bg-slate-100 text-slate-600 border border-slate-200">P${it.p}</span>`
+          : "";
+        return `<a href="#" ${target ? `data-go="${target}"` : ""} ${isActive ? 'aria-current="page"' : ""} title="${collapsed ? it.label : ""}"
+    class="focus-ring flex items-center gap-3 rounded-md ${collapsed ? "justify-center h-9 w-9 mx-auto" : "px-3 h-9"} ${cls} ${later && !target ? "opacity-60" : ""}">
+    ${icon(it.icon)}${collapsed ? "" : `<span class="truncate">${it.label}</span>${badge}`}</a>`;
+      }
+      function navList(role, active, collapsed, mobile) {
+        let h = "";
+        for (const g of NAV[role]) {
+          const items = g.items
+            .map((it) => navItem(it, role, active, collapsed, mobile))
+            .join("");
+          if (!items) continue;
+          h += `<div class="py-2">${g.section && !collapsed ? `<div class="px-3 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">${g.section}</div>` : ""}<div class="space-y-0.5">${items}</div></div>`;
+        }
+        return h;
+      }
+      function userMenu(role, mobile) {
+        const u = USERS[role];
+        return `<div class="relative">
     <button data-act="menu" aria-haspopup="menu" aria-expanded="${cur.menu}" class="focus-ring flex items-center gap-2 rounded-md px-1.5 h-9 hover:bg-muted">
       <span class="w-7 h-7 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold grid place-items-center">${u.initials}</span>
-      ${mobile ? '' : `<span class="font-medium">${u.first}</span>${icon('chev','w-4 h-4 text-muted-foreground')}`}
+      ${mobile ? "" : `<span class="font-medium">${u.first}</span>${icon("chev", "w-4 h-4 text-muted-foreground")}`}
     </button>
-    ${cur.menu ? `<div role="menu" class="absolute right-0 mt-1 w-64 bg-white border border-border rounded-lg shadow-lg p-1 z-30">
+    ${
+      cur.menu
+        ? `<div role="menu" class="absolute right-0 mt-1 w-64 bg-white border border-border rounded-lg shadow-lg p-1 z-30">
       <div class="px-2 py-2"><div class="font-medium">${u.full}</div><div class="text-xs text-muted-foreground">${u.email}</div>
         <span class="inline-block mt-1 text-xs font-medium px-1.5 rounded-sm bg-accent text-accent-foreground capitalize">${role}</span></div>
       <div class="h-px bg-border my-1"></div>
-      <a role="menuitem" href="#" class="flex items-center gap-2 px-2 h-9 rounded-md hover:bg-muted">${icon('user')} My profile <span class="ml-auto text-[11px] text-slate-500">P1</span></a>
-      <a role="menuitem" href="#" class="flex items-center gap-2 px-2 h-9 rounded-md hover:bg-muted">${icon('cal')} Calendar subscription <span class="ml-auto text-[11px] text-slate-500">P5</span></a>
+      <a role="menuitem" href="#" class="flex items-center gap-2 px-2 h-9 rounded-md hover:bg-muted">${icon("user")} My profile <span class="ml-auto text-[11px] text-slate-500">P1</span></a>
+      <a role="menuitem" href="#" class="flex items-center gap-2 px-2 h-9 rounded-md hover:bg-muted">${icon("cal")} Calendar subscription <span class="ml-auto text-[11px] text-slate-500">P5</span></a>
       <div class="h-px bg-border my-1"></div>
-      <a role="menuitem" href="#" data-go="login" class="flex items-center gap-2 px-2 h-9 rounded-md hover:bg-muted">${icon('out')} Sign out</a>
-    </div>` : ''}
+      <a role="menuitem" href="#" data-go="login" class="flex items-center gap-2 px-2 h-9 rounded-md hover:bg-muted">${icon("out")} Sign out</a>
+    </div>`
+        : ""
+    }
   </div>`;
-}
-function header(role, mobile) {
-  return `<header class="h-14 shrink-0 border-b border-border bg-white flex items-center gap-2 px-3 sticky top-0 z-20">
-    <button data-act="${mobile ? 'sheet' : 'collapse'}" aria-label="${mobile ? 'Open navigation' : 'Toggle sidebar'}" class="focus-ring w-9 h-9 grid place-items-center rounded-md hover:bg-muted">${icon(mobile ? 'menu' : 'panel')}</button>
+      }
+      function header(role, mobile) {
+        return `<header class="h-14 shrink-0 border-b border-border bg-white flex items-center gap-2 px-3 sticky top-0 z-20">
+    <button data-act="${mobile ? "sheet" : "collapse"}" aria-label="${mobile ? "Open navigation" : "Toggle sidebar"}" class="focus-ring w-9 h-9 grid place-items-center rounded-md hover:bg-muted">${icon(mobile ? "menu" : "panel")}</button>
     <span class="w-8 h-8 rounded-md bg-primary text-white grid place-items-center text-xs font-semibold" aria-hidden="true">LL</span>
     <span class="font-semibold truncate" title="${SCHOOL}">${SCHOOL}</span>
     <div class="ml-auto flex items-center gap-1">
-      ${document.getElementById('wf-later').checked && !mobile ? `<button aria-label="Notifications" class="focus-ring w-9 h-9 grid place-items-center rounded-md hover:bg-muted opacity-60 relative" title="P5">${icon('bell')}<span class="absolute -top-0.5 -right-0.5 text-[10px] px-1 rounded-sm bg-slate-100 border border-slate-200 text-slate-600">P5</span></button>` : ''}
+      ${document.getElementById("wf-later").checked && !mobile ? `<button aria-label="Notifications" class="focus-ring w-9 h-9 grid place-items-center rounded-md hover:bg-muted opacity-60 relative" title="P5">${icon("bell")}<span class="absolute -top-0.5 -right-0.5 text-[10px] px-1 rounded-sm bg-slate-100 border border-slate-200 text-slate-600">P5</span></button>` : ""}
       ${userMenu(role, mobile)}
     </div>
   </header>`;
-}
-function desktopShell(role, active, title, content, action='') {
-  const c = cur.collapsed;
-  const bottom = BOTTOM[role] ? navItem(BOTTOM[role], role, active, c) : '';
-  return `<div class="w-full max-w-[1280px] h-[800px] bg-white rounded-lg overflow-hidden shadow-xl border border-slate-300 flex flex-col">
+      }
+      function desktopShell(role, active, title, content, action = "") {
+        const c = cur.collapsed;
+        const bottom = BOTTOM[role]
+          ? navItem(BOTTOM[role], role, active, c)
+          : "";
+        return `<div class="w-full max-w-[1280px] h-[800px] bg-white rounded-lg overflow-hidden shadow-xl border border-slate-300 flex flex-col">
     <a href="#content" class="sr-only focus:not-sr-only">Skip to content</a>
     ${header(role, false)}
     <div class="flex flex-1 min-h-0">
-      <nav aria-label="Main" class="${c ? 'w-14' : 'w-64'} shrink-0 border-r border-border bg-white flex flex-col px-2 overflow-y-auto">
+      <nav aria-label="Main" class="${c ? "w-14" : "w-64"} shrink-0 border-r border-border bg-white flex flex-col px-2 overflow-y-auto">
         <div class="flex-1">${navList(role, active, c)}</div>
-        ${bottom ? `<div class="border-t border-border py-2">${bottom}</div>` : ''}
+        ${bottom ? `<div class="border-t border-border py-2">${bottom}</div>` : ""}
       </nav>
       <main id="content" class="flex-1 min-w-0 bg-muted overflow-auto p-6">
         <div class="flex items-start justify-between gap-4 mb-6"><div>${title}</div>${action}</div>
@@ -223,68 +518,108 @@ function desktopShell(role, active, title, content, action='') {
       </main>
     </div>
   </div>`;
-}
-function mobileShell(role, active, content) {
-  const tabs = NAV.student[0].items.filter(i => i.tab);
-  const showLater = document.getElementById('wf-later').checked;
-  const visibleTabs = tabs.filter(t => t.p === 0 || showLater);
-  return `<div class="w-[390px] h-[780px] bg-white rounded-[2rem] border-[10px] border-slate-900 overflow-hidden shadow-xl flex flex-col relative">
+      }
+      function mobileShell(role, active, content) {
+        const tabs = NAV.student[0].items.filter((i) => i.tab);
+        const showLater = document.getElementById("wf-later").checked;
+        const visibleTabs = tabs.filter((t) => t.p === 0 || showLater);
+        return `<div class="w-[390px] h-[780px] bg-white rounded-[2rem] border-[10px] border-slate-900 overflow-hidden shadow-xl flex flex-col relative">
     ${header(role, true)}
     <main id="content" class="flex-1 overflow-auto bg-muted p-4 text-base">${content}</main>
-    ${visibleTabs.length > 1 ? `<nav aria-label="Primary" class="h-16 shrink-0 border-t border-border bg-white grid grid-cols-5">
-      ${visibleTabs.map(t => {
-        const a = t.k === active, go = t.k === 'timetable' ? 'tt-student' : t.k === 'dashboard' ? 'student' : '';
-        return `<a href="#" ${go ? `data-go="${go}"` : ''} ${a ? 'aria-current="page"' : ''} class="focus-ring flex flex-col items-center justify-center gap-0.5 text-xs ${a ? 'text-primary font-medium' : 'text-slate-600'} ${t.p > 0 && !go ? 'opacity-60' : ''}">${icon(t.icon,'w-5 h-5')}<span>${t.label}</span>${t.p > 0 ? `<span class="text-[9px] leading-none">P${t.p}</span>` : ''}</a>`;
-      }).join('')}
-      <a href="#" data-act="sheet" class="focus-ring flex flex-col items-center justify-center gap-0.5 text-xs text-slate-600">${icon('menu','w-5 h-5')}<span>More</span></a>
-    </nav>` : ''}
-    ${cur.sheet ? `<div class="absolute inset-0 bg-black/50 z-40" data-act="sheet"></div>
+    ${
+      visibleTabs.length > 1
+        ? `<nav aria-label="Primary" class="h-16 shrink-0 border-t border-border bg-white grid grid-cols-5">
+      ${visibleTabs
+        .map((t) => {
+          const a = t.k === active,
+            go =
+              t.k === "timetable"
+                ? "tt-student"
+                : t.k === "dashboard"
+                  ? "student"
+                  : "";
+          return `<a href="#" ${go ? `data-go="${go}"` : ""} ${a ? 'aria-current="page"' : ""} class="focus-ring flex flex-col items-center justify-center gap-0.5 text-xs ${a ? "text-primary font-medium" : "text-slate-600"} ${t.p > 0 && !go ? "opacity-60" : ""}">${icon(t.icon, "w-5 h-5")}<span>${t.label}</span>${t.p > 0 ? `<span class="text-[9px] leading-none">P${t.p}</span>` : ""}</a>`;
+        })
+        .join("")}
+      <a href="#" data-act="sheet" class="focus-ring flex flex-col items-center justify-center gap-0.5 text-xs text-slate-600">${icon("menu", "w-5 h-5")}<span>More</span></a>
+    </nav>`
+        : ""
+    }
+    ${
+      cur.sheet
+        ? `<div class="absolute inset-0 bg-black/50 z-40" data-act="sheet"></div>
       <nav aria-label="Main" class="absolute inset-y-0 left-0 w-72 bg-white z-50 shadow-lg px-2 pt-2 overflow-auto">
-        <div class="flex items-center justify-between px-2 h-12"><span class="font-semibold">${SCHOOL}</span><button data-act="sheet" aria-label="Close navigation" class="focus-ring w-11 h-11 grid place-items-center rounded-md hover:bg-muted">${icon('x')}</button></div>
+        <div class="flex items-center justify-between px-2 h-12"><span class="font-semibold">${SCHOOL}</span><button data-act="sheet" aria-label="Close navigation" class="focus-ring w-11 h-11 grid place-items-center rounded-md hover:bg-muted">${icon("x")}</button></div>
         ${navList(role, active, false, true)}
-      </nav>` : ''}
+      </nav>`
+        : ""
+    }
   </div>`;
-}
+      }
 
-/* --------------------------------------------------------- page bits */
-const h1 = (t, sub='') => `<h1 class="text-2xl font-semibold">${t}</h1>${sub ? `<p class="text-muted-foreground mt-1">${sub}</p>` : ''}`;
-const card = (inner, cls='') => `<section class="bg-white border border-border rounded-lg ${cls}">${inner}</section>`;
-const emptyState = (ic, title, desc, action='') => card(`<div class="py-16 px-6 flex flex-col items-center text-center max-w-md mx-auto">
-  <span class="text-muted-foreground">${icon(ic,'w-10 h-10')}</span>
+      /* --------------------------------------------------------- page bits */
+      const h1 = (t, sub = "") =>
+        `<h1 class="text-2xl font-semibold">${t}</h1>${sub ? `<p class="text-muted-foreground mt-1">${sub}</p>` : ""}`;
+      const card = (inner, cls = "") =>
+        `<section class="bg-white border border-border rounded-lg ${cls}">${inner}</section>`;
+      const emptyState = (ic, title, desc, action = "") =>
+        card(`<div class="py-16 px-6 flex flex-col items-center text-center max-w-md mx-auto">
+  <span class="text-muted-foreground">${icon(ic, "w-10 h-10")}</span>
   <h2 class="text-lg font-semibold mt-4">${title}</h2><p class="text-muted-foreground mt-1">${desc}</p>${action}</div>`);
-const errorAlert = () => `<div role="alert" class="border border-red-300 bg-red-50 text-red-700 rounded-lg p-4 flex gap-3">
-  ${icon('alert','w-5 h-5 mt-0.5')}<div class="flex-1"><div class="font-semibold">Couldn't load this page</div>
+      const errorAlert =
+        () => `<div role="alert" class="border border-red-300 bg-red-50 text-red-700 rounded-lg p-4 flex gap-3">
+  ${icon("alert", "w-5 h-5 mt-0.5")}<div class="flex-1"><div class="font-semibold">Couldn't load this page</div>
   <div class="text-red-700/90">Check your connection and try again.</div></div>
   <button class="focus-ring h-9 px-3 rounded-md border border-input bg-white text-foreground font-medium hover:bg-muted">Try again</button></div>`;
-const skel = (h='h-4', w='w-full') => `<div class="skeleton ${h} ${w}"></div>`;
-const dashSkeleton = () => `<div class="grid grid-cols-4 gap-4 mb-6">${[0,1,2,3].map(()=>card(`<div class="p-4 space-y-3">${skel('h-3','w-24')}${skel('h-7','w-12')}</div>`)).join('')}</div>
-  <div class="grid grid-cols-12 gap-6"><div class="col-span-8">${card(`<div class="p-6 space-y-4">${skel('h-5','w-40')}${[0,1,2,3].map(()=>skel('h-10')).join('')}</div>`)}</div>
-  <div class="col-span-4">${card(`<div class="p-6 space-y-4">${skel('h-5','w-32')}${skel('h-10')}${skel('h-10')}</div>`)}</div></div>`;
+      const skel = (h = "h-4", w = "w-full") =>
+        `<div class="skeleton ${h} ${w}"></div>`;
+      const dashSkeleton =
+        () => `<div class="grid grid-cols-4 gap-4 mb-6">${[0, 1, 2, 3].map(() => card(`<div class="p-4 space-y-3">${skel("h-3", "w-24")}${skel("h-7", "w-12")}</div>`)).join("")}</div>
+  <div class="grid grid-cols-12 gap-6"><div class="col-span-8">${card(`<div class="p-6 space-y-4">${skel("h-5", "w-40")}${[0, 1, 2, 3].map(() => skel("h-10")).join("")}</div>`)}</div>
+  <div class="col-span-4">${card(`<div class="p-6 space-y-4">${skel("h-5", "w-32")}${skel("h-10")}${skel("h-10")}</div>`)}</div></div>`;
 
-/* ------------------------------------------------------------ screens */
-function login(state) {
-  const st = SCREENS[0].states[state];
-  const err = st === 'auth error', val = st === 'validation', busy = st === 'submitting', exp = st === 'session expired';
-  const field = (id, label, type, ac, value, error, extra='') => `<div class="space-y-2">
+      /* ------------------------------------------------------------ screens */
+      function login(state) {
+        const st = SCREENS[0].states[state];
+        const err = st === "auth error",
+          val = st === "validation",
+          busy = st === "submitting",
+          exp = st === "session expired";
+        const field = (
+          id,
+          label,
+          type,
+          ac,
+          value,
+          error,
+          extra = "",
+        ) => `<div class="space-y-2">
     <label for="${id}" class="block font-medium">${label}</label>
-    <div class="relative"><input id="${id}" type="${type}" autocomplete="${ac}" value="${value}" ${busy ? 'disabled' : ''} ${error ? `aria-invalid="true" aria-describedby="${id}-err"` : ''}
-      class="focus-ring w-full h-11 sm:h-9 rounded-md border ${error ? 'border-destructive' : 'border-input'} px-3 text-base sm:text-sm disabled:opacity-60 bg-white">${extra}</div>
-    ${error ? `<p id="${id}-err" class="text-destructive text-sm">${error}</p>` : ''}</div>`;
-  return `<div class="w-full max-w-[1280px] h-[800px] bg-muted rounded-lg border border-slate-300 shadow-xl grid place-items-center p-4">
+    <div class="relative"><input id="${id}" type="${type}" autocomplete="${ac}" value="${value}" ${busy ? "disabled" : ""} ${error ? `aria-invalid="true" aria-describedby="${id}-err"` : ""}
+      class="focus-ring w-full h-11 sm:h-9 rounded-md border ${error ? "border-destructive" : "border-input"} px-3 text-base sm:text-sm disabled:opacity-60 bg-white">${extra}</div>
+    ${error ? `<p id="${id}-err" class="text-destructive text-sm">${error}</p>` : ""}</div>`;
+        return `<div class="w-full max-w-[1280px] h-[800px] bg-muted rounded-lg border border-slate-300 shadow-xl grid place-items-center p-4">
     <div class="w-full max-w-sm">
       <div class="flex flex-col items-center mb-6"><span class="w-12 h-12 rounded-lg bg-primary text-white grid place-items-center font-semibold">LL</span>
         <div class="text-3xl font-semibold mt-3 text-center">${SCHOOL}</div></div>
       <div class="bg-white border border-border rounded-xl p-6 shadow-sm">
         <h1 class="text-2xl font-semibold">Sign in</h1>
         <p class="text-muted-foreground mt-1 mb-5">Sign in to ${SCHOOL}</p>
-        ${err ? `<div role="alert" class="mb-4 border border-red-300 bg-red-50 text-red-700 rounded-md p-3 flex gap-2">${icon('alert','w-4 h-4 mt-0.5')}Email or password is incorrect.</div>` : ''}
-        ${exp ? `<div role="status" class="mb-4 border border-blue-300 bg-blue-50 text-blue-700 rounded-md p-3 flex gap-2">${icon('alert','w-4 h-4 mt-0.5')}Your session expired. Sign in again to continue.</div>` : ''}
+        ${err ? `<div role="alert" class="mb-4 border border-red-300 bg-red-50 text-red-700 rounded-md p-3 flex gap-2">${icon("alert", "w-4 h-4 mt-0.5")}Email or password is incorrect.</div>` : ""}
+        ${exp ? `<div role="status" class="mb-4 border border-blue-300 bg-blue-50 text-blue-700 rounded-md p-3 flex gap-2">${icon("alert", "w-4 h-4 mt-0.5")}Your session expired. Sign in again to continue.</div>` : ""}
         <form class="space-y-4" onsubmit="return false">
-          ${field('email','Email','email','email', val ? 'anna@lingua' : (st==='default' || exp ? '' : 'admin@lingua.test'), val ? 'Enter a valid email address.' : '')}
-          ${field('password','Password','password','current-password', val || err ? '' : (st==='default' || exp ? '' : '••••••••'), val ? 'Enter your password.' : '',
-            `<button type="button" aria-label="Show password" class="focus-ring absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 grid place-items-center rounded-md text-muted-foreground hover:bg-muted">${icon('eye')}</button>`)}
-          <button ${busy ? 'disabled' : ''} class="focus-ring w-full h-11 sm:h-9 rounded-md bg-primary text-white font-medium hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2">
-            ${busy ? `<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>Signing in…` : 'Sign in'}</button>
+          ${field("email", "Email", "email", "email", val ? "anna@lingua" : st === "default" || exp ? "" : "admin@lingua.test", val ? "Enter a valid email address." : "")}
+          ${field(
+            "password",
+            "Password",
+            "password",
+            "current-password",
+            val || err ? "" : st === "default" || exp ? "" : "••••••••",
+            val ? "Enter your password." : "",
+            `<button type="button" aria-label="Show password" class="focus-ring absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 grid place-items-center rounded-md text-muted-foreground hover:bg-muted">${icon("eye")}</button>`,
+          )}
+          <button ${busy ? "disabled" : ""} class="focus-ring w-full h-11 sm:h-9 rounded-md bg-primary text-white font-medium hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2">
+            ${busy ? `<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>Signing in…` : "Sign in"}</button>
         </form>
         <p class="text-xs text-muted-foreground mt-4">No “Forgot password?” in v1 — admins set passwords.</p>
       </div>
@@ -293,146 +628,255 @@ function login(state) {
         <span class="flex gap-2 mt-2"><a href="#" data-go="admin" class="text-primary underline">Admin</a><a href="#" data-go="teacher" class="text-primary underline">Teacher</a><a href="#" data-go="student" class="text-primary underline">Student</a></span>
       </div>
     </div></div>`;
-}
-function adminDash(state) {
-  const u = USERS.admin;
-  const title = h1(`Good morning, ${u.first}`, 'Today is Tuesday, 14 October 2026');
-  let content;
-  if (state === 1) content = dashSkeleton();
-  else if (state === 2) content = errorAlert();
-  else content = emptyState('cog', 'Your school is ready to set up',
-    'Once terms, rooms, teachers, students and groups are added, today\'s lessons and anything that needs your attention will show up here.',
-    `<p class="text-xs text-muted-foreground mt-4">From P1 this becomes a setup checklist (term → rooms → teachers → students → groups → timetable).</p>`)
-    + `<p class="mt-6 text-xs text-muted-foreground">P1+ layout zones: 4 stat cards · Today's lessons (8 cols) · Needs attention (4 cols) — see the loading state for the shape.</p>`;
-  return desktopShell('admin', 'dashboard', title, content);
-}
-function teacherDash(state) {
-  const title = h1(`Good morning, ${USERS.teacher.first}`, 'Today is Tuesday, 14 October 2026');
-  let content;
-  if (state === 1) content = `<div class="grid grid-cols-12 gap-6"><div class="col-span-8 space-y-6">${card(`<div class="p-6 space-y-3">${skel('h-5','w-32')}${skel('h-8','w-64')}${skel('h-4','w-48')}</div>`)}${card(`<div class="p-6 space-y-3">${skel('h-5','w-24')}${[0,1,2].map(()=>skel('h-10')).join('')}</div>`)}</div><div class="col-span-4">${card(`<div class="p-6 space-y-3">${skel('h-5','w-20')}${skel('h-10')}</div>`)}</div></div>`;
-  else if (state === 2) content = errorAlert();
-  else content = emptyState('cal', 'No lessons yet', 'When the school publishes the timetable, your lessons for today and the week will appear here.')
-    + `<p class="mt-6 text-xs text-muted-foreground">P1+ layout zones: Next lesson card · Today list · To do (P2: lessons without log, homework to check).</p>`;
-  return desktopShell('teacher', 'dashboard', title, content);
-}
-function studentDash(state) {
-  let c = `<h1 class="text-2xl font-semibold">Hi, ${USERS.student.first}</h1><p class="text-muted-foreground mb-4">Tuesday, 14 October</p>`;
-  if (state === 1) c += `<div class="space-y-4">${card(`<div class="p-4 space-y-3">${skel('h-4','w-24')}${skel('h-8','w-40')}${skel('h-4','w-56')}</div>`)}${card(`<div class="p-4 space-y-3">${skel('h-4','w-28')}${skel('h-10')}${skel('h-10')}</div>`)}</div>`;
-  else if (state === 2) c += errorAlert();
-  else c += card(`<div class="py-12 px-4 text-center"><span class="text-muted-foreground inline-block">${icon('cap','w-10 h-10')}</span>
-      <h2 class="text-lg font-semibold mt-3">You're all set</h2><p class="text-muted-foreground mt-1">Your lessons and homework will appear here once you're enrolled in a course.</p></div>`)
-    + `<p class="mt-4 text-xs text-muted-foreground">P1+: Next lesson card (large time, room, teacher, “Can't attend?” P3) · Homework due (P2) · This week agenda.</p>`;
-  return mobileShell('student', 'dashboard', c);
-}
+      }
+      function adminDash(state) {
+        const u = USERS.admin;
+        const title = h1(
+          `Good morning, ${u.first}`,
+          "Today is Tuesday, 14 October 2026",
+        );
+        let content;
+        if (state === 1) content = dashSkeleton();
+        else if (state === 2) content = errorAlert();
+        else
+          content =
+            emptyState(
+              "cog",
+              "Your school is ready to set up",
+              "Once terms, rooms, teachers, students and groups are added, today's lessons and anything that needs your attention will show up here.",
+              `<p class="text-xs text-muted-foreground mt-4">From P1 this becomes a setup checklist (term → rooms → teachers → students → groups → timetable).</p>`,
+            ) +
+            `<p class="mt-6 text-xs text-muted-foreground">P1+ layout zones: 4 stat cards · Today's lessons (8 cols) · Needs attention (4 cols) — see the loading state for the shape.</p>`;
+        return desktopShell("admin", "dashboard", title, content);
+      }
+      function teacherDash(state) {
+        const title = h1(
+          `Good morning, ${USERS.teacher.first}`,
+          "Today is Tuesday, 14 October 2026",
+        );
+        let content;
+        if (state === 1)
+          content = `<div class="grid grid-cols-12 gap-6"><div class="col-span-8 space-y-6">${card(`<div class="p-6 space-y-3">${skel("h-5", "w-32")}${skel("h-8", "w-64")}${skel("h-4", "w-48")}</div>`)}${card(`<div class="p-6 space-y-3">${skel("h-5", "w-24")}${[0, 1, 2].map(() => skel("h-10")).join("")}</div>`)}</div><div class="col-span-4">${card(`<div class="p-6 space-y-3">${skel("h-5", "w-20")}${skel("h-10")}</div>`)}</div></div>`;
+        else if (state === 2) content = errorAlert();
+        else
+          content =
+            emptyState(
+              "cal",
+              "No lessons yet",
+              "When the school publishes the timetable, your lessons for today and the week will appear here.",
+            ) +
+            `<p class="mt-6 text-xs text-muted-foreground">P1+ layout zones: Next lesson card · Today list · To do (P2: lessons without log, homework to check).</p>`;
+        return desktopShell("teacher", "dashboard", title, content);
+      }
+      function studentDash(state) {
+        let c = `<h1 class="text-2xl font-semibold">Hi, ${USERS.student.first}</h1><p class="text-muted-foreground mb-4">Tuesday, 14 October</p>`;
+        if (state === 1)
+          c += `<div class="space-y-4">${card(`<div class="p-4 space-y-3">${skel("h-4", "w-24")}${skel("h-8", "w-40")}${skel("h-4", "w-56")}</div>`)}${card(`<div class="p-4 space-y-3">${skel("h-4", "w-28")}${skel("h-10")}${skel("h-10")}</div>`)}</div>`;
+        else if (state === 2) c += errorAlert();
+        else
+          c +=
+            card(`<div class="py-12 px-4 text-center"><span class="text-muted-foreground inline-block">${icon("cap", "w-10 h-10")}</span>
+      <h2 class="text-lg font-semibold mt-3">You're all set</h2><p class="text-muted-foreground mt-1">Your lessons and homework will appear here once you're enrolled in a course.</p></div>`) +
+            `<p class="mt-4 text-xs text-muted-foreground">P1+: Next lesson card (large time, room, teacher, “Can't attend?” P3) · Homework due (P2) · This week agenda.</p>`;
+        return mobileShell("student", "dashboard", c);
+      }
 
-/* --------------------------------------------------------- timetable */
-const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
-function lessonBlock(l, role, style='') {
-  const t = LT[l.type];
-  const meta = role === 'admin' ? `${l.room} · ${l.who}` : `${l.room} · ${l.lvl}`;
-  const short = toMin(l.e) - toMin(l.s) <= 30;
-  return `<button data-lesson="${LESSONS.indexOf(l)}" style="${style}" title="${l.t} · ${l.s}–${l.e} · ${meta}"
+      /* --------------------------------------------------------- timetable */
+      const toMin = (t) => {
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + m;
+      };
+      function lessonBlock(l, role, style = "") {
+        const t = LT[l.type];
+        const meta =
+          role === "admin" ? `${l.room} · ${l.who}` : `${l.room} · ${l.lvl}`;
+        const short = toMin(l.e) - toMin(l.s) <= 30;
+        return `<button data-lesson="${LESSONS.indexOf(l)}" style="${style}" title="${l.t} · ${l.s}–${l.e} · ${meta}"
     class="focus-ring absolute text-left rounded-sm border-l-[3px] ${t.bd} ${t.bg} ${t.tx} px-2 py-1 overflow-hidden hover:shadow-sm text-xs leading-4">
     <span class="sr-only">${t.sr}, </span>
-    <span class="flex items-center gap-1 font-semibold">${icon(t.ic,'w-3 h-3')}<span class="truncate">${l.t}</span></span>
-    ${short ? '' : `<span class="block tnum">${l.s}–${l.e}</span><span class="block truncate">${meta}</span>`}
+    <span class="flex items-center gap-1 font-semibold">${icon(t.ic, "w-3 h-3")}<span class="truncate">${l.t}</span></span>
+    ${short ? "" : `<span class="block tnum">${l.s}–${l.e}</span><span class="block truncate">${meta}</span>`}
   </button>`;
-}
-function weekGrid(role, state) {
-  const start = 7, end = 21, ph = 64;
-  if (state === 1) return card(`<div class="p-4 space-y-3">${skel('h-6')}<div class="grid grid-cols-6 gap-2">${[0,1,2,3,4,5].map(i=>`<div class="space-y-2">${skel('h-16')}${i%2?skel('h-24'):''}${skel('h-12')}</div>`).join('')}</div></div>`);
-  const lessons = state === 0 ? LESSONS : [];
-  const hours = Array.from({length:end-start},(_,i)=>start+i);
-  let cols = DAYS.map((d,i) => {
-    const day = lessons.filter(l => l.d === i).sort((a,b)=>toMin(a.s)-toMin(b.s));
-    // naive overlap split: lessons overlapping a neighbour get half width
-    const blocks = day.map((l,j) => {
-      const ov = day.filter(o => o !== l && toMin(o.s) < toMin(l.e) && toMin(l.s) < toMin(o.e));
-      const idx = ov.length ? day.filter(o => (o===l || ov.includes(o))).indexOf(l) : 0;
-      const n = ov.length + 1;
-      const top = (toMin(l.s) - start*60) / 60 * ph, h = (toMin(l.e) - toMin(l.s)) / 60 * ph;
-      return lessonBlock(l, role, `top:${top+1}px;height:${h-2}px;left:${idx/n*100}%;width:calc(${100/n}% - 4px);margin-left:2px`);
-    }).join('');
-    const now = i === TODAY && state === 0 ? `<div class="absolute left-0 right-0 border-t-2 border-red-600 z-10" style="top:${(toMin('11:20')-start*60)/60*ph}px" aria-hidden="true"><span class="absolute -left-1 -top-1.5 w-2.5 h-2.5 rounded-full bg-red-600"></span></div>` : '';
-    return `<div class="relative border-l border-border ${i===TODAY?'bg-blue-50/30':''}" style="height:${(end-start)*ph}px">
-      ${hours.map(h=>`<div class="border-t border-border/70" style="height:${ph}px"><div class="border-t border-dashed border-border/50 mt-[32px]"></div></div>`).join('')}
+      }
+      function weekGrid(role, state) {
+        const start = 7,
+          end = 21,
+          ph = 64;
+        if (state === 1)
+          return card(
+            `<div class="p-4 space-y-3">${skel("h-6")}<div class="grid grid-cols-6 gap-2">${[0, 1, 2, 3, 4, 5].map((i) => `<div class="space-y-2">${skel("h-16")}${i % 2 ? skel("h-24") : ""}${skel("h-12")}</div>`).join("")}</div></div>`,
+          );
+        const lessons = state === 0 ? LESSONS : [];
+        const hours = Array.from({ length: end - start }, (_, i) => start + i);
+        let cols = DAYS.map((d, i) => {
+          const day = lessons
+            .filter((l) => l.d === i)
+            .sort((a, b) => toMin(a.s) - toMin(b.s));
+          // naive overlap split: lessons overlapping a neighbour get half width
+          const blocks = day
+            .map((l, j) => {
+              const ov = day.filter(
+                (o) =>
+                  o !== l && toMin(o.s) < toMin(l.e) && toMin(l.s) < toMin(o.e),
+              );
+              const idx = ov.length
+                ? day.filter((o) => o === l || ov.includes(o)).indexOf(l)
+                : 0;
+              const n = ov.length + 1;
+              const top = ((toMin(l.s) - start * 60) / 60) * ph,
+                h = ((toMin(l.e) - toMin(l.s)) / 60) * ph;
+              return lessonBlock(
+                l,
+                role,
+                `top:${top + 1}px;height:${h - 2}px;left:${(idx / n) * 100}%;width:calc(${100 / n}% - 4px);margin-left:2px`,
+              );
+            })
+            .join("");
+          const now =
+            i === TODAY && state === 0
+              ? `<div class="absolute left-0 right-0 border-t-2 border-red-600 z-10" style="top:${((toMin("11:20") - start * 60) / 60) * ph}px" aria-hidden="true"><span class="absolute -left-1 -top-1.5 w-2.5 h-2.5 rounded-full bg-red-600"></span></div>`
+              : "";
+          return `<div class="relative border-l border-border ${i === TODAY ? "bg-blue-50/30" : ""}" style="height:${(end - start) * ph}px">
+      ${hours.map((h) => `<div class="border-t border-border/70" style="height:${ph}px"><div class="border-t border-dashed border-border/50 mt-[32px]"></div></div>`).join("")}
       <div class="absolute inset-0">${blocks}${now}</div></div>`;
-  }).join('');
-  const head = DAYS.map((d,i)=>`<div ${i===TODAY?'aria-current="date"':''} class="h-10 grid place-items-center border-l border-border text-sm ${i===TODAY?'bg-accent text-accent-foreground font-semibold':'font-medium'}">${d}</div>`).join('');
-  const emptyOverlay = state === 2 ? `<div class="absolute inset-0 grid place-items-center pointer-events-none"><div class="bg-white border border-border rounded-lg px-6 py-4 text-center shadow-sm"><div class="font-semibold">No lessons this week.</div><div class="text-muted-foreground text-sm">Try another week or clear the filters.</div></div></div>` : '';
-  return card(`<div class="overflow-auto max-h-[560px] relative">
+        }).join("");
+        const head = DAYS.map(
+          (d, i) =>
+            `<div ${i === TODAY ? 'aria-current="date"' : ""} class="h-10 grid place-items-center border-l border-border text-sm ${i === TODAY ? "bg-accent text-accent-foreground font-semibold" : "font-medium"}">${d}</div>`,
+        ).join("");
+        const emptyOverlay =
+          state === 2
+            ? `<div class="absolute inset-0 grid place-items-center pointer-events-none"><div class="bg-white border border-border rounded-lg px-6 py-4 text-center shadow-sm"><div class="font-semibold">No lessons this week.</div><div class="text-muted-foreground text-sm">Try another week or clear the filters.</div></div></div>`
+            : "";
+        return card(
+          `<div class="overflow-auto max-h-[560px] relative">
     <div class="grid sticky top-0 z-10 bg-white border-b border-border" style="grid-template-columns:56px repeat(${DAYS.length},minmax(140px,1fr))"><div></div>${head}</div>
     <div class="grid relative pt-2" style="grid-template-columns:56px repeat(${DAYS.length},minmax(140px,1fr))">
-      <div class="tnum text-xs text-muted-foreground">${hours.map(h=>`<div style="height:${ph}px" class="pr-2 text-right relative -top-2">${String(h).padStart(2,'0')}:00</div>`).join('')}</div>
+      <div class="tnum text-xs text-muted-foreground">${hours.map((h) => `<div style="height:${ph}px" class="pr-2 text-right relative -top-2">${String(h).padStart(2, "0")}:00</div>`).join("")}</div>
       ${cols}${emptyOverlay}
-    </div></div>`, 'overflow-hidden');
-}
-function legend() {
-  return `<div class="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">${Object.entries(LT).map(([k,t])=>`<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm border-l-[3px] ${t.bd} ${t.bg}"></span>${t.sr}</span>`).join('')}<span class="flex items-center gap-1.5"><span class="w-4 border-t-2 border-red-600"></span>Now</span></div>`;
-}
-function detailsSheet(mobile) {
-  if (cur.lesson === null) return '';
-  const l = LESSONS[cur.lesson], t = LT[l.type];
-  const body = `<div class="flex items-start justify-between"><div><div class="text-xs font-medium ${t.tx.replace('line-through','')} flex items-center gap-1">${icon(t.ic,'w-3 h-3')}${t.sr}</div>
+    </div></div>`,
+          "overflow-hidden",
+        );
+      }
+      function legend() {
+        return `<div class="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">${Object.entries(
+          LT,
+        )
+          .map(
+            ([k, t]) =>
+              `<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm border-l-[3px] ${t.bd} ${t.bg}"></span>${t.sr}</span>`,
+          )
+          .join(
+            "",
+          )}<span class="flex items-center gap-1.5"><span class="w-4 border-t-2 border-red-600"></span>Now</span></div>`;
+      }
+      function detailsSheet(mobile) {
+        if (cur.lesson === null) return "";
+        const l = LESSONS[cur.lesson],
+          t = LT[l.type];
+        const body = `<div class="flex items-start justify-between"><div><div class="text-xs font-medium ${t.tx.replace("line-through", "")} flex items-center gap-1">${icon(t.ic, "w-3 h-3")}${t.sr}</div>
       <h2 class="text-lg font-semibold mt-1">${l.t}</h2></div>
-      <button data-act="close-lesson" aria-label="Close" class="focus-ring w-9 h-9 grid place-items-center rounded-md hover:bg-muted">${icon('x')}</button></div>
+      <button data-act="close-lesson" aria-label="Close" class="focus-ring w-9 h-9 grid place-items-center rounded-md hover:bg-muted">${icon("x")}</button></div>
     <dl class="mt-4 grid grid-cols-[96px_1fr] gap-y-2 text-sm">
       <dt class="text-muted-foreground">When</dt><dd class="tnum">${DAYS[l.d]} Oct · ${l.s}–${l.e}</dd>
       <dt class="text-muted-foreground">Room</dt><dd>${l.room}</dd>
       <dt class="text-muted-foreground">Teacher</dt><dd>${l.who}</dd>
       <dt class="text-muted-foreground">Level</dt><dd>${l.lvl}</dd></dl>
     <p class="mt-6 text-xs text-muted-foreground">Later: attendance & lesson log (P2), report absence / book replacement (P3). Detailed in the timetable spec.</p>`;
-  return mobile
-    ? `<div class="absolute inset-0 bg-black/50 z-40" data-act="close-lesson"></div><div role="dialog" aria-modal="true" class="absolute inset-x-0 bottom-0 bg-white rounded-t-xl p-4 z-50 shadow-lg">${body}</div>`
-    : `<div class="fixed inset-0 bg-black/50 z-40" data-act="close-lesson"></div><div role="dialog" aria-modal="true" class="fixed inset-y-0 right-0 w-96 bg-white p-6 z-50 shadow-lg">${body}</div>`;
-}
-function ttAdmin(state) {
-  const btn = (inner, extra='') => `<button class="focus-ring h-9 px-3 rounded-md border border-input bg-white hover:bg-muted flex items-center gap-1 ${extra}">${inner}</button>`;
-  const toolbar = `<div class="flex flex-wrap items-center gap-2 mb-4">
-    <div class="flex items-center gap-1">${btn(icon('left'),'px-2" aria-label="Previous week')}${btn('Today')}${btn(icon('right'),'px-2" aria-label="Next week')}</div>
+        return mobile
+          ? `<div class="absolute inset-0 bg-black/50 z-40" data-act="close-lesson"></div><div role="dialog" aria-modal="true" class="absolute inset-x-0 bottom-0 bg-white rounded-t-xl p-4 z-50 shadow-lg">${body}</div>`
+          : `<div class="fixed inset-0 bg-black/50 z-40" data-act="close-lesson"></div><div role="dialog" aria-modal="true" class="fixed inset-y-0 right-0 w-96 bg-white p-6 z-50 shadow-lg">${body}</div>`;
+      }
+      function ttAdmin(state) {
+        const btn = (inner, extra = "") =>
+          `<button class="focus-ring h-9 px-3 rounded-md border border-input bg-white hover:bg-muted flex items-center gap-1 ${extra}">${inner}</button>`;
+        const toolbar = `<div class="flex flex-wrap items-center gap-2 mb-4">
+    <div class="flex items-center gap-1">${btn(icon("left"), 'px-2" aria-label="Previous week')}${btn("Today")}${btn(icon("right"), 'px-2" aria-label="Next week')}</div>
     <div class="font-semibold text-base ml-2 tnum">13 – 19 Oct 2026</div>
     <div class="ml-auto flex items-center gap-2">
-      ${['Teacher','Room','Group'].map(f=>btn(`${f}: All ${icon('chev','w-4 h-4 text-muted-foreground')}`)).join('')}
+      ${["Teacher", "Room", "Group"].map((f) => btn(`${f}: All ${icon("chev", "w-4 h-4 text-muted-foreground")}`)).join("")}
       <div role="group" aria-label="View" class="flex rounded-md border border-input overflow-hidden"><button aria-pressed="true" class="focus-ring h-9 px-3 bg-accent text-accent-foreground font-medium">Week</button><button aria-pressed="false" class="focus-ring h-9 px-3 bg-white hover:bg-muted border-l border-input">Day</button></div>
     </div></div>`;
-  let content = toolbar;
-  if (state === 3) content += emptyState('cal', 'The timetable for this term hasn\'t been published yet.', 'Build the recurring timetable for the term, then publish it to generate lessons.', `<button class="focus-ring mt-4 h-9 px-4 rounded-md bg-primary text-white font-medium">Edit timetable</button>`);
-  else content += weekGrid('admin', state) + legend();
-  const action = `<button class="focus-ring h-9 px-4 rounded-md bg-primary text-white font-medium hover:bg-blue-700">Edit timetable</button>`;
-  return desktopShell('admin', 'timetable', h1('Timetable'), content, action) + detailsSheet(false);
-}
-function ttStudent(state) {
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const strip = `<div class="flex gap-1 mb-4" role="tablist" aria-label="Day">${days.map((d,i)=>{
-      const has = LESSONS.some(l=>l.d===i && (l.t.includes('Mia') || l.lvl==='B2')); const a = i===cur.day;
-      return `<button role="tab" aria-selected="${a}" data-day="${i}" class="focus-ring flex-1 min-w-0 h-14 rounded-md flex flex-col items-center justify-center ${a?'bg-primary text-white':'bg-white border border-border'}">
-        <span class="text-xs">${d}</span><span class="font-semibold tnum">${13+i}</span><span class="w-1 h-1 rounded-full ${has? (a?'bg-white':'bg-primary') :'bg-transparent'}"></span></button>`;}).join('')}</div>`;
-  let c = `<div class="flex items-center justify-between mb-3"><h1 class="text-2xl font-semibold">Timetable</h1>
-    <div class="flex gap-1"><button aria-label="Previous week" class="focus-ring w-11 h-11 grid place-items-center rounded-md border border-input bg-white">${icon('left')}</button><button aria-label="Next week" class="focus-ring w-11 h-11 grid place-items-center rounded-md border border-input bg-white">${icon('right')}</button></div></div>
+        let content = toolbar;
+        if (state === 3)
+          content += emptyState(
+            "cal",
+            "The timetable for this term hasn't been published yet.",
+            "Build the recurring timetable for the term, then publish it to generate lessons.",
+            `<button class="focus-ring mt-4 h-9 px-4 rounded-md bg-primary text-white font-medium">Edit timetable</button>`,
+          );
+        else content += weekGrid("admin", state) + legend();
+        const action = `<button class="focus-ring h-9 px-4 rounded-md bg-primary text-white font-medium hover:bg-blue-700">Edit timetable</button>`;
+        return (
+          desktopShell("admin", "timetable", h1("Timetable"), content, action) +
+          detailsSheet(false)
+        );
+      }
+      function ttStudent(state) {
+        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        const strip = `<div class="flex gap-1 mb-4" role="tablist" aria-label="Day">${days
+          .map((d, i) => {
+            const has = LESSONS.some(
+              (l) => l.d === i && (l.t.includes("Mia") || l.lvl === "B2"),
+            );
+            const a = i === cur.day;
+            return `<button role="tab" aria-selected="${a}" data-day="${i}" class="focus-ring flex-1 min-w-0 h-14 rounded-md flex flex-col items-center justify-center ${a ? "bg-primary text-white" : "bg-white border border-border"}">
+        <span class="text-xs">${d}</span><span class="font-semibold tnum">${13 + i}</span><span class="w-1 h-1 rounded-full ${has ? (a ? "bg-white" : "bg-primary") : "bg-transparent"}"></span></button>`;
+          })
+          .join("")}</div>`;
+        let c = `<div class="flex items-center justify-between mb-3"><h1 class="text-2xl font-semibold">Timetable</h1>
+    <div class="flex gap-1"><button aria-label="Previous week" class="focus-ring w-11 h-11 grid place-items-center rounded-md border border-input bg-white">${icon("left")}</button><button aria-label="Next week" class="focus-ring w-11 h-11 grid place-items-center rounded-md border border-input bg-white">${icon("right")}</button></div></div>
     <p class="text-sm text-muted-foreground mb-3 tnum">13 – 19 Oct 2026</p>${strip}`;
-  if (state === 1) c += `<div class="space-y-3">${[0,1].map(()=>card(`<div class="p-4 space-y-2">${skel('h-4','w-24')}${skel('h-5','w-48')}${skel('h-4','w-32')}</div>`)).join('')}</div>`;
-  else {
-    const mine = state === 2 ? [] : LESSONS.filter(l => l.d === cur.day && (l.t.includes('Mia') || l.lvl === 'B2'));
-    c += mine.length ? `<ol class="space-y-3">${mine.map(l => { const t = LT[l.type]; return `<li><button data-lesson="${LESSONS.indexOf(l)}" class="focus-ring w-full text-left bg-white border border-border border-l-4 ${t.bd} rounded-lg p-4">
-        <div class="flex items-center justify-between"><span class="text-lg font-semibold tnum">${l.s}–${l.e}</span><span class="text-xs font-medium ${t.tx.replace('line-through','')} ${t.bg} px-2 py-0.5 rounded-sm flex items-center gap-1">${icon(t.ic,'w-3 h-3')}${t.sr}</span></div>
-        <div class="font-medium mt-1 ${l.type==='cancelled'?'line-through':''}">${l.t}</div>
-        <div class="text-sm text-muted-foreground flex items-center gap-3 mt-1"><span class="flex items-center gap-1">${icon('door','w-4 h-4')}${l.room}</span><span>${l.who}</span></div></button></li>`;}).join('')}</ol>`
-      : card(`<div class="py-10 px-4 text-center"><span class="text-muted-foreground inline-block">${icon('cal','w-8 h-8')}</span><div class="font-semibold mt-2">No lessons on this day.</div></div>`);
-  }
-  return mobileShell('student', 'timetable', c).replace(/<\/div>\s*$/, detailsSheet(true) + '</div>');
-}
+        if (state === 1)
+          c += `<div class="space-y-3">${[0, 1].map(() => card(`<div class="p-4 space-y-2">${skel("h-4", "w-24")}${skel("h-5", "w-48")}${skel("h-4", "w-32")}</div>`)).join("")}</div>`;
+        else {
+          const mine =
+            state === 2
+              ? []
+              : LESSONS.filter(
+                  (l) =>
+                    l.d === cur.day && (l.t.includes("Mia") || l.lvl === "B2"),
+                );
+          c += mine.length
+            ? `<ol class="space-y-3">${mine
+                .map((l) => {
+                  const t = LT[l.type];
+                  return `<li><button data-lesson="${LESSONS.indexOf(l)}" class="focus-ring w-full text-left bg-white border border-border border-l-4 ${t.bd} rounded-lg p-4">
+        <div class="flex items-center justify-between"><span class="text-lg font-semibold tnum">${l.s}–${l.e}</span><span class="text-xs font-medium ${t.tx.replace("line-through", "")} ${t.bg} px-2 py-0.5 rounded-sm flex items-center gap-1">${icon(t.ic, "w-3 h-3")}${t.sr}</span></div>
+        <div class="font-medium mt-1 ${l.type === "cancelled" ? "line-through" : ""}">${l.t}</div>
+        <div class="text-sm text-muted-foreground flex items-center gap-3 mt-1"><span class="flex items-center gap-1">${icon("door", "w-4 h-4")}${l.room}</span><span>${l.who}</span></div></button></li>`;
+                })
+                .join("")}</ol>`
+            : card(
+                `<div class="py-10 px-4 text-center"><span class="text-muted-foreground inline-block">${icon("cal", "w-8 h-8")}</span><div class="font-semibold mt-2">No lessons on this day.</div></div>`,
+              );
+        }
+        return mobileShell("student", "timetable", c).replace(
+          /<\/div>\s*$/,
+          detailsSheet(true) + "</div>",
+        );
+      }
 
-/* ------------------------------------------------------------- tokens */
-function tokens() {
-  const sw = (name, hex, fg='#0f172a', note='') => `<div class="rounded-lg border border-border overflow-hidden"><div class="h-14 grid place-items-center text-xs font-medium" style="background:${hex};color:${fg}">Aa</div><div class="p-2 text-xs"><div class="font-medium">${name}</div><div class="text-muted-foreground tnum">${hex}${note?' · '+note:''}</div></div></div>`;
-  const badge = (txt, c) => `<span class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-sm border ${c}">${txt}</span>`;
-  return `<div class="w-full max-w-[1280px] bg-white rounded-lg border border-slate-300 shadow-xl p-8 space-y-10">
+      /* ------------------------------------------------------------- tokens */
+      function tokens() {
+        const sw = (name, hex, fg = "#0f172a", note = "") =>
+          `<div class="rounded-lg border border-border overflow-hidden"><div class="h-14 grid place-items-center text-xs font-medium" style="background:${hex};color:${fg}">Aa</div><div class="p-2 text-xs"><div class="font-medium">${name}</div><div class="text-muted-foreground tnum">${hex}${note ? " · " + note : ""}</div></div></div>`;
+        const badge = (txt, c) =>
+          `<span class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-sm border ${c}">${txt}</span>`;
+        return `<div class="w-full max-w-[1280px] bg-white rounded-lg border border-slate-300 shadow-xl p-8 space-y-10">
     <div><h1 class="text-2xl font-semibold">Tokens & components</h1><p class="text-muted-foreground">Visual reference for <code>docs/design/tokens.md</code>.</p></div>
     <section><h2 class="text-lg font-semibold mb-3">Semantic colors (light)</h2><div class="grid grid-cols-6 gap-3">
-      ${sw('background','#ffffff')}${sw('foreground','#0f172a','#fff','17.9:1')}${sw('muted','#f1f5f9')}${sw('muted-foreground','#475569','#fff','7.6:1')}
-      ${sw('primary','#2563eb','#fff','5.2:1')}${sw('accent','#eff6ff','#1e40af','8.0:1')}${sw('destructive','#dc2626','#fff','4.8:1')}${sw('border','#e2e8f0')}
-      ${sw('input','#64748b','#fff','4.8:1 (≥3:1)')}${sw('success','#15803d','#fff','5.0:1')}${sw('warning','#b45309','#fff','5.0:1')}${sw('info','#1d4ed8','#fff','6.7:1')}</div></section>
-    <section><h2 class="text-lg font-semibold mb-3">Lesson types</h2><div class="flex gap-3">${Object.values(LT).map(t=>`<div class="w-48 h-16 rounded-sm border-l-[3px] ${t.bd} ${t.bg} ${t.tx} p-2 text-xs"><span class="flex items-center gap-1 font-semibold">${icon(t.ic,'w-3 h-3')}${t.sr}</span><span class="tnum">17:00–18:30</span></div>`).join('')}</div></section>
+      ${sw("background", "#ffffff")}${sw("foreground", "#0f172a", "#fff", "17.9:1")}${sw("muted", "#f1f5f9")}${sw("muted-foreground", "#475569", "#fff", "7.6:1")}
+      ${sw("primary", "#2563eb", "#fff", "5.2:1")}${sw("accent", "#eff6ff", "#1e40af", "8.0:1")}${sw("destructive", "#dc2626", "#fff", "4.8:1")}${sw("border", "#e2e8f0")}
+      ${sw("input", "#64748b", "#fff", "4.8:1 (≥3:1)")}${sw("success", "#15803d", "#fff", "5.0:1")}${sw("warning", "#b45309", "#fff", "5.0:1")}${sw("info", "#1d4ed8", "#fff", "6.7:1")}</div></section>
+    <section><h2 class="text-lg font-semibold mb-3">Lesson types</h2><div class="flex gap-3">${Object.values(
+      LT,
+    )
+      .map(
+        (t) =>
+          `<div class="w-48 h-16 rounded-sm border-l-[3px] ${t.bd} ${t.bg} ${t.tx} p-2 text-xs"><span class="flex items-center gap-1 font-semibold">${icon(t.ic, "w-3 h-3")}${t.sr}</span><span class="tnum">17:00–18:30</span></div>`,
+      )
+      .join("")}</div></section>
     <section><h2 class="text-lg font-semibold mb-3">Typography (Inter)</h2><div class="space-y-2">
       <div class="text-3xl font-semibold">Display 30/36 — login school name</div><div class="text-2xl font-semibold">Page title 24/32</div>
       <div class="text-lg font-semibold">Section title 18/28</div><div class="text-base font-semibold">Subsection 16/24</div>
@@ -446,39 +890,91 @@ function tokens() {
       <button class="focus-ring h-9 px-4 rounded-md bg-destructive text-white font-medium">Delete</button>
       <button disabled class="h-9 px-4 rounded-md bg-primary text-white font-medium opacity-70 flex items-center gap-2"><svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>Saving…</button>
       <input class="focus-ring h-9 w-56 rounded-md border border-input px-3" placeholder="Search students">
-      ${badge('Present','text-green-700 bg-green-50 border-green-300')}${badge('Pending review','text-amber-700 bg-amber-50 border-amber-300')}${badge('Info','text-blue-700 bg-blue-50 border-blue-300')}${badge('Absent','text-red-700 bg-red-50 border-red-300')}
+      ${badge("Present", "text-green-700 bg-green-50 border-green-300")}${badge("Pending review", "text-amber-700 bg-amber-50 border-amber-300")}${badge("Info", "text-blue-700 bg-blue-50 border-blue-300")}${badge("Absent", "text-red-700 bg-red-50 border-red-300")}
     </div><p class="text-xs text-muted-foreground mt-3">Tab through this row to see the focus ring (2 px ring + 2 px offset).</p></section>
     <section><h2 class="text-lg font-semibold mb-3">Radius & elevation</h2><div class="flex gap-4 items-end">
-      ${[['sm 4','rounded-sm'],['md 6','rounded-md'],['lg 8','rounded-lg'],['xl 12','rounded-xl']].map(([n,c])=>`<div class="w-24 h-16 border border-border bg-muted ${c} grid place-items-center text-xs">${n}</div>`).join('')}
+      ${[
+        ["sm 4", "rounded-sm"],
+        ["md 6", "rounded-md"],
+        ["lg 8", "rounded-lg"],
+        ["xl 12", "rounded-xl"],
+      ]
+        .map(
+          ([n, c]) =>
+            `<div class="w-24 h-16 border border-border bg-muted ${c} grid place-items-center text-xs">${n}</div>`,
+        )
+        .join("")}
       <div class="w-28 h-16 border border-border rounded-lg grid place-items-center text-xs">0 · border</div><div class="w-28 h-16 rounded-lg shadow-sm border border-border grid place-items-center text-xs">1 · shadow-sm</div><div class="w-28 h-16 rounded-lg shadow-lg grid place-items-center text-xs">2 · shadow-lg</div></div></section>
   </div>`;
-}
+      }
 
-/* ------------------------------------------------------------- render */
-function render() {
-  const s = SCREENS.find(x => x.k === cur.screen);
-  document.getElementById('wf-screens').innerHTML = SCREENS.map(x => `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k===cur.screen?'bg-white text-slate-900 font-medium':'bg-slate-700 hover:bg-slate-600'}">${x.label}</button>`).join('');
-  document.getElementById('wf-states').innerHTML = s.states.map((st,i) => `<button data-state="${i}" class="px-2 py-1 rounded ${i===cur.state?'bg-blue-500 text-white':'bg-slate-700 hover:bg-slate-600'}">${st}</button>`).join('');
-  const fn = { login, admin: adminDash, teacher: teacherDash, student: studentDash, 'tt-admin': ttAdmin, 'tt-student': ttStudent, tokens };
-  document.getElementById('stage').innerHTML = fn[cur.screen](cur.state);
-}
-document.addEventListener('click', e => {
-  const go = e.target.closest('[data-go]'), st = e.target.closest('[data-state]'), act = e.target.closest('[data-act]');
-  const ls = e.target.closest('[data-lesson]'), dy = e.target.closest('[data-day]');
-  if (go) { e.preventDefault(); cur = { ...cur, screen: go.dataset.go, state: 0, menu:false, sheet:false, lesson:null }; }
-  else if (st) cur.state = +st.dataset.state;
-  else if (act) { e.preventDefault(); const a = act.dataset.act;
-    if (a === 'menu') cur.menu = !cur.menu; if (a === 'collapse') cur.collapsed = !cur.collapsed;
-    if (a === 'sheet') cur.sheet = !cur.sheet; if (a === 'close-lesson') cur.lesson = null; }
-  else if (ls) cur.lesson = +ls.dataset.lesson;
-  else if (dy) cur.day = +dy.dataset.day;
-  else if (cur.menu && !e.target.closest('[role=menu]')) cur.menu = false;
-  else return;
-  render();
-});
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && (cur.menu || cur.sheet || cur.lesson !== null)) { cur.menu = false; cur.sheet = false; cur.lesson = null; render(); } });
-document.getElementById('wf-later').addEventListener('change', render);
-render();
-</script>
-</body>
+      /* ------------------------------------------------------------- render */
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        const fn = {
+          login,
+          admin: adminDash,
+          teacher: teacherDash,
+          student: studentDash,
+          "tt-admin": ttAdmin,
+          "tt-student": ttStudent,
+          tokens,
+        };
+        document.getElementById("stage").innerHTML = fn[cur.screen](cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]"),
+          act = e.target.closest("[data-act]");
+        const ls = e.target.closest("[data-lesson]"),
+          dy = e.target.closest("[data-day]");
+        if (go) {
+          e.preventDefault();
+          cur = {
+            ...cur,
+            screen: go.dataset.go,
+            state: 0,
+            menu: false,
+            sheet: false,
+            lesson: null,
+          };
+        } else if (st) cur.state = +st.dataset.state;
+        else if (act) {
+          e.preventDefault();
+          const a = act.dataset.act;
+          if (a === "menu") cur.menu = !cur.menu;
+          if (a === "collapse") cur.collapsed = !cur.collapsed;
+          if (a === "sheet") cur.sheet = !cur.sheet;
+          if (a === "close-lesson") cur.lesson = null;
+        } else if (ls) cur.lesson = +ls.dataset.lesson;
+        else if (dy) cur.day = +dy.dataset.day;
+        else if (cur.menu && !e.target.closest("[role=menu]")) cur.menu = false;
+        else return;
+        render();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (
+          e.key === "Escape" &&
+          (cur.menu || cur.sheet || cur.lesson !== null)
+        ) {
+          cur.menu = false;
+          cur.sheet = false;
+          cur.lesson = null;
+          render();
+        }
+      });
+      document.getElementById("wf-later").addEventListener("change", render);
+      render();
+    </script>
+  </body>
 </html>
