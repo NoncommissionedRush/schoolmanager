@@ -1,0 +1,37 @@
+{
+  "severity": {
+    "blocking": "Cannot be saved",
+    "overridable": "Can be overridden"
+  },
+  "conflicts": {
+    "INVALID_TIME": "The start time must be before the end time, within one day.",
+    "OUTSIDE_TERM": "This is outside the term {term} ({termStart} – {termEnd}).",
+    "GROUP_ARCHIVED": "{group} is archived and cannot get new lessons.",
+    "TEACHER_DOUBLE_BOOKED": "{teacher} is already teaching {otherGroup} ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}.",
+    "ROOM_DOUBLE_BOOKED": "{room} is already used by {otherGroup} ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}.",
+    "GROUP_DOUBLE_BOOKED": "{group} already has a lesson at that time ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}.",
+    "STUDENT_DOUBLE_BOOKED": "{studentCount, plural, one {# student} other {# students}} ({students}) also attend {otherGroup} ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}.",
+    "ONLINE_ROOM_SHARED": "{room} is also used by {otherGroup} ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}.",
+    "ROOM_CAPACITY_EXCEEDED": "{room} holds {capacity, plural, one {# student} other {# students}}, but the group has {studentCount}.",
+    "GROUP_OVER_CAPACITY": "{group} has {studentCount} students, more than its capacity of {capacity}.",
+    "ONE_ON_ONE_STUDENT_COUNT": "{group} is a 1-on-1 but has {studentCount, plural, =0 {no students} one {# student} other {# students}}.",
+    "TEACHER_UNAVAILABLE_WEEKLY": "{teacher} is not available {allDay, select, yes {all day} other {{time}}} on this weekday ({dateCount, plural, one {# date} other {# dates}}, first on {firstDate}).",
+    "TEACHER_UNAVAILABLE_ON_DATE": "{teacher} is not available on {firstDate}{allDay, select, yes {} other { ({time})}}.",
+    "LESSON_ON_HOLIDAY": "{firstDate} is a holiday ({holiday}).",
+    "OUTSIDE_SCHOOL_DAYS": "{weekday, select, 1 {Monday} 2 {Tuesday} 3 {Wednesday} 4 {Thursday} 5 {Friday} 6 {Saturday} other {Sunday}} is not a school day.",
+    "OUTSIDE_SCHOOL_HOURS": "{time} is outside school hours ({schoolHours}).",
+    "NO_OCCURRENCES": "This slot never takes place: every matching day in {term} is a holiday or outside the slot's dates."
+  },
+  "cancelReasons": {
+    "HOLIDAY": "Holiday",
+    "TIMETABLE_CHANGED": "Timetable changed"
+  },
+  "errors": {
+    "NOT_FOUND": "This item no longer exists. Reload the page and try again.",
+    "INVALID_INPUT": "Some of the details are invalid.",
+    "EFFECTIVE_DATE_IN_PAST": "Changes to a published timetable cannot start in the past.",
+    "NOT_PUBLISHED": "The timetable of this term is not published yet.",
+    "TERM_HAS_LESSONS": "This term already has lessons and cannot be deleted.",
+    "SLOT_HAS_LESSONS": "This slot already has lessons. End it instead of deleting it."
+  }
+}
