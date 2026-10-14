@@ -1,5 +1,5 @@
 import type { SchoolIds } from "./fixtures";
-import { FormFields } from "./server-actions";
+import { FormFields } from "../server-actions";
 
 // Every admin server action, called with ids from `target` by an admin of
 // `own`'s school. Forms are valid, so the only reason left to refuse is the

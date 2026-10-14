@@ -15,7 +15,11 @@ import {
   signedIn,
   WEEK,
 } from "./fixtures";
-import { callAction, FormFields, serverActions } from "./server-actions";
+import {
+  callAction,
+  compiledServerActions,
+  FormFields,
+} from "../server-actions";
 
 // Role boundaries inside one school (CARM-26): teachers and students can't
 // open admin pages or run admin actions, students only see their own
@@ -189,12 +193,14 @@ async function snapshot(ids: SchoolIds) {
     );
     rows[`${table}:${id}`] = row?.row ?? "missing";
   }
+  // Levels: E2E-% codes belong to specs running in parallel (admin-actions
+  // adds and removes E2E-LEAK in this school), so they're left out.
   const [counts] = await sql<{ row: string }>(
     `SELECT row(
        (SELECT count(*) FROM users WHERE name = 'Role Leak'),
        (SELECT count(*) FROM rooms WHERE name LIKE 'Role Leak%'),
        (SELECT count(*) FROM terms WHERE name LIKE 'Role Leak%'),
-       (SELECT count(*) FROM levels WHERE school_id = $1),
+       (SELECT count(*) FROM levels WHERE school_id = $1 AND code NOT LIKE 'E2E-%'),
        (SELECT md5(string_agg(l::text, '|' ORDER BY l.id)) FROM lessons l WHERE term_id = $2)
      )::text AS row`,
     [ids.school, ids.term],
@@ -208,7 +214,7 @@ test.describe("role boundaries › admin area", () => {
     const covered = new Set(
       allAdminCases(placeholderIds()).map(({ action }) => action.join("#")),
     );
-    const admin = [...serverActions().keys()].filter((key) =>
+    const admin = [...compiledServerActions().keys()].filter((key) =>
       key.startsWith("src/app/admin/"),
     );
     expect(admin.length).toBeGreaterThan(0);

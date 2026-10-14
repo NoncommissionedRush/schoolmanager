@@ -47,13 +47,14 @@ Sign-ins (password `demo-password`): `admin@northbridge.test`,
 
 ### Calling server actions directly
 
-`callAction(page, [file, exportName], args)` in `server-actions.ts` posts a
+`callAction(page, [file, exportName], args)` in `e2e/server-actions.ts` posts a
 server action the way a crafted request would, with the cookies of the user
 signed in on `page`. It looks the action id up in Next's
 `server-reference-manifest.json` (`.next/server` after `pnpm build`,
 `.next/dev/server` under `pnpm dev` once the page using it was compiled) and
-encodes arguments like React does; wrap a form argument in
-`new FormFields({...})`. It returns the HTTP status and the action's
+encodes arguments like React does; wrap a form argument (at most one per
+call) in `new FormFields({...})`. The CARM-28 admin-action spec uses the same
+helper. It returns the HTTP status and the action's
 `ActionResult`, or `null` when the action didn't run.
 
 ### Adding a case

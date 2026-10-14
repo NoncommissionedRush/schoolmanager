@@ -15,7 +15,7 @@ import {
   signedIn,
   WEEK,
 } from "./fixtures";
-import { callAction } from "./server-actions";
+import { callAction } from "../server-actions";
 
 // Tenant isolation (CARM-26): nobody in school A can read or change school
 // B's data — not through pages, not through server actions, not with guessed
