@@ -20,8 +20,8 @@ import {
   planLessonSync,
 } from "./lesson-sync";
 import {
+  placeGreedily,
   prng,
-  randomSlot,
   randomTimetable,
   type RealisticSchool,
   realisticSchool,
@@ -94,36 +94,6 @@ function oracle(school: RealisticSchool, slots: SlotInfo[]) {
     }
   }
   return new Map([...result].map(([id, set]) => [id, [...set].sort()]));
-}
-
-/** Greedy placement: each slot goes to the first time without any conflict. */
-function placeGreedily(school: RealisticSchool, seed: number) {
-  const r = prng(seed);
-  const placed: SlotInfo[] = [];
-  const unplaced: { slot: SlotInfo; conflicts: Conflict[] }[] = [];
-  for (const group of school.groups) {
-    for (const suffix of ["a", "b"]) {
-      let last: { slot: SlotInfo; conflicts: Conflict[] } | null = null;
-      for (let attempt = 0; attempt < 40; attempt++) {
-        const slot = randomSlot(r, school, group, `${group.id}-${suffix}`);
-        if (school.groupTeacher.get(group.id) !== slot.teacherId) {
-          slot.teacherId = school.groupTeacher.get(group.id)!;
-        }
-        const conflicts = checkSlot(
-          buildCalendar(contextOf(school, placed)),
-          slot,
-        ).filter((c) => c.type !== "TEACHER_UNAVAILABLE_ON_DATE");
-        if (conflicts.length === 0) {
-          placed.push(slot);
-          last = null;
-          break;
-        }
-        last = { slot, conflicts };
-      }
-      if (last) unplaced.push(last);
-    }
-  }
-  return { placed, unplaced };
 }
 
 function asStoredLessons(
