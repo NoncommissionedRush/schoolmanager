@@ -157,7 +157,8 @@ The generator only gives Tomas groups of these levels. You can still pick him fo
 - A checkbox per active level, ordered by `Level.rank`. **Quick select "Up
   to…"** ticks every level up to the chosen one in one click — most
   teachers are "up to X". A teacher who teaches only some levels (e.g. only
-  kids' A1–A2, or only C1–C2 exam prep) just ticks those (Q1).
+  kids' A1–A2, or only C1–C2 exam prep) just ticks those (owner decision,
+  §13).
 - Also in the teacher create dialog (optional there; default none).
 - A teacher with **no levels** is never assigned by the generator; the
   readiness check lists them (§6.2).
@@ -737,15 +738,13 @@ doesn't teach the group's level.
 Owner decisions (2026-10-14, CARM-54): fixed times per group, kept across
 terms; room fixed per group; one teacher per group per term; even workload
 as the only preference in v1, with a school setting for other preferences
-(e.g. rotate vs keep teachers) as a later addition.
+(e.g. rotate vs keep teachers) as a later addition. Levels a teacher
+teaches are a **tick box per level** with an "Up to…" shortcut (§5.2), not
+a single "up to level X" (stored as `TeacherLevel` rows, one per level).
 
 Open:
 
-1. **Q1 — How to record which levels a teacher teaches.** Either a single
-   "teaches up to level X" (everything at and below X), or a tick box per
-   level, so a teacher can teach e.g. only A1–A2, or only C1–C2.
-   Recommended: tick boxes with an "Up to…" shortcut (§5.2) — as fast as
-   "up to X" in the common case, and it also covers the exceptions.
+1. (Resolved: levels per teacher, see above.)
 2. **Q2 — Changing a group's times mid-term.** Recommended: saving the
    group never changes the live timetable; an alert offers to change the
    current term's slots from a date (existing editor flow).
