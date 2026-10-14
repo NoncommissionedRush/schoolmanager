@@ -51,11 +51,12 @@ const adminPages = (ids: SchoolIds) => [
 
 const FORBIDDEN = "You don't have access to this page";
 
-/**
- * The forbidden page was served. (Its HTTP status is 200, not the 403 the
- * proxy asks for, so the body is what we can rely on.)
- */
-function expectForbidden(body: string, path: string) {
+/** The forbidden page was served, with a 403. */
+function expectForbidden(
+  { status, body }: { status: number; body: string },
+  path: string,
+) {
+  expect(status, path).toBe(403);
   expect(body, path).toContain("have access to this page");
 }
 
@@ -225,9 +226,9 @@ test.describe("role boundaries › admin area", () => {
     test(`a ${role} gets 403 on every admin page`, async ({ browser }) => {
       const page = await signedIn(browser, LOGINS.A[role], role);
       for (const path of adminPages(a)) {
-        const { body } = await serverResponse(page, path);
-        expectForbidden(body, path);
-        expectNoneOf(body, ["A1 Morning", "Room 1 (London)"], path);
+        const response = await serverResponse(page, path);
+        expectForbidden(response, path);
+        expectNoneOf(response.body, ["A1 Morning", "Room 1 (London)"], path);
       }
     });
 
@@ -248,11 +249,11 @@ test.describe("role boundaries › admin area", () => {
   }) => {
     const teacher = await signedIn(browser, LOGINS.A.teacher, "teacher");
     for (const path of ["/student", `/student/timetable?week=${WEEK}`]) {
-      expectForbidden((await serverResponse(teacher, path)).body, path);
+      expectForbidden(await serverResponse(teacher, path), path);
     }
     const student = await signedIn(browser, LOGINS.A.student, "student");
     for (const path of ["/teacher", `/teacher/timetable?week=${WEEK}`]) {
-      expectForbidden((await serverResponse(student, path)).body, path);
+      expectForbidden(await serverResponse(student, path), path);
     }
   });
 });
