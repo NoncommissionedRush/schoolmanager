@@ -39,17 +39,16 @@ test.describe("admin › groups", () => {
     await page.getByRole("button", { name: "Add members" }).click();
     const add = page.getByRole("dialog", { name: `Add members to ${name}` });
     await add.getByLabel("Show all levels").check();
-    // Leave the demo student login alone.
-    const choices = add
-      .getByRole("listitem")
-      .filter({ hasNot: page.getByText(DEMO_LOGINS.student) })
-      .getByRole("checkbox");
-    await choices.nth(0).check();
-    await choices.nth(1).check();
+    // Seeded students only: other specs add and remove their own students
+    // in parallel, and one removed mid-test would empty a seat here.
+    const choice = (name: string) =>
+      add.getByRole("listitem").filter({ hasText: name }).getByRole("checkbox");
+    await choice("Adam Kollár").check();
+    await choice("Barbora Hudáková").check();
     await expect(
       add.getByText("The group is full. Increase the capacity to add more."),
     ).toBeVisible();
-    await expect(choices.nth(2)).toBeDisabled();
+    await expect(choice("Cyril Marko")).toBeDisabled();
     await add.getByRole("button", { name: "Add members" }).click();
     await expect(page.getByText(`2 students added to ${name}`)).toBeVisible();
     await expect(page.getByText("Members 2 / 2")).toBeVisible();
@@ -79,7 +78,9 @@ test.describe("admin › groups", () => {
       one.getByText("1-on-1 lessons have one student."),
     ).toBeVisible();
     const student = one.getByLabel(/^Student/);
-    await student.selectOption({ index: 1 });
+    await student.selectOption({
+      label: "Dominika Šulcová (dominika.sulcova@demo-school.test, A1)",
+    });
     await expect(one.getByLabel("Name")).toHaveValue(/ 1-on-1$/);
     const oneName = `E2E 1-on-1 ${stamp}`;
     await one.getByLabel("Name").fill(oneName);

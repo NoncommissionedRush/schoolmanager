@@ -32,7 +32,8 @@ import {
 //   Rita holds one AVAILABLE credit, one expired and one already used.
 // - Otto (S3) is in "full", whose room seats one; Olga (S4) is in "other",
 //   the group Rita books into. Nora (S5) is in no group at all.
-// - "level" is a group of another level.
+// - "level" is a group of another level, the spec's own: picking an existing
+//   one could take another spec's fixture level and block its cleanup.
 //
 // Every log, homework, note and reason carries a unique marker, so finding
 // one in a response that shouldn't have it is the leak check.
@@ -67,6 +68,7 @@ const emailOf = (who: Who) => `e2e-p3-${who}-${suffix}@demo-school.test`;
 
 const ids = {
   term: randomUUID(),
+  level: randomUUID(),
   room: randomUUID(),
   tinyRoom: randomUUID(),
   groups: {
@@ -289,14 +291,10 @@ test.describe("phase 3 permissions", () => {
 
     const [row] = await sql<{
       level: string;
-      otherLevel: string;
       teacher: string;
       hash: string;
     }>(
-      `SELECT g.level_id AS level,
-              (SELECT id FROM levels WHERE school_id = s.id AND id <> g.level_id
-                 AND archived_at IS NULL ORDER BY id LIMIT 1) AS "otherLevel",
-              tp.id AS teacher, su.password_hash AS hash
+      `SELECT g.level_id AS level, tp.id AS teacher, su.password_hash AS hash
        FROM schools s
        JOIN groups g ON g.school_id = s.id AND g.name = 'A2 Evening'
        JOIN teacher_profiles tp ON tp.school_id = s.id
@@ -330,6 +328,18 @@ test.describe("phase 3 permissions", () => {
         `P3 Tiny ${suffix}`,
       ],
     );
+    // E2E-% codes are left out of the role suite's level count.
+    await sql(
+      `INSERT INTO levels (id, school_id, code, name, rank, updated_at)
+       VALUES ($1, $2, $3, $4, $5, now())`,
+      [
+        ids.level,
+        school,
+        `E2E-P3-${suffix}`,
+        `P3 Level ${suffix}`,
+        9001 + parseInt(suffix.slice(0, 4), 16),
+      ],
+    );
     const g = ids.groups;
     await sql(
       `INSERT INTO groups (id, school_id, level_id, type, name, capacity, updated_at) VALUES
@@ -346,7 +356,7 @@ test.describe("phase 3 permissions", () => {
         g.oneOnOne,
         school,
         row.level,
-        row.otherLevel,
+        ids.level,
         `P3 Own ${suffix}`,
         `P3 Other ${suffix}`,
         `P3 Full ${suffix}`,
@@ -479,9 +489,12 @@ test.describe("phase 3 permissions", () => {
   test.afterAll(async () => {
     for (const page of pages.values()) await page.context().close();
     const students = Object.values(ids.students);
+    const groups = Object.values(ids.groups);
+    // By group, not term: a reschedule lands in whichever published term
+    // covers its date, which may be another spec's or the seed's.
     const lessons = await sql<{ id: string }>(
-      "SELECT id FROM lessons WHERE term_id = $1",
-      [ids.term],
+      "SELECT id FROM lessons WHERE group_id = ANY($1)",
+      [groups],
     );
     const lessonIds = lessons.map((l) => l.id);
     await sql("DELETE FROM replacement_requests WHERE student_id = ANY($1)", [
@@ -498,12 +511,13 @@ test.describe("phase 3 permissions", () => {
       "DELETE FROM teacher_notes WHERE lesson_id = ANY($1) OR student_id = ANY($2)",
       [lessonIds, students],
     );
-    // Reschedules first: they point at the lesson they replace.
+    // A reschedule points at the lesson it replaces (Restrict), and may be
+    // rescheduled again: unlink the chains, then delete.
     await sql(
-      "DELETE FROM lessons WHERE term_id = $1 AND rescheduled_from_id IS NOT NULL",
-      [ids.term],
+      "UPDATE lessons SET rescheduled_from_id = NULL WHERE id = ANY($1)",
+      [lessonIds],
     );
-    await sql("DELETE FROM lessons WHERE term_id = $1", [ids.term]);
+    await sql("DELETE FROM lessons WHERE id = ANY($1)", [lessonIds]);
     await sql("DELETE FROM group_memberships WHERE student_id = ANY($1)", [
       students,
     ]);
@@ -511,9 +525,8 @@ test.describe("phase 3 permissions", () => {
     const users = Object.values(ids.users);
     await sql("DELETE FROM memberships WHERE user_id = ANY($1)", [users]);
     await sql("DELETE FROM users WHERE id = ANY($1)", [users]);
-    await sql("DELETE FROM groups WHERE id = ANY($1)", [
-      Object.values(ids.groups),
-    ]);
+    await sql("DELETE FROM groups WHERE id = ANY($1)", [groups]);
+    await sql("DELETE FROM levels WHERE id = $1", [ids.level]);
     await sql("DELETE FROM rooms WHERE id = ANY($1)", [
       [ids.room, ids.tinyRoom],
     ]);
