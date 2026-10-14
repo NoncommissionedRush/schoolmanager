@@ -119,13 +119,22 @@ model School {
 /// A person. Global (not tenant-owned) so one person can belong to several
 /// schools; per-school roles live in `Membership`.
 model User {
-  id        String    @id @default(uuid()) @db.Uuid
-  email     String    @unique
-  name      String
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id            String    @id @default(uuid()) @db.Uuid
+  /// Stored lower-cased; sign-in compares case-insensitively.
+  email         String    @unique
+  name          String
+  /// bcrypt hash; null for users who cannot sign in with a password.
+  passwordHash  String?   @map("password_hash")
+  /// Auth.js: set once an email provider (magic link) verifies the address.
+  emailVerified DateTime? @map("email_verified")
+  /// Auth.js: avatar URL from an OAuth provider.
+  image         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  /// Soft delete; a deleted user can no longer sign in ("account disabled").
+  deletedAt     DateTime? @map("deleted_at")
 
+  accounts             Account[]
   memberships          Membership[]
   teacherProfiles      TeacherProfile[]
   studentProfiles      StudentProfile[]
@@ -137,8 +146,9 @@ model User {
   @@map("users")
 }
 
-/// A user's role in a school. A user may hold several roles in the same
-/// school (e.g. an admin who also teaches).
+/// A user's role in a school. One role per user and school in v1 (decision
+/// 2026-10-14, docs/design/app-layout.md §9); authorization checks this row,
+/// never the existence of a Teacher/StudentProfile.
 model Membership {
   id        String   @id @default(uuid()) @db.Uuid
   schoolId  String   @map("school_id") @db.Uuid
@@ -150,10 +160,47 @@ model Membership {
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([schoolId, userId, role])
+  @@unique([schoolId, userId])
   @@unique([schoolId, id])
   @@index([userId])
   @@map("memberships")
+}
+
+/// Auth.js: an external identity (OAuth account) linked to a user. Unused
+/// while only email + password sign-in is enabled; shaped for
+/// `@auth/prisma-adapter` so OAuth providers can be added later.
+model Account {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+/// Auth.js: one-time tokens for email (magic link) sign-in. Unused until an
+/// email provider is enabled.
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
 }
 
 model TeacherProfile {

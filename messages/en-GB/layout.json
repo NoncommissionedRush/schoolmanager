@@ -1,0 +1,11 @@
+{
+  "userMenu": {
+    "label": "Account menu for {name}",
+    "signOut": "Sign out"
+  },
+  "role": {
+    "ADMIN": "Admin",
+    "TEACHER": "Teacher",
+    "STUDENT": "Student"
+  }
+}

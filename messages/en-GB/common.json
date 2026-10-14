@@ -2,5 +2,7 @@
   "appName": "School Manager",
   "noResults": "No results.",
   "loading": "Loading…",
-  "retry": "Try again"
+  "retry": "Try again",
+  "skipToContent": "Skip to content",
+  "close": "Close"
 }

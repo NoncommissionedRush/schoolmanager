@@ -10,8 +10,9 @@ export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "en-GB";
 
 /**
- * Times are shown in the school's time zone, not the browser's. Until schools
- * store their own time zone this default is used for every request.
+ * Times are shown in the school's time zone (`School.timezone`), not the
+ * browser's. This default only applies outside the signed-in app shell
+ * (login, error pages); see src/i18n/school-format.ts.
  */
 export const defaultTimeZone = "Europe/Bratislava";
 

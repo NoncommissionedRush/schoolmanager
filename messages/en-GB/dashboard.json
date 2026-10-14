@@ -1,0 +1,27 @@
+{
+  "greeting": {
+    "morning": "Good morning, {firstName}",
+    "afternoon": "Good afternoon, {firstName}",
+    "evening": "Good evening, {firstName}"
+  },
+  "studentGreeting": "Hi, {firstName}",
+  "today": "Today is {date}",
+  "admin": {
+    "empty": {
+      "title": "Your school is ready to set up",
+      "description": "Once terms, rooms, teachers, students and groups are added, today's lessons and anything that needs your attention will show up here."
+    }
+  },
+  "teacher": {
+    "empty": {
+      "title": "No lessons yet",
+      "description": "When the school publishes the timetable, your lessons for today and the week will appear here."
+    }
+  },
+  "student": {
+    "empty": {
+      "title": "You're all set",
+      "description": "Your lessons and homework will appear here once you're enrolled in a course."
+    }
+  }
+}
