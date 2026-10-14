@@ -1,6 +1,18 @@
 // Prisma schema — https://pris.ly/d/prisma-schema
 // Convention: every tenant-owned table carries `schoolId` (column `school_id`)
 // and every query against it must be scoped by that id.
+//
+// Cross-school references are made impossible at the database level: every
+// tenant-owned model exposes `@@unique([schoolId, id])`, and relations between
+// tenant-owned models use the composite key `[schoolId, xId]`, so a row can
+// only point at rows of its own school. Optional composite relations use
+// `onDelete: Restrict` because the default (SetNull) would try to null
+// `school_id` as well.
+//
+// Times of day (slots, availability) are stored as minutes since midnight in
+// the school's timezone (`School.timezone`); concrete lessons store absolute
+// `timestamptz` instants. Weekdays follow ISO 8601: 1 = Monday … 7 = Sunday.
+// See docs/architecture/data-model.md.
 
 generator client {
   provider = "prisma-client"
@@ -11,12 +23,652 @@ datasource db {
   provider = "postgresql"
 }
 
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum GroupType {
+  GROUP
+  ONE_ON_ONE
+}
+
+enum RoomKind {
+  PHYSICAL
+  ONLINE
+}
+
+enum AvailabilityKind {
+  /// Recurring every week on `weekday` between `startMinute` and `endMinute`.
+  WEEKLY_UNAVAILABLE
+  /// One-off: unavailable on `date` (whole day when minutes are null).
+  DATE_UNAVAILABLE
+  /// One-off exception: available on `date` despite a weekly rule.
+  DATE_AVAILABLE
+}
+
+enum LessonStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+enum ReplacementStatus {
+  AUTO_APPROVED
+  APPROVED
+  REJECTED
+  OVERRIDDEN
+}
+
+enum MakeupCreditStatus {
+  AVAILABLE
+  USED
+  EXPIRED
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy & people
+// ---------------------------------------------------------------------------
+
 model School {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
   slug      String   @unique
+  /// IANA timezone used to interpret slot times, e.g. "Europe/Bratislava".
+  timezone  String   @default("Europe/Bratislava")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  memberships         Membership[]
+  teacherProfiles     TeacherProfile[]
+  studentProfiles     StudentProfile[]
+  levels              Level[]
+  courses             Course[]
+  groups              Group[]
+  groupMemberships    GroupMembership[]
+  rooms               Room[]
+  terms               Term[]
+  holidays            Holiday[]
+  teacherAvailability TeacherAvailability[]
+  timetableSlots      TimetableSlot[]
+  lessons             Lesson[]
+  attendance          Attendance[]
+  lessonLogs          LessonLog[]
+  assignments         Assignment[]
+  teacherNotes        TeacherNote[]
+  absenceReports      AbsenceReport[]
+  replacementRequests ReplacementRequest[]
+  makeupCredits       MakeupCredit[]
+  auditLogs           AuditLog[]
+
   @@map("schools")
+}
+
+/// A person. Global (not tenant-owned) so one person can belong to several
+/// schools; per-school roles live in `Membership`.
+model User {
+  id        String    @id @default(uuid()) @db.Uuid
+  email     String    @unique
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  memberships          Membership[]
+  teacherProfiles      TeacherProfile[]
+  studentProfiles      StudentProfile[]
+  recordedAttendance   Attendance[]
+  reportedAbsences     AbsenceReport[]
+  reviewedReplacements ReplacementRequest[]
+  auditLogs            AuditLog[]
+
+  @@map("users")
+}
+
+/// A user's role in a school. A user may hold several roles in the same
+/// school (e.g. an admin who also teaches).
+model Membership {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      Role
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, userId, role])
+  @@unique([schoolId, id])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model TeacherProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  bio       String?
+  /// Hex color used for the teacher's lessons in timetable views.
+  color     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  availability      TeacherAvailability[]
+  timetableSlots    TimetableSlot[]
+  lessons           Lesson[]              @relation("LessonTeacher")
+  substituteLessons Lesson[]              @relation("LessonSubstitute")
+  lessonLogs        LessonLog[]
+  assignments       Assignment[]
+  notes             TeacherNote[]
+
+  @@unique([schoolId, userId])
+  @@unique([schoolId, id])
+  @@index([userId])
+  @@map("teacher_profiles")
+}
+
+model StudentProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// Current skill level; replacement lessons must match it.
+  levelId   String?  @map("level_id") @db.Uuid
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  level  Level? @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+
+  groupMemberships    GroupMembership[]
+  attendance          Attendance[]
+  notesAbout          TeacherNote[]
+  absenceReports      AbsenceReport[]
+  replacementRequests ReplacementRequest[]
+  makeupCredits       MakeupCredit[]
+
+  @@unique([schoolId, userId])
+  @@unique([schoolId, id])
+  @@index([userId])
+  @@map("student_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Academics
+// ---------------------------------------------------------------------------
+
+/// Skill level, e.g. CEFR A1–C2. `rank` orders levels (lower = easier).
+model Level {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  code      String
+  name      String
+  rank      Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  school   School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  students StudentProfile[]
+  courses  Course[]
+  groups   Group[]
+
+  @@unique([schoolId, code])
+  @@unique([schoolId, rank])
+  @@unique([schoolId, id])
+  @@map("levels")
+}
+
+/// What is taught (e.g. "General English B1"); groups are concrete classes.
+model Course {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  levelId     String   @map("level_id") @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  school School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  level  Level   @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  groups Group[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("courses")
+}
+
+/// A class that meets regularly: a group lesson or a 1-on-1 (capacity 1).
+model Group {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @map("school_id") @db.Uuid
+  courseId  String?   @map("course_id") @db.Uuid
+  levelId   String    @map("level_id") @db.Uuid
+  type      GroupType
+  name      String
+  capacity  Int
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  school         School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  course         Course?           @relation(fields: [schoolId, courseId], references: [schoolId, id], onDelete: Restrict)
+  level          Level             @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  memberships    GroupMembership[]
+  timetableSlots TimetableSlot[]
+  lessons        Lesson[]
+  assignments    Assignment[]
+  teacherNotes   TeacherNote[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@index([schoolId, levelId])
+  @@map("groups")
+}
+
+/// Enrolment of a student in a group. `leftAt` keeps history.
+model GroupMembership {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @map("school_id") @db.Uuid
+  groupId   String    @map("group_id") @db.Uuid
+  studentId String    @map("student_id") @db.Uuid
+  joinedAt  DateTime  @default(now()) @map("joined_at")
+  leftAt    DateTime? @map("left_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  school  School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  group   Group          @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Cascade)
+  student StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([groupId, studentId])
+  @@unique([schoolId, id])
+  @@index([schoolId, studentId])
+  @@map("group_memberships")
+}
+
+// ---------------------------------------------------------------------------
+// Resources & calendar
+// ---------------------------------------------------------------------------
+
+model Room {
+  id         String   @id @default(uuid()) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  name       String
+  kind       RoomKind
+  capacity   Int?
+  /// Join link for ONLINE rooms.
+  meetingUrl String?  @map("meeting_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  timetableSlots TimetableSlot[]
+  lessons        Lesson[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("rooms")
+}
+
+/// A teaching period (e.g. "Autumn 2026"). Dates are inclusive.
+model Term {
+  id                   String    @id @default(uuid()) @db.Uuid
+  schoolId             String    @map("school_id") @db.Uuid
+  name                 String
+  startDate            DateTime  @map("start_date") @db.Date
+  endDate              DateTime  @map("end_date") @db.Date
+  /// Set when the timetable is published; null = draft (hidden from students).
+  timetablePublishedAt DateTime? @map("timetable_published_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  holidays       Holiday[]
+  timetableSlots TimetableSlot[]
+  lessons        Lesson[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("terms")
+}
+
+/// Day(s) without lessons. Dates are inclusive. `termId` null = school-wide.
+model Holiday {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  termId    String?  @map("term_id") @db.Uuid
+  name      String
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  term   Term?  @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, startDate])
+  @@map("holidays")
+}
+
+/// Teacher (un)availability. See `AvailabilityKind` for which fields apply;
+/// shape is enforced by a CHECK constraint in the migration.
+model TeacherAvailability {
+  id          String           @id @default(uuid()) @db.Uuid
+  schoolId    String           @map("school_id") @db.Uuid
+  teacherId   String           @map("teacher_id") @db.Uuid
+  kind        AvailabilityKind
+  /// ISO weekday 1–7, WEEKLY_UNAVAILABLE only.
+  weekday     Int?
+  /// One-off date, DATE_* kinds only.
+  date        DateTime?        @db.Date
+  /// Minutes since midnight; both null = whole day (DATE_* kinds only).
+  startMinute Int?             @map("start_minute")
+  endMinute   Int?             @map("end_minute")
+  note        String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  school  School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher TeacherProfile @relation(fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, teacherId])
+  @@map("teacher_availability")
+}
+
+// ---------------------------------------------------------------------------
+// Timetable & lessons
+// ---------------------------------------------------------------------------
+
+/// Recurring weekly template. Lessons are generated from slots per term.
+model TimetableSlot {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  termId      String   @map("term_id") @db.Uuid
+  groupId     String   @map("group_id") @db.Uuid
+  teacherId   String   @map("teacher_id") @db.Uuid
+  roomId      String?  @map("room_id") @db.Uuid
+  weekday     Int
+  startMinute Int      @map("start_minute")
+  endMinute   Int      @map("end_minute")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  school  School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  term    Term           @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Cascade)
+  group   Group          @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Restrict)
+  teacher TeacherProfile @relation(fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Restrict)
+  room    Room?          @relation(fields: [schoolId, roomId], references: [schoolId, id], onDelete: Restrict)
+  lessons Lesson[]
+
+  @@unique([schoolId, id])
+  @@index([schoolId, termId, weekday])
+  @@index([schoolId, teacherId])
+  @@map("timetable_slots")
+}
+
+/// A concrete dated lesson. Attendance, logs, homework, absences and
+/// replacements attach here. `teacherId` is the regular teacher;
+/// `substituteTeacherId` is set when someone else teaches this instance.
+model Lesson {
+  id                  String       @id @default(uuid()) @db.Uuid
+  schoolId            String       @map("school_id") @db.Uuid
+  termId              String       @map("term_id") @db.Uuid
+  /// Null for ad-hoc lessons not generated from a slot.
+  timetableSlotId     String?      @map("timetable_slot_id") @db.Uuid
+  groupId             String       @map("group_id") @db.Uuid
+  teacherId           String       @map("teacher_id") @db.Uuid
+  substituteTeacherId String?      @map("substitute_teacher_id") @db.Uuid
+  roomId              String?      @map("room_id") @db.Uuid
+  /// Local date of the slot occurrence (school timezone); set for generated
+  /// lessons, null for ad-hoc ones. Stays put when the lesson time is edited.
+  occurrenceDate      DateTime?    @map("occurrence_date") @db.Date
+  startsAt            DateTime     @map("starts_at") @db.Timestamptz(3)
+  endsAt              DateTime     @map("ends_at") @db.Timestamptz(3)
+  status              LessonStatus @default(SCHEDULED)
+  cancelReason        String?      @map("cancel_reason")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  school            School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  term              Term            @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Cascade)
+  timetableSlot     TimetableSlot?  @relation(fields: [schoolId, timetableSlotId], references: [schoolId, id], onDelete: Restrict)
+  group             Group           @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Restrict)
+  teacher           TeacherProfile  @relation("LessonTeacher", fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Restrict)
+  substituteTeacher TeacherProfile? @relation("LessonSubstitute", fields: [schoolId, substituteTeacherId], references: [schoolId, id], onDelete: Restrict)
+  room              Room?           @relation(fields: [schoolId, roomId], references: [schoolId, id], onDelete: Restrict)
+
+  attendance       Attendance[]
+  log              LessonLog?
+  assignmentsSet   Assignment[]         @relation("AssignmentSetIn")
+  assignmentsDue   Assignment[]         @relation("AssignmentDueIn")
+  teacherNotes     TeacherNote[]
+  absenceReports   AbsenceReport[]
+  replacementsFrom ReplacementRequest[] @relation("ReplacementOriginal")
+  replacementsTo   ReplacementRequest[] @relation("ReplacementTarget")
+  makeupCredits    MakeupCredit[]
+
+  /// Makes lesson generation idempotent: one lesson per slot per date, even
+  /// after the slot or the lesson has been moved to another time.
+  @@unique([timetableSlotId, occurrenceDate])
+  @@unique([schoolId, id])
+  @@index([schoolId, startsAt])
+  @@index([schoolId, groupId, startsAt])
+  @@index([schoolId, teacherId, startsAt])
+  @@map("lessons")
+}
+
+model Attendance {
+  id           String           @id @default(uuid()) @db.Uuid
+  schoolId     String           @map("school_id") @db.Uuid
+  lessonId     String           @map("lesson_id") @db.Uuid
+  studentId    String           @map("student_id") @db.Uuid
+  status       AttendanceStatus
+  note         String?
+  recordedById String?          @map("recorded_by_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  school     School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  lesson     Lesson         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Cascade)
+  student    StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+  recordedBy User?          @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([lessonId, studentId])
+  @@unique([schoolId, id])
+  @@index([schoolId, studentId])
+  @@map("attendance")
+}
+
+/// What was covered in a lesson (one per lesson). Visible to students.
+model LessonLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  lessonId  String   @map("lesson_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  school School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  lesson Lesson         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Cascade)
+  author TeacherProfile @relation(fields: [schoolId, authorId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, lessonId])
+  @@unique([schoolId, id])
+  @@map("lesson_logs")
+}
+
+/// Homework for a group, set in one lesson and due by a lesson or a date.
+model Assignment {
+  id          String    @id @default(uuid()) @db.Uuid
+  schoolId    String    @map("school_id") @db.Uuid
+  groupId     String    @map("group_id") @db.Uuid
+  lessonId    String?   @map("lesson_id") @db.Uuid
+  dueLessonId String?   @map("due_lesson_id") @db.Uuid
+  dueDate     DateTime? @map("due_date") @db.Date
+  authorId    String    @map("author_id") @db.Uuid
+  title       String
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  group     Group          @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Cascade)
+  lesson    Lesson?        @relation("AssignmentSetIn", fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Restrict)
+  dueLesson Lesson?        @relation("AssignmentDueIn", fields: [schoolId, dueLessonId], references: [schoolId, id], onDelete: Restrict)
+  author    TeacherProfile @relation(fields: [schoolId, authorId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, groupId])
+  @@map("assignments")
+}
+
+/// INTERNAL note by a teacher about a student, group or lesson. Readable by
+/// teachers and admins only — never exposed to students (enforced in
+/// src/server, covered by tests).
+model TeacherNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  studentId String?  @map("student_id") @db.Uuid
+  groupId   String?  @map("group_id") @db.Uuid
+  lessonId  String?  @map("lesson_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  school  School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  author  TeacherProfile  @relation(fields: [schoolId, authorId], references: [schoolId, id], onDelete: Restrict)
+  student StudentProfile? @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+  group   Group?          @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Restrict)
+  lesson  Lesson?         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, studentId])
+  @@map("teacher_notes")
+}
+
+// ---------------------------------------------------------------------------
+// Absences & replacements (Phase 3)
+// ---------------------------------------------------------------------------
+
+/// A student announcing they will miss (or missed) a lesson.
+model AbsenceReport {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  lessonId     String   @map("lesson_id") @db.Uuid
+  studentId    String   @map("student_id") @db.Uuid
+  reportedById String?  @map("reported_by_id") @db.Uuid
+  reason       String?
+  reportedAt   DateTime @default(now()) @map("reported_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  lesson        Lesson         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Cascade)
+  student       StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+  reportedBy    User?          @relation(fields: [reportedById], references: [id], onDelete: SetNull)
+  makeupCredits MakeupCredit[]
+
+  @@unique([lessonId, studentId])
+  @@unique([schoolId, id])
+  @@index([schoolId, studentId])
+  @@map("absence_reports")
+}
+
+/// Entitlement to one replacement lesson, earned by a reported absence.
+model MakeupCredit {
+  id              String             @id @default(uuid()) @db.Uuid
+  schoolId        String             @map("school_id") @db.Uuid
+  studentId       String             @map("student_id") @db.Uuid
+  sourceLessonId  String             @map("source_lesson_id") @db.Uuid
+  absenceReportId String?            @map("absence_report_id") @db.Uuid
+  status          MakeupCreditStatus @default(AVAILABLE)
+  expiresAt       DateTime?          @map("expires_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student       StudentProfile       @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+  sourceLesson  Lesson               @relation(fields: [schoolId, sourceLessonId], references: [schoolId, id], onDelete: Restrict)
+  absenceReport AbsenceReport?       @relation(fields: [schoolId, absenceReportId], references: [schoolId, id], onDelete: Restrict)
+  replacements  ReplacementRequest[]
+
+  @@unique([studentId, sourceLessonId])
+  @@unique([schoolId, id])
+  @@index([schoolId, studentId, status])
+  @@map("makeup_credits")
+}
+
+/// A student attending `targetLesson` (another group, same level) instead of
+/// `originalLesson`. Created AUTO_APPROVED; an admin can approve, reject or
+/// override afterwards (`reviewedBy*`).
+model ReplacementRequest {
+  id               String            @id @default(uuid()) @db.Uuid
+  schoolId         String            @map("school_id") @db.Uuid
+  studentId        String            @map("student_id") @db.Uuid
+  originalLessonId String            @map("original_lesson_id") @db.Uuid
+  targetLessonId   String            @map("target_lesson_id") @db.Uuid
+  makeupCreditId   String?           @map("makeup_credit_id") @db.Uuid
+  status           ReplacementStatus @default(AUTO_APPROVED)
+  reviewedById     String?           @map("reviewed_by_id") @db.Uuid
+  reviewedAt       DateTime?         @map("reviewed_at")
+  reviewNote       String?           @map("review_note")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  school         School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student        StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+  originalLesson Lesson         @relation("ReplacementOriginal", fields: [schoolId, originalLessonId], references: [schoolId, id], onDelete: Restrict)
+  targetLesson   Lesson         @relation("ReplacementTarget", fields: [schoolId, targetLessonId], references: [schoolId, id], onDelete: Restrict)
+  makeupCredit   MakeupCredit?  @relation(fields: [schoolId, makeupCreditId], references: [schoolId, id], onDelete: Restrict)
+  reviewedBy     User?          @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, status])
+  @@index([schoolId, targetLessonId])
+  @@index([schoolId, studentId])
+  @@map("replacement_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+/// Append-only record of significant changes (who did what to which entity).
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  data       Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  actor  User?  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, entityType, entityId])
+  @@index([schoolId, createdAt])
+  @@map("audit_logs")
 }
