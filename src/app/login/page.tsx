@@ -8,7 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { db } from "@/lib/db";
 import { safeCallbackPath } from "@/server/auth/roles";
-import { DEMO_LOGINS, DEMO_PASSWORD } from "../../../prisma/seed/data";
 
 import { LoginForm } from "./login-form";
 
@@ -44,6 +43,13 @@ async function Login({
   });
   const schoolName = school?.name ?? tc("appName");
 
+  // Dev-only import: production builds replace NODE_ENV statically and drop
+  // this branch, so the demo password never ships in the server bundle.
+  const demo =
+    process.env.NODE_ENV === "development"
+      ? await import("../../../prisma/seed/data")
+      : null;
+
   return (
     <>
       <div className="flex flex-col items-center gap-3 text-center">
@@ -66,9 +72,12 @@ async function Login({
           </NextIntlClientProvider>
         </CardContent>
       </Card>
-      {process.env.NODE_ENV === "development" && (
+      {demo && (
         <p className="max-w-sm text-center text-xs text-muted-foreground">
-          {t("demoHint", { ...DEMO_LOGINS, password: DEMO_PASSWORD })}
+          {t("demoHint", {
+            ...demo.DEMO_LOGINS,
+            password: demo.DEMO_PASSWORD,
+          })}
         </p>
       )}
     </>

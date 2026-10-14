@@ -11,6 +11,11 @@ const { auth } = NextAuth(authConfig);
  * /login, each role area (`/admin`, `/teacher`, `/student`) answers 403 to
  * other roles. Pages and server actions re-check the membership in the
  * database (src/server/auth/session.ts).
+ *
+ * The role here is the one the token was issued with. After an admin changes
+ * a user's role, the proxy keeps answering 403 on the new area (and lets the
+ * old one through to pages, which then deny it) until the user signs in
+ * again. That is safe — the database decides — just stale until re-login.
  */
 export default auth((request) => {
   const { pathname, search } = request.nextUrl;
