@@ -85,6 +85,13 @@ const studentLessonSelect = {
   room: { select: { id: true, name: true, kind: true, meetingUrl: true } },
 } satisfies Prisma.LessonSelect;
 
+// Students also get the homework of lessons that have started (lessons.md
+// §5.1); never "What we covered" or anything else of the log.
+const studentWeekSelect = {
+  ...studentLessonSelect,
+  log: { select: { homework: true } },
+} satisfies Prisma.LessonSelect;
+
 const staffLessonSelect = {
   ...studentLessonSelect,
   group: {
@@ -102,13 +109,16 @@ const staffLessonSelect = {
 } satisfies Prisma.LessonSelect;
 
 type StudentLessonRow = Prisma.LessonGetPayload<{
-  select: typeof studentLessonSelect;
+  select: typeof studentWeekSelect;
 }>;
 type StaffLessonRow = Prisma.LessonGetPayload<{
   select: typeof staffLessonSelect;
 }>;
 
-function toRecord(row: StudentLessonRow | StaffLessonRow): LessonRecord {
+function toRecord(
+  row: StudentLessonRow | StaffLessonRow,
+  now: Date,
+): LessonRecord {
   return {
     id: row.id,
     termId: row.termId,
@@ -139,6 +149,8 @@ function toRecord(row: StudentLessonRow | StaffLessonRow): LessonRecord {
             name: m.student.user.name,
           }))
         : [],
+    homework:
+      "log" in row && row.startsAt <= now ? (row.log?.homework ?? null) : null,
   };
 }
 
@@ -243,15 +255,16 @@ export async function loadWeek(
   } satisfies Prisma.LessonFindManyArgs;
   const rows =
     viewer.kind === "STUDENT"
-      ? await db.lesson.findMany({ ...query, select: studentLessonSelect })
+      ? await db.lesson.findMany({ ...query, select: studentWeekSelect })
       : await db.lesson.findMany({ ...query, select: staffLessonSelect });
   // Belt and braces: the query already applies the membership windows.
   const allowed =
     viewer.kind === "STUDENT"
       ? rows.filter((r) => isMemberAt(memberships, r.group.id, r.startsAt))
       : rows;
+  const now = new Date();
   const lessons = allowed.map((row) =>
-    toLessonView(toRecord(row), { kind: viewer.kind, teacherId }, tz),
+    toLessonView(toRecord(row, now), { kind: viewer.kind, teacherId }, tz),
   );
 
   // Holidays of the terms this week (school-wide ones count everywhere).

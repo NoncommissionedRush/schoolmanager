@@ -96,6 +96,15 @@ describe("toLessonView", () => {
     expect(JSON.stringify(view)).not.toContain("Zora");
   });
 
+  it("passes the homework on to students only", () => {
+    const record = lesson({ homework: "Workbook p. 34" });
+    expect(toLessonView(record, { kind: "STUDENT" }, TZ).homework).toBe(
+      "Workbook p. 34",
+    );
+    expect(toLessonView(record, { kind: "ADMIN" }, TZ).homework).toBeNull();
+    expect(toLessonView(lesson(), { kind: "STUDENT" }, TZ).homework).toBeNull();
+  });
+
   it("tells a teacher whether they teach, substitute or are covered", () => {
     const sub = { id: "t2", name: "Ana" };
     expect(
