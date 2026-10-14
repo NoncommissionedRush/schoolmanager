@@ -1,4 +1,4 @@
-import { CalendarX, Ticket } from "lucide-react";
+import { CalendarX, Repeat, Ticket } from "lucide-react";
 import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { Suspense } from "react";
@@ -16,7 +16,10 @@ import {
   HISTORY_PAGE,
   loadStudentAbsences,
   type StudentCredit,
+  type StudentHistoryItem,
 } from "@/server/replacements/views";
+
+import { BookingActions, RescheduleCreditButton } from "./absences-client";
 
 const first = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
@@ -26,7 +29,8 @@ const EXPIRING_SOON_DAYS = 7;
 
 /**
  * Student Absences tab (absences.md §5.4): available makeup credits,
- * upcoming cancellations and history. Only the student's own rows.
+ * upcoming bookings and cancellations, and history. Only the student's own
+ * rows.
  */
 async function StudentAbsences({
   searchParams,
@@ -45,6 +49,9 @@ async function StudentAbsences({
     : null;
   const t = await getTranslations("absences");
   const tc = await getTranslations("credits");
+  const tb = await getTranslations("bookings");
+  const tr = await getTranslations("replacements");
+  const ts = await getTranslations("reschedule");
   const format = await getFormatter();
   const date = (iso: string, weekday = true) =>
     format.dateTime(calendarDate(iso), {
@@ -57,8 +64,48 @@ async function StudentAbsences({
   const empty =
     !data ||
     (data.credits.length === 0 &&
+      data.bookings.length === 0 &&
       data.upcoming.length === 0 &&
       data.historyCount === 0);
+  const historyText = (item: StudentHistoryItem) => {
+    switch (item.kind) {
+      case "cancelledNoCredit":
+        return t("history.cancelledNoCredit", {
+          date: date(item.sourceDate),
+          group: item.groupName,
+        });
+      case "removedBySchool":
+        return item.lessonCancelled || !item.reason
+          ? t("history.removedLessonCancelled", {
+              date: date(item.sourceDate),
+              group: item.groupName,
+            })
+          : t("history.removedBySchool", {
+              date: date(item.sourceDate),
+              group: item.groupName,
+              reason: item.reason,
+            });
+      case "creditUsed":
+        return item.usedFor?.kind === "replacement"
+          ? t("history.creditUsedFor", {
+              sourceDate: date(item.sourceDate),
+              group: item.usedFor.groupName,
+              date: date(item.usedFor.date),
+            })
+          : item.usedFor
+            ? t("history.creditRescheduledTo", {
+                sourceDate: date(item.sourceDate),
+                date: date(item.usedFor.date),
+                time: formatMinutes(item.usedFor.startMinute),
+              })
+            : t("history.creditUsed", { sourceDate: date(item.sourceDate) });
+      default:
+        return t("history.creditExpired", {
+          sourceDate: date(item.sourceDate),
+          date: date(item.expiredOn),
+        });
+    }
+  };
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 text-base">
@@ -95,12 +142,64 @@ async function StudentAbsences({
                 ))}
               </ul>
             )}
-            {data.credits.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {tc("comingSoon")}
-              </p>
-            )}
           </section>
+          {data.bookings.length > 0 && (
+            <section aria-labelledby="bookings" className="flex flex-col gap-3">
+              <h2 id="bookings" className="text-lg font-semibold">
+                {tb("section", { count: data.bookings.length })}
+              </h2>
+              <ul className="flex flex-col gap-3">
+                {data.bookings.map((booking) => (
+                  <li key={booking.lessonId}>
+                    <Card className="border-l-4 border-l-lesson-replacement bg-lesson-replacement-surface">
+                      <CardContent className="flex flex-col gap-2">
+                        <p className="flex flex-wrap items-center gap-x-2 font-medium tabular-nums">
+                          <Repeat
+                            aria-hidden="true"
+                            className="size-4 text-lesson-replacement"
+                          />
+                          <span>{date(booking.date)}</span>
+                          <span>
+                            {formatMinutes(booking.startMinute)}–
+                            {formatMinutes(booking.endMinute)}
+                          </span>
+                        </p>
+                        <p className="text-sm">
+                          {booking.oneOnOne
+                            ? t("oneOnOneWith", {
+                                teacher: booking.teacherName,
+                              })
+                            : booking.groupName}{" "}
+                          ·{" "}
+                          {booking.kind === "replacement"
+                            ? tr("badge")
+                            : ts("badge")}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {tr("forYourLesson", {
+                            date: date(booking.originalDate),
+                          })}
+                        </p>
+                        {booking.changedBySchool !== null && (
+                          <p className="text-sm">
+                            <ToneBadge tone="info">
+                              {tr("changedBySchool")}
+                            </ToneBadge>{" "}
+                            {booking.changedBySchool}
+                          </p>
+                        )}
+                        <BookingActions
+                          booking={booking}
+                          cutoffMinutes={data.policy.cutoffMinutes}
+                          nowIso={now.toISOString()}
+                        />
+                      </CardContent>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {data.upcoming.length > 0 && (
             <section
               aria-labelledby="cancellations"
@@ -166,27 +265,19 @@ async function StudentAbsences({
                     key={item.id}
                     className="flex flex-wrap items-center justify-between gap-2 border-b pb-2"
                   >
-                    <span>
-                      {item.kind === "cancelledNoCredit"
-                        ? t("history.cancelledNoCredit", {
-                            date: date(item.sourceDate),
-                            group: item.groupName,
-                          })
-                        : item.kind === "creditUsed"
-                          ? t("history.creditUsed", {
-                              sourceDate: date(item.sourceDate),
-                            })
-                          : t("history.creditExpired", {
-                              sourceDate: date(item.sourceDate),
-                              date: date(item.expiredOn),
-                            })}
-                    </span>
-                    {item.kind !== "cancelledNoCredit" && (
-                      <ToneBadge tone="muted">
-                        {item.kind === "creditUsed"
-                          ? tc("used")
-                          : tc("expired")}
+                    <span>{historyText(item)}</span>
+                    {item.kind === "removedBySchool" ? (
+                      <ToneBadge tone="danger">
+                        {tr("removedBySchool")}
                       </ToneBadge>
+                    ) : (
+                      item.kind !== "cancelledNoCredit" && (
+                        <ToneBadge tone="muted">
+                          {item.kind === "creditUsed"
+                            ? tc("used")
+                            : tc("expired")}
+                        </ToneBadge>
+                      )
                     )}
                   </li>
                 ))}
@@ -241,6 +332,16 @@ async function CreditCard({
               : tc("validUntil", { date: date(credit.validUntil, false) })}
           </ToneBadge>
         </span>
+        {credit.oneOnOne ? (
+          <RescheduleCreditButton creditId={credit.id} />
+        ) : (
+          <Link
+            href={`/student/absences/book?credit=${credit.id}`}
+            className={buttonVariants({ size: "lg", className: "w-full" })}
+          >
+            {tc("book")}
+          </Link>
+        )}
       </CardContent>
     </Card>
   );

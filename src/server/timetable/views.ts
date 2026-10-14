@@ -16,6 +16,7 @@ import {
   zonedTimeToUtc,
 } from "@/server/scheduling";
 
+import { ACTIVE_REPLACEMENT } from "@/server/replacements/release";
 import { loadStudentAttendance } from "@/server/replacements/views";
 
 import type { SchoolDb } from "./service";
@@ -213,6 +214,7 @@ export async function loadWeek(
   let where: Prisma.LessonWhereInput;
   let teacherId: string | undefined;
   let memberships: MembershipWindow[] = [];
+  let booked: string[] = [];
   let student: { id: string; userId: string } | null = null;
   if (viewer.kind === "TEACHER") {
     const profile = await db.teacherProfile.findFirst({
@@ -233,13 +235,25 @@ export async function loadWeek(
         groupMemberships: {
           select: { groupId: true, joinedAt: true, leftAt: true },
         },
+        // Lessons they joined as a replacement (absences.md §5.8).
+        replacementRequests: {
+          where: { status: { in: [...ACTIVE_REPLACEMENT] } },
+          select: { targetLessonId: true },
+        },
       },
     });
     memberships = profile?.groupMemberships ?? [];
+    booked = (profile?.replacementRequests ?? []).map((r) => r.targetLessonId);
     student = profile && { id: profile.id, userId: profile.userId };
     where = {
-      ...membershipLessonWhere(memberships),
-      term: { timetablePublishedAt: { not: null } },
+      AND: [
+        booked.length > 0
+          ? {
+              OR: [membershipLessonWhere(memberships), { id: { in: booked } }],
+            }
+          : membershipLessonWhere(memberships),
+        { term: { timetablePublishedAt: { not: null } } },
+      ],
     };
   } else {
     where = {
@@ -266,12 +280,16 @@ export async function loadWeek(
   // Belt and braces: the query already applies the membership windows.
   const allowed =
     viewer.kind === "STUDENT"
-      ? rows.filter((r) => isMemberAt(memberships, r.group.id, r.startsAt))
+      ? rows.filter(
+          (r) =>
+            isMemberAt(memberships, r.group.id, r.startsAt) ||
+            booked.includes(r.id),
+        )
       : rows;
   const now = new Date();
   // Students also get their own cancellation of each lesson (absences.md §5.1).
   const attendance = student
-    ? await loadStudentAttendance(db, student, allowed)
+    ? await loadStudentAttendance(db, student, allowed, now)
     : new Map();
   const lessons = allowed.map((row) => ({
     ...toLessonView(toRecord(row, now), { kind: viewer.kind, teacherId }, tz),

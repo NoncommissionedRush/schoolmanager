@@ -258,6 +258,7 @@ async function targetedRows(ids: SchoolIds) {
     ["holidays", ids.holiday],
     ["teacher_availability", ids.availability],
     ["absence_reports", ids.absence],
+    ["replacement_requests", ids.replacement],
   ];
   const rows: Record<string, string> = {};
   for (const [table, id] of tables) {

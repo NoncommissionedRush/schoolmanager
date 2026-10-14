@@ -63,6 +63,9 @@ enum ReplacementStatus {
   APPROVED
   REJECTED
   OVERRIDDEN
+  /// Cancelled by the student, or released because the target lesson was
+  /// cancelled (`cancelReason`). Kept for history.
+  CANCELLED
 }
 
 enum MakeupCreditStatus {
@@ -508,6 +511,9 @@ model Lesson {
   endsAt              DateTime     @map("ends_at") @db.Timestamptz(3)
   status              LessonStatus @default(SCHEDULED)
   cancelReason        String?      @map("cancel_reason")
+  /// The lesson this one replaces after a 1-on-1 reschedule (ad-hoc lessons
+  /// only, CHECK). Permanent history; docs/architecture/replacements.md §7.
+  rescheduledFromId   String?      @map("rescheduled_from_id") @db.Uuid
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
@@ -520,6 +526,8 @@ model Lesson {
   teacher           TeacherProfile  @relation("LessonTeacher", fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Restrict)
   substituteTeacher TeacherProfile? @relation("LessonSubstitute", fields: [schoolId, substituteTeacherId], references: [schoolId, id], onDelete: Restrict)
   room              Room?           @relation(fields: [schoolId, roomId], references: [schoolId, id], onDelete: Restrict)
+  rescheduledFrom   Lesson?         @relation("LessonReschedule", fields: [schoolId, rescheduledFromId], references: [schoolId, id], onDelete: Restrict)
+  rescheduledTo     Lesson?         @relation("LessonReschedule")
 
   log              LessonLog?
   teacherNotes     TeacherNote[]
@@ -527,11 +535,15 @@ model Lesson {
   replacementsFrom ReplacementRequest[] @relation("ReplacementOriginal")
   replacementsTo   ReplacementRequest[] @relation("ReplacementTarget")
   makeupCredits    MakeupCredit[]
+  /// The credit currently spent on this (rescheduled) lesson.
+  spentCredit      MakeupCredit?        @relation("CreditRescheduledLesson")
 
   /// Makes lesson generation idempotent: one lesson per slot per date, even
   /// after the slot or the lesson has been moved to another time.
   @@unique([timetableSlotId, occurrenceDate])
   @@unique([schoolId, id])
+  /// A lesson is rescheduled at most once (re-rescheduling chains on).
+  @@unique([schoolId, rescheduledFromId])
   @@index([schoolId, startsAt])
   @@index([schoolId, groupId, startsAt])
   @@index([schoolId, teacherId, startsAt])
@@ -632,47 +644,59 @@ model AbsenceReport {
 /// an AVAILABLE credit past `expiresAt` is EXPIRED (`creditState`), and is
 /// brought up to date lazily. See docs/architecture/replacements.md §4.
 model MakeupCredit {
-  id              String             @id @default(uuid()) @db.Uuid
-  schoolId        String             @map("school_id") @db.Uuid
-  studentId       String             @map("student_id") @db.Uuid
-  sourceLessonId  String             @map("source_lesson_id") @db.Uuid
-  absenceReportId String             @map("absence_report_id") @db.Uuid
-  status          MakeupCreditStatus @default(AVAILABLE)
+  id                  String             @id @default(uuid()) @db.Uuid
+  schoolId            String             @map("school_id") @db.Uuid
+  studentId           String             @map("student_id") @db.Uuid
+  sourceLessonId      String             @map("source_lesson_id") @db.Uuid
+  absenceReportId     String             @map("absence_report_id") @db.Uuid
+  status              MakeupCreditStatus @default(AVAILABLE)
   /// Start of the local day after "valid until"; usable only before it.
-  expiresAt       DateTime           @map("expires_at")
+  expiresAt           DateTime           @map("expires_at")
   /// Set with USED, cleared when the credit is released.
-  usedAt          DateTime?          @map("used_at")
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  usedAt              DateTime?          @map("used_at")
+  /// The ad-hoc lesson a 1-on-1 credit is currently spent on (USED only,
+  /// CHECK); cleared on release. History lives on `Lesson.rescheduledFromId`.
+  rescheduledLessonId String?            @map("rescheduled_lesson_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
 
-  school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  student       StudentProfile       @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
-  sourceLesson  Lesson               @relation(fields: [schoolId, sourceLessonId], references: [schoolId, id], onDelete: Restrict)
-  absenceReport AbsenceReport        @relation(fields: [schoolId, absenceReportId], references: [schoolId, id], onDelete: Restrict)
-  replacements  ReplacementRequest[]
+  school            School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student           StudentProfile       @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+  sourceLesson      Lesson               @relation(fields: [schoolId, sourceLessonId], references: [schoolId, id], onDelete: Restrict)
+  absenceReport     AbsenceReport        @relation(fields: [schoolId, absenceReportId], references: [schoolId, id], onDelete: Restrict)
+  rescheduledLesson Lesson?              @relation("CreditRescheduledLesson", fields: [schoolId, rescheduledLessonId], references: [schoolId, id], onDelete: Restrict)
+  replacements      ReplacementRequest[]
 
   @@unique([studentId, sourceLessonId])
   @@unique([schoolId, id])
   @@unique([schoolId, absenceReportId])
+  @@unique([schoolId, rescheduledLessonId])
   @@index([schoolId, studentId, status])
   @@index([schoolId, status, expiresAt])
   @@map("makeup_credits")
 }
 
 /// A student attending `targetLesson` (another group, same level) instead of
-/// `originalLesson`. Created AUTO_APPROVED; an admin can approve, reject or
-/// override afterwards (`reviewedBy*`).
+/// `originalLesson`, booked with a makeup credit. Created AUTO_APPROVED; an
+/// admin can approve, reject or override afterwards (`reviewedBy*`). Active =
+/// AUTO_APPROVED, APPROVED or OVERRIDDEN; partial unique indexes allow one
+/// active booking per credit and per (student, target). See
+/// docs/architecture/replacements.md §6.
 model ReplacementRequest {
   id               String            @id @default(uuid()) @db.Uuid
   schoolId         String            @map("school_id") @db.Uuid
   studentId        String            @map("student_id") @db.Uuid
   originalLessonId String            @map("original_lesson_id") @db.Uuid
   targetLessonId   String            @map("target_lesson_id") @db.Uuid
-  makeupCreditId   String?           @map("makeup_credit_id") @db.Uuid
+  makeupCreditId   String            @map("makeup_credit_id") @db.Uuid
   status           ReplacementStatus @default(AUTO_APPROVED)
   reviewedById     String?           @map("reviewed_by_id") @db.Uuid
   reviewedAt       DateTime?         @map("reviewed_at")
   reviewNote       String?           @map("review_note")
+  /// Set iff CANCELLED (CHECK).
+  cancelledAt      DateTime?         @map("cancelled_at")
+  /// STUDENT | STUDENT_LATE | LESSON_CANCELLED.
+  cancelReason     String?           @map("cancel_reason")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
@@ -680,12 +704,13 @@ model ReplacementRequest {
   student        StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
   originalLesson Lesson         @relation("ReplacementOriginal", fields: [schoolId, originalLessonId], references: [schoolId, id], onDelete: Restrict)
   targetLesson   Lesson         @relation("ReplacementTarget", fields: [schoolId, targetLessonId], references: [schoolId, id], onDelete: Restrict)
-  makeupCredit   MakeupCredit?  @relation(fields: [schoolId, makeupCreditId], references: [schoolId, id], onDelete: Restrict)
+  makeupCredit   MakeupCredit   @relation(fields: [schoolId, makeupCreditId], references: [schoolId, id], onDelete: Restrict)
   reviewedBy     User?          @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@unique([schoolId, id])
   @@index([schoolId, status])
   @@index([schoolId, targetLessonId])
+  @@index([schoolId, originalLessonId])
   @@index([schoolId, studentId])
   @@map("replacement_requests")
 }

@@ -5,6 +5,7 @@
 // first and pass `getSchoolScopedDb()`. See docs/architecture/scheduling.md.
 
 import type { scopeToSchool } from "@/server/db/school-scope";
+import { releaseCancelledLessons } from "@/server/replacements/release";
 import {
   addDays,
   buildCalendar,
@@ -106,6 +107,51 @@ function toSlotInfo(slot: {
  * groups, rooms, people and availability.
  */
 async function load(tx: Tx, termId: string, now: Date): Promise<Loaded> {
+  const term = await tx.term.findUnique({ where: { id: termId } });
+  if (!term) throw new SchedulingError("NOT_FOUND", `Term ${termId} not found`);
+  const { school, context } = await loadContext(
+    tx,
+    term.startDate,
+    term.endDate,
+  );
+  return {
+    schoolId: school.id,
+    today: toZonedDateTime(now, school.timezone).date,
+    term: {
+      id: term.id,
+      name: term.name,
+      startDate: iso(term.startDate),
+      endDate: iso(term.endDate),
+      publishedAt: term.timetablePublishedAt,
+    },
+    context,
+  };
+}
+
+/**
+ * The checker's context for every term overlapping `[from, to]` (calendar
+ * dates), with the terms' publication, for checks that aren't tied to one
+ * term (a 1-on-1 reschedule, CARM-43).
+ */
+export async function loadSchedulingContext(
+  tx: Tx,
+  from: IsoDate,
+  to: IsoDate,
+): Promise<{ context: SchedulingContext; publishedTermIds: string[] }> {
+  const { context, terms } = await loadContext(
+    tx,
+    fromIsoDate(from),
+    fromIsoDate(to),
+  );
+  return {
+    context,
+    publishedTermIds: terms
+      .filter((t) => t.timetablePublishedAt !== null)
+      .map((t) => t.id),
+  };
+}
+
+async function loadContext(tx: Tx, from: Date, to: Date) {
   const school = await tx.school.findFirstOrThrow({
     select: {
       id: true,
@@ -115,15 +161,18 @@ async function load(tx: Tx, termId: string, now: Date): Promise<Loaded> {
       dayEndMinute: true,
     },
   });
-  const term = await tx.term.findUnique({ where: { id: termId } });
-  if (!term) throw new SchedulingError("NOT_FOUND", `Term ${termId} not found`);
-
   const terms = await tx.term.findMany({
     where: {
-      startDate: { lte: term.endDate },
-      endDate: { gte: term.startDate },
+      startDate: { lte: to },
+      endDate: { gte: from },
     },
-    select: { id: true, name: true, startDate: true, endDate: true },
+    select: {
+      id: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      timetablePublishedAt: true,
+    },
   });
   const termIds = terms.map((t) => t.id);
   const [holidays, slots, lessons, groups, rooms, teachers, students, rules] =
@@ -177,15 +226,8 @@ async function load(tx: Tx, termId: string, now: Date): Promise<Loaded> {
     ]);
 
   return {
-    schoolId: school.id,
-    today: toZonedDateTime(now, school.timezone).date,
-    term: {
-      id: term.id,
-      name: term.name,
-      startDate: iso(term.startDate),
-      endDate: iso(term.endDate),
-      publishedAt: term.timetablePublishedAt,
-    },
+    school,
+    terms,
     context: {
       school: {
         timeZone: school.timezone,
@@ -311,6 +353,8 @@ async function loadSyncLessons(
       endsAt: true,
       status: true,
       log: { select: { id: true } },
+      // A lesson a 1-on-1 was rescheduled from stays as its history.
+      rescheduledTo: { select: { id: true } },
       _count: {
         select: {
           teacherNotes: true,
@@ -322,10 +366,13 @@ async function loadSyncLessons(
       },
     },
   });
-  return rows.map(({ log, _count, ...lesson }) => ({
+  return rows.map(({ log, rescheduledTo, _count, ...lesson }) => ({
     ...lesson,
     occurrenceDate: isoOrNull(lesson.occurrenceDate),
-    hasDependents: log !== null || Object.values(_count).some((n) => n > 0),
+    hasDependents:
+      log !== null ||
+      rescheduledTo !== null ||
+      Object.values(_count).some((n) => n > 0),
   }));
 }
 
@@ -334,6 +381,8 @@ async function applyPlan(
   schoolId: string,
   termId: string,
   plan: LessonSyncPlan,
+  timeZone: string,
+  now: Date,
 ): Promise<LessonChanges> {
   if (plan.remove.length > 0) {
     await tx.lesson.deleteMany({
@@ -347,6 +396,10 @@ async function applyPlan(
       where: { id: { in: ids }, status: "SCHEDULED" },
       data: { status: "CANCELLED", cancelReason: reason },
     });
+    // Bookings into a cancelled lesson are released, credits with grace
+    // (replacements.md §4). Moving them to a slot split's successor is
+    // lesson-sync's job, still to come (§5 _Slot splits_).
+    await releaseCancelledLessons(tx, schoolId, ids, timeZone, now);
   }
   if (plan.create.length > 0) {
     await tx.lesson.createMany({
@@ -395,7 +448,14 @@ async function syncSlots(
     from,
     now,
   });
-  return applyPlan(tx, loaded.schoolId, loaded.term.id, plan);
+  return applyPlan(
+    tx,
+    loaded.schoolId,
+    loaded.term.id,
+    plan,
+    loaded.context.school.timeZone,
+    now,
+  );
 }
 
 const addChanges = (a: LessonChanges, b: LessonChanges): LessonChanges => ({

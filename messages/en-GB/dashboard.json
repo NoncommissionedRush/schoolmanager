@@ -22,7 +22,9 @@
       "students": "Add students",
       "groups": "Create groups and add students",
       "timetable": "Build and publish the timetable"
-    }
+    },
+    "attention": "Needs attention",
+    "toReview": "{count, plural, one {# replacement to review} other {# replacements to review}}"
   },
   "teacher": {
     "empty": {

@@ -6,10 +6,11 @@
   "used": "Used",
   "expired": "Expired",
   "none": "No credits right now.",
-  "comingSoon": "Booking a replacement with this credit arrives soon. Until then, ask the school office.",
   "home": {
     "title": "{count, plural, one {You have # makeup credit} other {You have # makeup credits}}",
     "soonest": "The first one expires on {date}.",
     "use": "Use a credit"
-  }
+  },
+  "book": "Book a replacement",
+  "reschedule": "Reschedule"
 }

@@ -342,6 +342,55 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
     },
   });
 
+  // A replacement booking (CARM-43), so bookings have rows in both schools
+  // for the permission suite. School B has a single group, so it books
+  // another of that group's lessons: fixture data, not a real-world case.
+  const bookedId = id("absence", "bauer-booked");
+  await db.absenceReport.upsert({
+    where: { id: bookedId },
+    update: {},
+    create: {
+      id: bookedId,
+      schoolId,
+      lessonId: lessonIds[2],
+      studentId: student.id,
+      reportedById: student.userId,
+      createdAt: new Date(occurrences[2].startsAt.getTime() - 2 * 86_400_000),
+    },
+  });
+  const bookedCredit = id("makeup-credit", "bauer-booked");
+  await db.makeupCredit.upsert({
+    where: { id: bookedCredit },
+    update: {},
+    create: {
+      id: bookedCredit,
+      schoolId,
+      studentId: student.id,
+      sourceLessonId: lessonIds[2],
+      absenceReportId: bookedId,
+      status: "USED",
+      usedAt: new Date(occurrences[2].startsAt.getTime() - 2 * 86_400_000),
+      expiresAt: creditExpiry(
+        occurrences[2].startsAt,
+        30,
+        SECOND_SCHOOL.timezone,
+      ).expiresAt,
+    },
+  });
+  const replacementId = id("replacement", "bauer");
+  await db.replacementRequest.upsert({
+    where: { id: replacementId },
+    update: {},
+    create: {
+      id: replacementId,
+      schoolId,
+      studentId: student.id,
+      originalLessonId: lessonIds[2],
+      targetLessonId: lessonIds[3],
+      makeupCreditId: bookedCredit,
+    },
+  });
+
   console.log(
     `Seeded "${school.name}" (permission tests): 1 teacher, 1 student, 1 group, ` +
       `${slots.length} slots, ${lessonIds.length} lessons.`,

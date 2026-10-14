@@ -438,6 +438,81 @@ export function crossSchoolCases(
       action: [ABSENCES, "deleteAbsenceAction"],
       args: [target.absence, []],
     },
+    // Replacement review and 1-on-1 reschedule (CARM-43)
+    {
+      name: "approve a replacement",
+      action: [ABSENCES, "approveReplacementsAction"],
+      args: [[target.replacement]],
+    },
+    {
+      name: "reject a replacement",
+      action: [ABSENCES, "rejectReplacementAction"],
+      args: [{ bookingId: target.replacement, note: "Cross-school" }],
+    },
+    {
+      name: "override a replacement, keeping it",
+      action: [ABSENCES, "overrideReplacementAction"],
+      args: [
+        {
+          bookingId: target.replacement,
+          targetLessonId: null,
+          acknowledgedKeys: [],
+          note: "Cross-school",
+        },
+      ],
+    },
+    {
+      name: "override their own replacement into their lesson",
+      action: [ABSENCES, "overrideReplacementAction"],
+      args: [
+        {
+          bookingId: own.replacement,
+          targetLessonId: target.lesson,
+          acknowledgedKeys: [],
+          note: "Cross-school",
+        },
+      ],
+    },
+    {
+      name: "list lessons to override a replacement into",
+      action: [ABSENCES, "loadOverrideOptionsAction"],
+      args: [target.replacement, true],
+    },
+    {
+      name: "reschedule a lesson",
+      action: [ABSENCES, "rescheduleLessonAction"],
+      args: [
+        {
+          lessonId: target.lesson,
+          date: DATE,
+          startMinute: 18 * 60,
+          durationMinutes: 45,
+          roomId: null,
+          acknowledgedKeys: [],
+          note: null,
+        },
+      ],
+    },
+    {
+      name: "reschedule a lesson into their room",
+      action: [ABSENCES, "rescheduleLessonAction"],
+      args: [
+        {
+          lessonId: own.lesson,
+          date: DATE,
+          startMinute: 18 * 60,
+          durationMinutes: 45,
+          roomId: target.room,
+          acknowledgedKeys: [],
+          note: null,
+        },
+      ],
+    },
+    {
+      name: "cancel a rescheduled lesson",
+      action: [ABSENCES, "cancelRescheduledLessonAction"],
+      args: [target.lesson],
+    },
   ];
 }
 

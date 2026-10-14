@@ -55,6 +55,7 @@ export function CancelLessonDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("absences");
+  const tb = useTranslations("bookings");
   const tc = useTranslations("common");
   const formatDate = useDateFormat();
   const render = useMessage();
@@ -71,6 +72,11 @@ export function CancelLessonDialog({
   const [pending, startTransition] = useTransition();
 
   const { attendance } = lesson;
+  // A rescheduled 1-on-1 never earns a new credit: its own comes back (§5.3).
+  const spent =
+    attendance.booking?.kind === "rescheduled"
+      ? attendance.booking.credit
+      : null;
   const beforeCutoff =
     !cutoffPassed && now.getTime() <= new Date(attendance.cutoffAt).getTime();
   const hours = Math.floor(attendance.cutoffMinutes / 60);
@@ -169,15 +175,20 @@ export function CancelLessonDialog({
             </ToneAlert>
           ) : beforeCutoff ? (
             <ToneAlert tone="success" icon={Ticket} live>
-              {lesson.oneOnOne
-                ? t("cancel.creditInfoOneOnOne", {
-                    teacher: lesson.teacherName,
-                    date: validUntil,
+              {spent
+                ? tb("cancel.creditBack", {
+                    sourceDate: formatDate(spent.sourceDate, "dayMonth"),
+                    expiry: formatDate(spent.validUntil, "weekdayDate"),
                   })
-                : t("cancel.creditInfo", {
-                    date: validUntil,
-                    level: lesson.level,
-                  })}
+                : lesson.oneOnOne
+                  ? t("cancel.creditInfoOneOnOne", {
+                      teacher: lesson.teacherName,
+                      date: validUntil,
+                    })
+                  : t("cancel.creditInfo", {
+                      date: validUntil,
+                      level: lesson.level,
+                    })}
             </ToneAlert>
           ) : (
             <ToneAlert tone="warning" icon={AlertTriangle} live>

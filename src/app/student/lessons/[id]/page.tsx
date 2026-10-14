@@ -38,6 +38,7 @@ async function StudentLesson({
   const tt = await getTranslations("timetable");
   const tr = await getTranslations("scheduling.cancelReasons");
   const tc = await getTranslations("common");
+  const trp = await getTranslations("replacements");
   const format = await getFormatter();
   const fromTimetable = (await searchParams).from === "timetable";
   const back = fromTimetable
@@ -102,6 +103,13 @@ async function StudentLesson({
             {tt("details.joinOnline")}
             <span className="sr-only">{tc("opensInNewTab")}</span>
           </a>
+        )}
+        {scope.bookedLessonIds.includes(lesson.id) && (
+          <Alert className="border-info-border bg-info-surface text-info">
+            <AlertDescription className="text-info">
+              {trp("joiningBanner")}
+            </AlertDescription>
+          </Alert>
         )}
         {lesson.status === "CANCELLED" && (
           <Alert className="border-danger-border bg-danger-surface text-danger">

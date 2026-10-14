@@ -1,6 +1,6 @@
 {
   "title": "Absences & replacements",
-  "description": "Cancellations by students and the school office, and the makeup credits they earned.",
+  "description": "Cancellations, replacement bookings and the makeup credits behind them.",
   "col": {
     "lesson": "Lesson",
     "student": "Student",
@@ -8,11 +8,26 @@
     "reason": "Reason",
     "credit": "Credit",
     "creditStatus": "Credit status",
-    "actions": "Actions"
+    "actions": "Actions",
+    "booked": "Booked",
+    "from": "From",
+    "to": "To",
+    "seats": "Seats",
+    "issues": "Issues",
+    "status": "Status",
+    "reviewedBy": "Reviewed by",
+    "select": "Select",
+    "selectAll": "Select all"
   },
   "status": {
     "creditEarned": "Credit earned",
-    "lateNoCredit": "Late — no credit"
+    "lateNoCredit": "Late — no credit",
+    "needsReview": "Needs review",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "overridden": "Overridden",
+    "cancelledByStudent": "Cancelled by student",
+    "lessonCancelled": "Lesson cancelled"
   },
   "creditAvailableUntil": "Available until {date}",
   "creditUsed": "Used",
@@ -25,7 +40,8 @@
     "group": "Group",
     "teacher": "Teacher",
     "all": "All",
-    "apply": "Apply"
+    "apply": "Apply",
+    "status": "Status"
   },
   "preset": {
     "thisWeek": "This week",
@@ -33,7 +49,10 @@
     "last30": "Last 30 days"
   },
   "empty": {
-    "absences": "No cancellations in this period."
+    "absences": "No cancellations in this period.",
+    "reviewTitle": "Nothing to review",
+    "reviewDescription": "Replacements are approved automatically. Ones you haven't checked yet appear here.",
+    "replacements": "No replacements in this period."
   },
   "entities": "cancellations",
   "openStudent": "Open student",
@@ -67,5 +86,55 @@
     "confirm": "Delete absence",
     "done": "Absence deleted."
   },
-  "groupOneOnOne": "{group} · 1-on-1"
+  "groupOneOnOne": "{group} · 1-on-1",
+  "tab": {
+    "label": "Absences and replacements",
+    "review": "Review ({count})",
+    "replacements": "Replacements",
+    "absences": "Absences"
+  },
+  "creditUsedFor": "Used → {lesson}",
+  "creditRescheduled": "Rescheduled → {lesson}",
+  "lessonRef": "{date}, {time} · {group}",
+  "noRoomLimit": "No room limit",
+  "seats": "{taken}/{capacity}",
+  "reviewedBy": "Reviewed by {name}, {dateTime}",
+  "selected": "{count, plural, one {# selected} other {# selected}}",
+  "approve": {
+    "action": "Approve",
+    "selected": "Approve selected ({count})",
+    "done": "{count, plural, one {Approved.} other {# replacements approved.}}"
+  },
+  "reject": {
+    "action": "Reject…",
+    "title": "Reject {student}'s replacement on {date}?",
+    "body": "The booking is removed and the credit goes back to the student, valid at least until {expiry}.",
+    "bodyGrace": "If that's later than its current expiry, the credit gets the extra days.",
+    "confirm": "Reject",
+    "done": "Replacement rejected. The student has their credit back."
+  },
+  "reason": "Reason (required)",
+  "reasonHint": "The student sees this reason.",
+  "reasonRequired": "Enter a reason.",
+  "override": {
+    "action": "Override…",
+    "title": "Override {student}'s booking",
+    "keep": "Keep {lesson}",
+    "current": "Current booking: {lesson}",
+    "showAll": "Show all lessons",
+    "noIssues": "No issues",
+    "options": "Or move it to",
+    "none": "No other lessons to offer.",
+    "ack": "I've checked: {reason}",
+    "blocked": "This lesson can't be booked:",
+    "confirm": "Save override",
+    "kept": "Booking kept.",
+    "moved": "Booking moved to {dateTime}.",
+    "loading": "Loading lessons…",
+    "optionLabel": "{lesson} · {room} · {teacher}"
+  },
+  "changedMeanwhile": "This booking changed while you were reviewing it. Reload to see the current state.",
+  "openReplacements": "Open replacements",
+  "entitiesReplacements": "replacements",
+  "noRoom": "No room"
 }

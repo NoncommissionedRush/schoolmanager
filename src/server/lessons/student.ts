@@ -1,8 +1,9 @@
 // What students read of their lessons (docs/design/lessons.md §2, §6): the
 // Homework tab, the lesson page and the home card. Authorization lives here,
 // server-side: every query is limited by `studentLessonWhere` (groups the
-// student was a member of when the lesson started, published terms, lessons
-// that have started) and runs on the school-scoped client.
+// student was a member of when the lesson started, or lessons they're booked
+// onto as a replacement; published terms; lessons that have started) and
+// runs on the school-scoped client.
 //
 // Students get their own DTOs, built from selects that never touch
 // TeacherNote. This module must not import src/server/notes
@@ -14,13 +15,19 @@ import type { SchoolDb } from "@/server/timetable/service";
 import { membershipLessonWhere } from "@/server/timetable/views";
 import type { MembershipWindow } from "@/server/timetable/week";
 
+import { ACTIVE_REPLACEMENT } from "@/server/replacements/release";
+
 import { isUuid } from "./access";
 import { canStudentSeeLesson, pickLatestHomework } from "./student-rules";
 
-/** The signed-in student in this school: profile id and group memberships. */
+/**
+ * The signed-in student in this school: profile id, group memberships and
+ * the lessons of their active replacement bookings (absences.md §2).
+ */
 export type StudentScope = {
   studentId: string | null;
   memberships: MembershipWindow[];
+  bookedLessonIds: string[];
 };
 
 export async function loadStudentScope(
@@ -34,25 +41,42 @@ export async function loadStudentScope(
       groupMemberships: {
         select: { groupId: true, joinedAt: true, leftAt: true },
       },
+      // Rejected, cancelled or moved bookings give no access.
+      replacementRequests: {
+        where: { status: { in: [...ACTIVE_REPLACEMENT] } },
+        select: { targetLessonId: true },
+      },
     },
   });
   return {
     studentId: profile?.id ?? null,
     memberships: profile?.groupMemberships ?? [],
+    bookedLessonIds: (profile?.replacementRequests ?? []).map(
+      (r) => r.targetLessonId,
+    ),
   };
 }
 
 /**
  * Lessons a student may read (§2): of groups they were a member of when the
- * lesson started, in a published term, and already started.
+ * lesson started, or booked onto as a replacement, in a published term, and
+ * already started.
  */
 export function studentLessonWhere(
   memberships: readonly MembershipWindow[],
   now: Date,
+  bookedLessonIds: readonly string[] = [],
 ): Prisma.LessonWhereInput {
   return {
     AND: [
-      membershipLessonWhere(memberships),
+      bookedLessonIds.length > 0
+        ? {
+            OR: [
+              membershipLessonWhere(memberships),
+              { id: { in: [...bookedLessonIds] } },
+            ],
+          }
+        : membershipLessonWhere(memberships),
       { term: { timetablePublishedAt: { not: null } } },
       { startsAt: { lte: now } },
     ],
@@ -148,11 +172,13 @@ const visible = (scope: StudentScope, row: StudentRow, now: Date) =>
   canStudentSeeLesson(
     scope.memberships,
     {
+      id: row.id,
       groupId: row.groupId,
       startsAt: row.startsAt,
       published: row.term.timetablePublishedAt !== null,
     },
     now,
+    scope.bookedLessonIds,
   );
 
 /**
@@ -169,7 +195,10 @@ export async function loadStudentLesson(
   if (!scope.studentId || !isUuid(lessonId)) return null;
   const row = await db.lesson.findFirst({
     where: {
-      AND: [{ id: lessonId }, studentLessonWhere(scope.memberships, now)],
+      AND: [
+        { id: lessonId },
+        studentLessonWhere(scope.memberships, now, scope.bookedLessonIds),
+      ],
     },
     select: studentSelect,
   });
@@ -214,7 +243,7 @@ export async function listStudentHomework(
   const rows = await db.lesson.findMany({
     where: {
       AND: [
-        studentLessonWhere(scope.memberships, now),
+        studentLessonWhere(scope.memberships, now, scope.bookedLessonIds),
         ...(groupId ? [{ groupId }] : []),
       ],
     },

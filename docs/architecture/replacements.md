@@ -1,10 +1,13 @@
 # Absences, makeup credits & replacements (rules, CARM-40)
 
-**Status: Phase 3. Implemented (CARM-42): settings (§2), reporting and
-deleting absences (§3, without the reschedule chains), credit creation and
-expiry (§4), and the schema for those parts (§9). Still proposed (CARM-43):
-replacement booking and review (§5–§6), 1-on-1 reschedule (§7), credit
-release, slot-split carry-over.** This page
+**Status: Phase 3. Implemented: settings (§2), reporting and deleting
+absences (§3) and credit creation and expiry (§4) in CARM-42; replacement
+booking and review (§5–§6), 1-on-1 and admin reschedule (§7), credit
+release (§4) and the rest of the schema (§9) in CARM-43. Still proposed:
+the slot-split carry-over (§5 _Slot splits_) and counting replacements in
+`checkLesson`'s room-capacity check (§9 _Changes outside the new module_);
+until then a lesson cancelled by a timetable change releases its bookings
+with grace.** This page
 defines the rules the Phase 3 booking flow enforces and the schema changes
 it needs. The screens are specified in `docs/design/absences.md` (CARM-39);
 where the two disagree, raise it on the issue rather than picking one.
@@ -134,9 +137,13 @@ uses the admin reschedule (§7). Audit: `absence.reported` with the actor.
   - If its credit is `USED`, the delete is refused (`ABSENCE_CREDIT_USED`).
     The admin first rejects the replacement or cancels the rescheduled
     lesson, which releases the credit (§4), and then deletes. A delete
-    never cascades into bookings.
+    never cancels or moves a booking: an active one keeps the credit
+    `USED` and refuses the delete.
   - Otherwise the report and its credit (`AVAILABLE` or `EXPIRED`) are
-    deleted together.
+    deleted together, with the bookings the credit backed before it came
+    back (`CANCELLED` or `REJECTED`; they reference the credit, so they
+    can't outlive it). Their ids are kept in the `absence.deleted` audit
+    entry (CARM-43 review).
   - For a 1-on-1 the lesson that was cancelled as `STUDENT_CANCELLED`
     returns to `SCHEDULED`, if it hasn't started. Before that,
     `checkLesson` is run on it, the same check the admin's lesson move

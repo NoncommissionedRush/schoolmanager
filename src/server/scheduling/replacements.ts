@@ -1,8 +1,8 @@
-// Absences and makeup credits: pure rules (docs/architecture/replacements.md
-// §2–§4). No Prisma, no Next.js, plain-data inputs, deterministic output.
-// The database service (src/server/replacements) loads the data, calls these
-// and writes in one transaction per action. Replacement booking and 1-on-1
-// reschedule rules join this module in CARM-43.
+// Absences, makeup credits and group replacements: pure rules
+// (docs/architecture/replacements.md §2–§6). No Prisma, no Next.js,
+// plain-data inputs, deterministic output. The database service
+// (src/server/replacements) loads the data, calls these and writes in one
+// transaction per action. The 1-on-1 reschedule rules are in reschedule.ts.
 
 import { addDays, type IsoDate, toZonedDateTime, zonedTimeToUtc } from "./time";
 
@@ -23,6 +23,12 @@ export const MAKEUP_CREDIT_VALID_DAYS_MAX = 365;
 
 /** `Lesson.cancelReason` of a 1-on-1 the student cancelled before the cutoff. */
 export const STUDENT_CANCELLED = "STUDENT_CANCELLED";
+
+/** `Lesson.cancelReason` of a 1-on-1 an admin moved to another time (§7). */
+export const RESCHEDULED = "RESCHEDULED";
+
+/** `Lesson.cancelReason` of a rescheduled 1-on-1 an admin cancelled (§7). */
+export const SCHOOL_CANCELLED = "SCHOOL_CANCELLED";
 
 /** Credits released by the school get at least this many more days (§4). */
 export const RELEASE_GRACE_DAYS = 7;
@@ -242,19 +248,23 @@ export type Roster = {
     reason: string | null;
     viaOffice: boolean;
     late: boolean;
+    /** A replacement student who cancelled their booking late (§6). */
+    replacement: boolean;
   })[];
   seatsTaken: number;
 };
 
 /**
  * Who is coming to a lesson and who isn't (§9): members at the lesson's
- * start minus those who cancelled, plus replacement students; sorted by
- * name.
+ * start minus those who cancelled, plus replacement students; not coming
+ * are the absent members plus replacements cancelled after the cutoff
+ * (`STUDENT_LATE`). Sorted by name.
  */
 export function buildRoster(input: {
   members: readonly RosterStudent[];
   absences: readonly RosterAbsence[];
   replacements: readonly (RosterStudent & { fromGroup: string })[];
+  lateCancelled?: readonly (RosterStudent & { cancelledAt: Date })[];
 }): Roster {
   const absentBy = new Map(input.absences.map((a) => [a.studentId, a]));
   const byName = (
@@ -271,19 +281,30 @@ export function buildRoster(input: {
       replacementFrom: r.fromGroup,
     })),
   ].sort(byName);
-  const notComing = input.members
-    .filter((m) => absentBy.has(m.id))
-    .map((m) => {
-      const absence = absentBy.get(m.id)!;
-      return {
-        ...m,
-        reportedAt: absence.reportedAt,
-        reason: absence.reason,
-        viaOffice: absence.viaOffice,
-        late: !absence.hasCredit,
-      };
-    })
-    .sort(byName);
+  const notComing = [
+    ...input.members
+      .filter((m) => absentBy.has(m.id))
+      .map((m) => {
+        const absence = absentBy.get(m.id)!;
+        return {
+          ...m,
+          reportedAt: absence.reportedAt,
+          reason: absence.reason,
+          viaOffice: absence.viaOffice,
+          late: !absence.hasCredit,
+          replacement: false,
+        };
+      }),
+    ...(input.lateCancelled ?? []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      reportedAt: r.cancelledAt,
+      reason: null,
+      viaOffice: false,
+      late: true,
+      replacement: true,
+    })),
+  ].sort(byName);
   return {
     coming,
     notComing,
@@ -292,5 +313,351 @@ export function buildRoster(input: {
       absentIds: input.absences.map((a) => a.studentId),
       replacementIds: input.replacements.map((r) => r.id),
     }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Releasing a used credit (§4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a spent credit comes back: the student cancelled their booking or
+ * rescheduled 1-on-1 before its cutoff (same expiry), or the school took
+ * it away — an admin rejected the booking or the lesson was cancelled
+ * (at least `RELEASE_GRACE_DAYS` more days).
+ */
+export type ReleaseCause = "STUDENT" | "SCHOOL";
+
+/**
+ * The credit after a release (§4). With grace, `expiresAt` becomes the
+ * later of the old one and the start of the local day after
+ * `today + RELEASE_GRACE_DAYS`, so "valid until" shows a whole extra week
+ * (never less than `now + 7 days`). A student's own release keeps the
+ * expiry and is EXPIRED if that has passed.
+ */
+export function releaseCredit(
+  credit: { expiresAt: Date },
+  cause: ReleaseCause,
+  timeZone: string,
+  now: Date,
+): { status: "AVAILABLE" | "EXPIRED"; expiresAt: Date } {
+  if (cause === "STUDENT") {
+    return {
+      status:
+        now.getTime() >= credit.expiresAt.getTime() ? "EXPIRED" : "AVAILABLE",
+      expiresAt: credit.expiresAt,
+    };
+  }
+  const today = toZonedDateTime(now, timeZone).date;
+  const grace = zonedTimeToUtc(
+    addDays(today, RELEASE_GRACE_DAYS + 1),
+    0,
+    timeZone,
+  );
+  return {
+    status: "AVAILABLE",
+    expiresAt:
+      grace.getTime() > credit.expiresAt.getTime() ? grace : credit.expiresAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Group replacement eligibility (§6)
+// ---------------------------------------------------------------------------
+
+/** Why a lesson can't be booked as a replacement; the order is the display order. */
+export const REPLACEMENT_REASONS = [
+  "NOT_FOUND",
+  "LESSON_NOT_PUBLISHED",
+  "LESSON_CANCELLED",
+  "LESSON_STARTED",
+  "NOT_A_GROUP_LESSON",
+  "SAME_LESSON",
+  "ALREADY_ATTENDING",
+  "CREDIT_UNAVAILABLE",
+  "CREDIT_EXPIRES_FIRST",
+  "NO_LEVEL",
+  "LEVEL_MISMATCH",
+  "ROOM_FULL",
+  "STUDENT_CLASH",
+] as const;
+
+export type ReplacementReasonCode = (typeof REPLACEMENT_REASONS)[number];
+
+/** Reasons an admin may override (acknowledging each); the rest block everyone. */
+export const OVERRIDABLE_REPLACEMENT_REASONS: ReadonlySet<ReplacementReasonCode> =
+  new Set([
+    "CREDIT_EXPIRES_FIRST",
+    "NO_LEVEL",
+    "LEVEL_MISMATCH",
+    "ROOM_FULL",
+    "STUDENT_CLASH",
+  ]);
+
+/**
+ * A failing reason with what its message needs. `key` is stable for the
+ * same reason on the same data, so an admin's acknowledgement can be
+ * checked again at save time (like timetable conflicts).
+ */
+export type ReplacementReason =
+  | {
+      code: "ROOM_FULL";
+      key: string;
+      params: { taken: number; capacity: number };
+    }
+  | { code: "LEVEL_MISMATCH"; key: string; params: { levelId: string } }
+  | { code: "CREDIT_EXPIRES_FIRST"; key: string; params: { expiresAt: Date } }
+  | { code: "STUDENT_CLASH"; key: string; params: { lessonIds: string[] } }
+  | {
+      code: Exclude<
+        ReplacementReasonCode,
+        | "ROOM_FULL"
+        | "LEVEL_MISMATCH"
+        | "CREDIT_EXPIRES_FIRST"
+        | "STUDENT_CLASH"
+      >;
+      key: string;
+      params: Record<string, never>;
+    };
+
+/** A lesson in time, for clash checks. */
+export type TimedLesson = { id: string; startsAt: Date; endsAt: Date };
+
+/**
+ * A lesson the student attends (§6 "Lessons the student attends"): one of
+ * their groups' non-cancelled lessons they haven't reported absent from,
+ * or the target of one of their active bookings (`bookingId` set).
+ */
+export type AttendedLesson = TimedLesson & { bookingId?: string };
+
+export type ReplacementCheckInput = {
+  /** Null when the lesson isn't in the student's school (→ NOT_FOUND). */
+  target: {
+    id: string;
+    startsAt: Date;
+    endsAt: Date;
+    status: "SCHEDULED" | "CANCELLED" | "COMPLETED";
+    published: boolean;
+    groupType: "GROUP" | "ONE_ON_ONE";
+    groupArchived: boolean;
+    levelId: string;
+    /** Null = no room, or a room without a capacity: no limit (§5). */
+    capacity: number | null;
+    /** `seatsTaken(target)` now, every active booking included. */
+    seatsTaken: number;
+  } | null;
+  student: {
+    id: string;
+    levelId: string | null;
+    /** Member of the target's group at its start. */
+    isMemberOfTarget: boolean;
+  };
+  /** The student's active bookings. */
+  bookings: readonly { id: string; targetLessonId: string }[];
+  credit: {
+    id: string;
+    studentId: string;
+    status: CreditStatus;
+    expiresAt: Date;
+    sourceLessonId: string;
+    /** The missed lesson was a 1-on-1 (those credits only reschedule). */
+    fromOneOnOne: boolean;
+    /** The active booking this credit is spent on, if any. */
+    bookingId: string | null;
+  } | null;
+  /** Lessons the student attends that may overlap the target. */
+  attending: readonly AttendedLesson[];
+};
+
+const overlaps = (a: TimedLesson, b: TimedLesson) =>
+  a.startsAt.getTime() < b.endsAt.getTime() &&
+  b.startsAt.getTime() < a.endsAt.getTime();
+
+/**
+ * The student's lessons that overlap `target` (half-open intervals, so
+ * back-to-back lessons don't clash), the target itself excluded, sorted by
+ * start then id.
+ */
+export function studentClashes<T extends TimedLesson>(
+  target: TimedLesson,
+  attending: readonly T[],
+): T[] {
+  return attending
+    .filter((lesson) => lesson.id !== target.id && overlaps(target, lesson))
+    .sort(
+      (a, b) =>
+        a.startsAt.getTime() - b.startsAt.getTime() ||
+        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    );
+}
+
+const reason = (
+  code: ReplacementReason["code"],
+  params: Record<string, unknown> = {},
+  keySuffix = "",
+): ReplacementReason =>
+  ({
+    code,
+    key: keySuffix ? `${code}:${keySuffix}` : code,
+    params,
+  }) as ReplacementReason;
+
+/**
+ * Every reason `input.target` can't be booked with `input.credit` now
+ * (§6), sorted in display order; empty means the booking is allowed.
+ * With `review` set, the booking under review is left out of every input
+ * (§6 _Admin review_): its own seat, credit and target don't count against
+ * it, and LESSON_STARTED isn't evaluated.
+ */
+export function checkReplacement(
+  input: ReplacementCheckInput,
+  now: Date,
+  review?: { bookingId: string },
+): ReplacementReason[] {
+  const { target, student, credit } = input;
+  if (!target) return [reason("NOT_FOUND")];
+  const out: ReplacementReason[] = [];
+  const reviewId = review?.bookingId;
+  const bookings = input.bookings.filter((b) => b.id !== reviewId);
+
+  if (!target.published) out.push(reason("LESSON_NOT_PUBLISHED"));
+  if (target.status !== "SCHEDULED") out.push(reason("LESSON_CANCELLED"));
+  if (!review && target.startsAt.getTime() <= now.getTime()) {
+    out.push(reason("LESSON_STARTED"));
+  }
+  if (target.groupType !== "GROUP" || target.groupArchived) {
+    out.push(reason("NOT_A_GROUP_LESSON"));
+  }
+  if (credit && credit.sourceLessonId === target.id) {
+    out.push(reason("SAME_LESSON"));
+  }
+  if (
+    student.isMemberOfTarget ||
+    bookings.some((b) => b.targetLessonId === target.id)
+  ) {
+    out.push(reason("ALREADY_ATTENDING"));
+  }
+  const creditOk =
+    credit !== null &&
+    credit.studentId === student.id &&
+    !credit.fromOneOnOne &&
+    (creditState(credit, now) === "AVAILABLE" ||
+      (reviewId !== undefined &&
+        credit.status === "USED" &&
+        credit.bookingId === reviewId));
+  if (!creditOk) out.push(reason("CREDIT_UNAVAILABLE"));
+  if (credit && target.startsAt.getTime() >= credit.expiresAt.getTime()) {
+    out.push(reason("CREDIT_EXPIRES_FIRST", { expiresAt: credit.expiresAt }));
+  }
+  if (student.levelId === null) out.push(reason("NO_LEVEL"));
+  else if (student.levelId !== target.levelId) {
+    out.push(
+      reason("LEVEL_MISMATCH", { levelId: target.levelId }, target.levelId),
+    );
+  }
+  if (target.capacity !== null) {
+    // Under review the booking already holds one of the counted seats.
+    const own =
+      reviewId !== undefined &&
+      input.bookings.some(
+        (b) => b.id === reviewId && b.targetLessonId === target.id,
+      )
+        ? 1
+        : 0;
+    const taken = target.seatsTaken - own;
+    if (taken + 1 > target.capacity) {
+      out.push(
+        reason(
+          "ROOM_FULL",
+          { taken: taken + 1, capacity: target.capacity },
+          `${target.capacity}`,
+        ),
+      );
+    }
+  }
+  const clashes = studentClashes(
+    target,
+    input.attending.filter(
+      (l) => reviewId === undefined || l.bookingId !== reviewId,
+    ),
+  );
+  if (clashes.length > 0) {
+    const lessonIds = clashes.map((l) => l.id);
+    out.push(reason("STUDENT_CLASH", { lessonIds }, lessonIds.join(",")));
+  }
+  const order = (code: ReplacementReasonCode) =>
+    REPLACEMENT_REASONS.indexOf(code);
+  return out.sort((a, b) => order(a.code) - order(b.code));
+}
+
+/**
+ * `checkReplacement` for a booking under admin review (§6): the booking is
+ * left out of every input. Also checks an Override's new target.
+ */
+export function reviewReplacement(
+  input: ReplacementCheckInput,
+  bookingId: string,
+  now: Date,
+): ReplacementReason[] {
+  return checkReplacement(input, now, { bookingId });
+}
+
+export type ReplacementDecision =
+  | { ok: true; overridden: ReplacementReason[] }
+  | {
+      ok: false;
+      reason: "BLOCKED" | "UNACKNOWLEDGED";
+      reasons: ReplacementReason[];
+    };
+
+/**
+ * Whether an admin override may be saved: never with a blocking reason;
+ * overridable ones only when each is acknowledged by key (the `decideSave`
+ * pattern of the timetable editor).
+ */
+export function decideOverride(
+  reasons: readonly ReplacementReason[],
+  acknowledgedKeys: readonly string[],
+): ReplacementDecision {
+  if (reasons.some((r) => !OVERRIDABLE_REPLACEMENT_REASONS.has(r.code))) {
+    return { ok: false, reason: "BLOCKED", reasons: [...reasons] };
+  }
+  const acknowledged = new Set(acknowledgedKeys);
+  if (reasons.some((r) => !acknowledged.has(r.key))) {
+    return { ok: false, reason: "UNACKNOWLEDGED", reasons: [...reasons] };
+  }
+  return { ok: true, overridden: [...reasons] };
+}
+
+// ---------------------------------------------------------------------------
+// Cancelling a booking (§6, student)
+// ---------------------------------------------------------------------------
+
+export type BookingCancelPlan =
+  | {
+      ok: true;
+      cancelReason: "STUDENT" | "STUDENT_LATE";
+      releaseCredit: boolean;
+    }
+  | { ok: false; reason: "LESSON_STARTED" };
+
+/**
+ * A student cancelling their booking into a lesson starting at `startsAt`:
+ * allowed until it starts; before the cutoff the credit comes back, after
+ * it the credit stays spent (`STUDENT_LATE`).
+ */
+export function planBookingCancel(
+  startsAt: Date,
+  cutoffMinutes: number,
+  now: Date,
+): BookingCancelPlan {
+  if (startsAt.getTime() <= now.getTime()) {
+    return { ok: false, reason: "LESSON_STARTED" };
+  }
+  const inTime = earnsCredit(startsAt, now, cutoffMinutes);
+  return {
+    ok: true,
+    cancelReason: inTime ? "STUDENT" : "STUDENT_LATE",
+    releaseCredit: inTime,
   };
 }

@@ -18,6 +18,22 @@ export type StudentAttendance = {
   creditValidUntil: IsoDate;
   /** Their cancellation, if they (or the office) already cancelled. */
   cancelled: { at: string; byOffice: boolean; credit: boolean } | null;
+  /**
+   * The lesson is one of their bookings (absences.md §5.8): a replacement
+   * in another group, or their rescheduled 1-on-1.
+   */
+  booking: StudentBooking | null;
+};
+
+/** A replacement or rescheduled lesson, as its student sees it. */
+export type StudentBooking = {
+  kind: "replacement" | "rescheduled";
+  /** The replacement booking (cancel it); null for a rescheduled lesson. */
+  bookingId: string | null;
+  /** The lesson it makes up for ("For your lesson on {date}"). */
+  originalDate: IsoDate;
+  /** The credit spent on it; null for an admin move without one. */
+  credit: { sourceDate: IsoDate; validUntil: IsoDate; expired: boolean } | null;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

@@ -42,6 +42,7 @@ const scope: StudentScope = {
   memberships: [
     { groupId: "g1", joinedAt: new Date("2026-09-01T00:00:00Z"), leftAt: null },
   ],
+  bookedLessonIds: [],
 };
 
 /** Every key anywhere in a nested Prisma `select`. */
@@ -78,13 +79,29 @@ describe("student lesson loaders", () => {
     expect(where).toContain(`"lte":"${NOW.toISOString()}"`);
   });
 
+  it("opens a lesson the student is booked onto as a replacement", async () => {
+    const { db, calls } = recordingDb();
+    await loadStudentLesson(
+      db,
+      { ...scope, bookedLessonIds: [LESSON] },
+      LESSON,
+      NOW,
+      TZ,
+    );
+    const where = JSON.stringify(calls[0].args);
+    expect(where).toContain(`"id":{"in":["${LESSON}"]}`);
+    // Still only published lessons that have started.
+    expect(where).toContain("timetablePublishedAt");
+    expect(where).toContain(`"lte":"${NOW.toISOString()}"`);
+  });
+
   it("treats malformed ids and students without a profile as not found", async () => {
     const { db, calls } = recordingDb();
     expect(await loadStudentLesson(db, scope, "nonsense", NOW, TZ)).toBeNull();
     expect(
       await loadStudentLesson(
         db,
-        { studentId: null, memberships: [] },
+        { studentId: null, memberships: [], bookedLessonIds: [] },
         LESSON,
         NOW,
         TZ,
