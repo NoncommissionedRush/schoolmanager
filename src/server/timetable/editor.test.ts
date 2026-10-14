@@ -4,10 +4,12 @@ import type { Conflict } from "@/server/scheduling";
 
 import {
   acknowledgementsFromAudit,
+  canSaveSlot,
   clampToTerm,
   defaultAsOf,
   defaultEndDate,
   defaultTeacherForGroup,
+  earliestEndDate,
   issueRows,
   occurrenceSummary,
   pickTerm,
@@ -269,5 +271,44 @@ describe("slot sheet helpers", () => {
         "2026-10-14",
       ),
     ).toBe("2026-10-14");
+  });
+
+  it("lets a published slot end yesterday at the earliest, like endSlot", () => {
+    expect(earliestEndDate("2026-10-14", true)).toBe("2026-10-13");
+    expect(earliestEndDate("2026-10-01", true)).toBe("2026-09-30");
+    expect(earliestEndDate("2026-10-14", false)).toBeUndefined();
+  });
+
+  describe("canSaveSlot", () => {
+    const base = {
+      complete: true,
+      checking: false,
+      pending: false,
+      checkedKey: "b",
+      requestKey: "b",
+    };
+
+    it("saves once the check answered for the draft on screen", () => {
+      expect(canSaveSlot(base)).toBe(true);
+    });
+
+    it("waits while the check runs", () => {
+      expect(canSaveSlot({ ...base, checking: true })).toBe(false);
+    });
+
+    it("waits for the debounced check of a changed draft", () => {
+      expect(canSaveSlot({ ...base, checkedKey: "a" })).toBe(false);
+      expect(canSaveSlot({ ...base, checkedKey: null })).toBe(false);
+    });
+
+    it("never saves twice at once", () => {
+      expect(canSaveSlot({ ...base, pending: true })).toBe(false);
+    });
+
+    it("lets an incomplete draft try, to show what is missing", () => {
+      expect(canSaveSlot({ ...base, complete: false, checkedKey: null })).toBe(
+        true,
+      );
+    });
   });
 });

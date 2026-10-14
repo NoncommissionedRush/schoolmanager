@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { Message } from "@/server/admin/result";
 import type { Conflict } from "@/server/scheduling";
 import {
+  canSaveSlot,
   defaultTeacherForGroup,
   occurrenceSummary,
 } from "@/server/timetable/editor";
@@ -171,6 +172,8 @@ function SlotForm({
   const [effectiveFrom, setEffectiveFrom] = useState(minEffective);
   const [conflicts, setConflicts] = useState<Conflict[] | null>(null);
   const [checking, setChecking] = useState(false);
+  // The request the shown check result belongs to; Save waits for a match.
+  const [checkedKey, setCheckedKey] = useState<string | null>(null);
   const previousKeys = editing
     ? (data.acknowledgements[editing.id]?.keys ?? [])
     : [];
@@ -221,11 +224,17 @@ function SlotForm({
           setConflicts(result.data);
           setError(null);
         } else {
+          // No list to act on: Save may still go, the server re-checks.
+          setConflicts(null);
           setError(result.formError ?? { key: "common.error.unexpected" });
         }
+        setCheckedKey(requestKey);
       } catch {
-        if (current === requestId.current)
+        if (current === requestId.current) {
+          setConflicts(null);
+          setCheckedKey(requestKey);
           setError({ key: "common.error.network" });
+        }
       } finally {
         if (current === requestId.current) setChecking(false);
       }
@@ -237,6 +246,13 @@ function SlotForm({
   const blocking = shown?.filter((c) => c.severity === "blocking") ?? [];
   const warnings = shown?.filter((c) => c.severity === "overridable") ?? [];
   const allTicked = warnings.every((w) => acked.has(w.key));
+  const canSave = canSaveSlot({
+    complete,
+    checking,
+    pending,
+    checkedKey,
+    requestKey,
+  });
 
   function update(changes: Partial<SlotDraft>) {
     setDraft((current) => {
@@ -256,6 +272,7 @@ function SlotForm({
   }
 
   function save() {
+    if (!canSave) return;
     if (!complete) {
       setSubmitError(null);
       setError({ key: "scheduling.errors.INVALID_INPUT" });
@@ -710,7 +727,7 @@ function SlotForm({
         <Button type="button" variant="outline" onClick={onClose}>
           {tc("cancel")}
         </Button>
-        <Button type="button" onClick={save} disabled={pending}>
+        <Button type="button" onClick={save} disabled={!canSave}>
           {pending && <Loader2 aria-hidden="true" className="animate-spin" />}
           {warnings.length > 0 && blocking.length === 0 && allTicked
             ? t("slot.saveAnyway")

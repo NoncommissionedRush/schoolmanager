@@ -312,3 +312,39 @@ export function defaultEndDate(
   );
   return dates.at(-1) ?? today;
 }
+
+/**
+ * Earliest last lesson the End dialog offers. Mirrors `endSlot`: a slot of a
+ * published term may end yesterday at the earliest; draft terms have no
+ * lower bound.
+ */
+export function earliestEndDate(
+  today: IsoDate,
+  published: boolean,
+): IsoDate | undefined {
+  return published ? addDays(today, -1) : undefined;
+}
+
+/**
+ * Whether the slot sheet may save (§5.4): only once the live check has
+ * answered for exactly the draft on screen, so a save never goes out on a
+ * result that is still running, debouncing, or for an older draft. An
+ * incomplete draft may "save" so the sheet can say what is missing.
+ */
+export function canSaveSlot({
+  complete,
+  checking,
+  pending,
+  checkedKey,
+  requestKey,
+}: {
+  complete: boolean;
+  checking: boolean;
+  pending: boolean;
+  checkedKey: string | null;
+  requestKey: string;
+}): boolean {
+  if (pending) return false;
+  if (!complete) return true;
+  return !checking && checkedKey === requestKey;
+}

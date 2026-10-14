@@ -232,7 +232,11 @@ describe.skipIf(!url)("timetable service (database)", () => {
     const saved = await saveSlot(
       db,
       actor,
-      { ...request, acknowledgedConflictKeys: conflicts.map((c) => c.key) },
+      {
+        ...request,
+        acknowledgedConflictKeys: conflicts.map((c) => c.key),
+        reason: "Weekend intensive",
+      },
       NOW,
     );
     expect(saved.ok).toBe(true);
@@ -246,8 +250,33 @@ describe.skipIf(!url)("timetable service (database)", () => {
     expect(log.actorId).toBe(actor.userId);
     expect(log.data).toMatchObject({
       overridden: [{ type: "OUTSIDE_SCHOOL_DAYS", key: conflicts[0].key }],
+      reason: "Weekend intensive",
     });
     await deleteSlot(db, actor, (saved as { slotId: string }).slotId, NOW);
+  });
+
+  it("audits no override reason when nothing was overridden", async () => {
+    const saved = await saveSlot(
+      db,
+      actor,
+      {
+        slot: slotInput({
+          groupId: ids.group2,
+          teacherId: ids.teacherB,
+          roomId: null,
+          weekday: 3,
+        }),
+        reason: "Not an override",
+      },
+      NOW,
+    );
+    expect(saved).toMatchObject({ ok: true, overridden: [] });
+    const slotId = (saved as { slotId: string }).slotId;
+    const log = await client.auditLog.findFirstOrThrow({
+      where: { schoolId, action: "timetable_slot.created", entityId: slotId },
+    });
+    expect(log.data).not.toHaveProperty("reason");
+    await deleteSlot(db, actor, slotId, NOW);
   });
 
   it("publishes and generates lessons from today on, idempotently", async () => {
@@ -350,6 +379,7 @@ describe.skipIf(!url)("timetable service (database)", () => {
     );
     expect(result).toEqual({
       outcome: "ended",
+      lastDate: "2026-11-10",
       lessons: { created: 0, removed: 1, cancelled: 1 },
     });
     const after = await lessonsOf(mondaySlot);

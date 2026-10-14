@@ -24,6 +24,7 @@ import {
   type LessonRecord,
   type LessonView,
   membersAt,
+  type MembershipWindow,
   toLessonView,
   type ViewerKind,
 } from "./week";
@@ -59,7 +60,16 @@ export type WeekData = {
   termId: string | null;
 };
 
-const lessonSelect = {
+const groupSelect = {
+  id: true,
+  name: true,
+  type: true,
+  level: { select: { code: true } },
+} satisfies Prisma.GroupSelect;
+
+// Students never load group memberships, so classmates' names are not even
+// read from the database for them.
+const studentLessonSelect = {
   id: true,
   termId: true,
   timetableSlotId: true,
@@ -67,12 +77,19 @@ const lessonSelect = {
   endsAt: true,
   status: true,
   cancelReason: true,
+  group: { select: groupSelect },
+  teacher: { select: { id: true, user: { select: { name: true } } } },
+  substituteTeacher: {
+    select: { id: true, user: { select: { name: true } } },
+  },
+  room: { select: { id: true, name: true, kind: true, meetingUrl: true } },
+} satisfies Prisma.LessonSelect;
+
+const staffLessonSelect = {
+  ...studentLessonSelect,
   group: {
     select: {
-      id: true,
-      name: true,
-      type: true,
-      level: { select: { code: true } },
+      ...groupSelect,
       memberships: {
         select: {
           joinedAt: true,
@@ -82,16 +99,16 @@ const lessonSelect = {
       },
     },
   },
-  teacher: { select: { id: true, user: { select: { name: true } } } },
-  substituteTeacher: {
-    select: { id: true, user: { select: { name: true } } },
-  },
-  room: { select: { id: true, name: true, kind: true, meetingUrl: true } },
 } satisfies Prisma.LessonSelect;
 
-type LessonRow = Prisma.LessonGetPayload<{ select: typeof lessonSelect }>;
+type StudentLessonRow = Prisma.LessonGetPayload<{
+  select: typeof studentLessonSelect;
+}>;
+type StaffLessonRow = Prisma.LessonGetPayload<{
+  select: typeof staffLessonSelect;
+}>;
 
-function toRecord(row: LessonRow, withStudents: boolean): LessonRecord {
+function toRecord(row: StudentLessonRow | StaffLessonRow): LessonRecord {
   return {
     id: row.id,
     termId: row.termId,
@@ -115,12 +132,33 @@ function toRecord(row: LessonRow, withStudents: boolean): LessonRecord {
       : null,
     room: row.room,
     // Students' names are loaded only for admins and teachers.
-    students: withStudents
-      ? membersAt(row.group.memberships, row.startsAt).map((m) => ({
-          id: m.student.id,
-          name: m.student.user.name,
-        }))
-      : [],
+    students:
+      "memberships" in row.group
+        ? membersAt(row.group.memberships, row.startsAt).map((m) => ({
+            id: m.student.id,
+            name: m.student.user.name,
+          }))
+        : [],
+  };
+}
+
+/**
+ * Lessons a student may see: those of their groups that start while they
+ * are a member (joined on or before, left after). Matches `isMemberAt`, but
+ * in the query, so limits and ordering apply to visible lessons only.
+ */
+export function membershipLessonWhere(
+  memberships: readonly MembershipWindow[],
+): Prisma.LessonWhereInput {
+  if (memberships.length === 0) return { id: { in: [] } };
+  return {
+    OR: memberships.map((m) => ({
+      groupId: m.groupId,
+      startsAt: {
+        gte: m.joinedAt,
+        ...(m.leftAt && { lt: m.leftAt }),
+      },
+    })),
   };
 }
 
@@ -160,8 +198,7 @@ export async function loadWeek(
   // Who is asking decides which lessons exist for them at all.
   let where: Prisma.LessonWhereInput;
   let teacherId: string | undefined;
-  let memberships: { groupId: string; joinedAt: Date; leftAt: Date | null }[] =
-    [];
+  let memberships: MembershipWindow[] = [];
   if (viewer.kind === "TEACHER") {
     const profile = await db.teacherProfile.findFirst({
       where: { userId: viewer.userId },
@@ -183,7 +220,7 @@ export async function loadWeek(
     });
     memberships = profile?.groupMemberships ?? [];
     where = {
-      groupId: { in: [...new Set(memberships.map((m) => m.groupId))] },
+      ...membershipLessonWhere(memberships),
       term: { timetablePublishedAt: { not: null } },
     };
   } else {
@@ -200,21 +237,21 @@ export async function loadWeek(
   }
 
   const inWeek = { startsAt: { gte: from, lt: until } };
-  const rows = await db.lesson.findMany({
+  const query = {
     where: { AND: [where, inWeek] },
-    select: lessonSelect,
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
-  });
+  } satisfies Prisma.LessonFindManyArgs;
+  const rows =
+    viewer.kind === "STUDENT"
+      ? await db.lesson.findMany({ ...query, select: studentLessonSelect })
+      : await db.lesson.findMany({ ...query, select: staffLessonSelect });
+  // Belt and braces: the query already applies the membership windows.
   const allowed =
     viewer.kind === "STUDENT"
       ? rows.filter((r) => isMemberAt(memberships, r.group.id, r.startsAt))
       : rows;
   const lessons = allowed.map((row) =>
-    toLessonView(
-      toRecord(row, viewer.kind !== "STUDENT"),
-      { kind: viewer.kind, teacherId },
-      tz,
-    ),
+    toLessonView(toRecord(row), { kind: viewer.kind, teacherId }, tz),
   );
 
   // Holidays of the terms this week (school-wide ones count everywhere).
@@ -275,18 +312,13 @@ export async function loadWeek(
 
   let nextLesson: WeekData["nextLesson"] = null;
   if (lessons.length === 0 && state !== "noGroups") {
-    const candidates = await db.lesson.findMany({
+    const next = await db.lesson.findFirst({
       where: {
         AND: [where, { startsAt: { gte: until }, status: "SCHEDULED" }],
       },
-      select: { startsAt: true, groupId: true },
-      orderBy: { startsAt: "asc" },
-      take: viewer.kind === "STUDENT" ? 50 : 1,
+      select: { startsAt: true },
+      orderBy: [{ startsAt: "asc" }, { id: "asc" }],
     });
-    const next =
-      viewer.kind === "STUDENT"
-        ? candidates.find((c) => isMemberAt(memberships, c.groupId, c.startsAt))
-        : candidates[0];
     if (next) {
       nextLesson = {
         date: toZonedDateTime(next.startsAt, tz).date,
