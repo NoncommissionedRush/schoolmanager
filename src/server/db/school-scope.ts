@@ -9,8 +9,9 @@ import { Prisma, type PrismaClient } from "@/generated/prisma/client";
  * Nested reads and writes (`include`, nested `create`) between tenant-owned
  * models are not rewritten: those relations use composite `[schoolId, id]`
  * keys, so anything reached from a scoped row is already in the same school.
- * `User` is the exception — it is global, so its relations (memberships,
- * profiles, …) span every school. On the scoped client a `User`, whether
+ * `User` is the exception — it is not tenant-owned (no `school_id`), so its
+ * relations (memberships, profiles, …) are not tied to this school: a user
+ * reached through a plain FK (e.g. an audit actor) may belong to another. On the scoped client a `User`, whether
  * queried directly or reached through `include`/`select`, may only return its
  * own scalar fields; relation reads (`include`, relation `select`, `_count`)
  * throw. Load school data from the tenant side instead (e.g.

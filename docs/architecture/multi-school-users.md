@@ -1,92 +1,58 @@
-# Writes to the global `User` from a school (proposal, CARM-29)
+# One school per user (decision)
 
-**Status: proposed, waiting for the project owner's approval. Nothing below is
-implemented.** Needs a decision before P6 (multi-school).
+**Decided by the project owner on 2026-10-14 (CARM-33).** Replaces the
+CARM-29 proposal for users who belong to several schools; that proposal and
+its "home school" question no longer apply.
 
-## Problem
+## Decision
 
-`User` is global (one person can belong to several schools, see
-[data-model.md](data-model.md#tenancy)). School admins write it today through
-`src/server/admin/people/service.ts`:
+Every user belongs to **exactly one school**. There are no multi-school
+users.
 
-| Function               | Writes on `User`   | Effect in every school the user belongs to |
-| ---------------------- | ------------------ | ------------------------------------------ |
-| `updatePersonIdentity` | `name`, `email`    | renamed / new sign-in email                |
-| `setPassword`          | `passwordHash`     | new password                               |
-| `archivePerson`        | `deletedAt = now`  | can't sign in anywhere                     |
-| `restorePerson`        | `deletedAt = null` | can sign in everywhere again               |
+- A `User` has one `Membership`, which holds their school and their role
+  (`ADMIN` / `TEACHER` / `STUDENT`).
+- The same person in two schools needs two accounts with two different
+  emails. `User.email` stays globally unique, so an email used in another
+  school is "already used" (design `admin-data.md` Q2).
+- **P6 "multi-school"** means several schools in one installation, each with
+  its own users. It does not mean users across schools.
 
-So an admin of school A could rename, lock out or take over (reset the
-password of) a person who also belongs to school B. v1 can't get there:
-`assertEmailFree` refuses an email that exists in another school (design
-`admin-data.md` Q2), so every user has exactly one membership. P6 lifts that
-restriction, and then the writes above cross schools.
+## What school admins may do
 
-## Proposed rule
+Nobody outside the school shares a user record, so a school admin manages
+their school's users fully, through `src/server/admin/people/service.ts`:
 
-A school admin may only change what belongs to their school. What belongs to
-the person is changed by the person, or by a school admin only while the
-person belongs to no other school.
+| Function               | Writes on `User`   | Effect                      |
+| ---------------------- | ------------------ | --------------------------- |
+| `updatePersonIdentity` | `name`, `email`    | renamed / new sign-in email |
+| `setPassword`          | `passwordHash`     | new password                |
+| `archivePerson`        | `deletedAt = now`  | can't sign in, signed out   |
+| `restorePerson`        | `deletedAt = null` | can sign in again           |
 
-1. **Archive and restore are per membership.** Add
-   `Membership.archivedAt` (nullable). `archivePerson` / `restorePerson` set
-   and clear it on the admin's school's membership; `User.deletedAt` is no
-   longer written by school admins (kept for a future platform-level
-   "disable account" and for existing rows).
-   - Sign-in skips archived memberships; with none left, sign-in returns
-     `disabled` as today. `getSessionContext` (`access.ts`) treats an archived
-     membership like a missing one, so an archived person is signed out of
-     that school on the next request, as now.
-   - All "active person" queries switch from `user: { deletedAt: null }` to
-     `archivedAt: null` on the membership (admin lists, last-active-admin
-     check, timetable pickers).
-   - Archive side effects (leave groups, teacher slot check) are already
-     per school and stay as they are.
-2. **Identity (name, email) and password: single-school users only.**
-   `updatePersonIdentity` and `setPassword` first count the user's
-   memberships in other schools (global client). If there are any, they
-   throw a blocked error: "{name} also belongs to another school, so only
-   they can change their name, email or password." The edit form shows the
-   fields read-only with that note.
-   - The person changes these themselves on a self-service account page
-     (P6, needs current-password confirmation). A password reset by email
-     link (P5 notifications) covers a forgotten password.
-   - Counting includes archived memberships in other schools: the other
-     school may restore them.
-3. **Joining a second school** (the P6 flow that replaces Q2's "already
-   used") creates only a `Membership` and profile for the existing `User`;
-   it never changes the user's name, email or password.
+All of them first check that the user is a member of the admin's school
+(`findMember`), so an admin can't reach a user of another school.
 
-### Why not alternatives
+## How it is enforced
 
-- _Per-school copies of name/email:_ breaks the single sign-in email and
-  duplicates identity; display name per school isn't a product need.
-- _Allow writes, notify the other schools:_ still lets school A lock a
-  person out of school B or take over their account.
-- _Let any admin write but require the person's confirmation:_ needs email
-  infrastructure (P5) for every edit; per-membership archive is simpler and
-  covers the common case (person leaves one school).
+- **Database:** unique `memberships.user_id` (`@@unique([userId])` on
+  `Membership`). A second membership for the same user fails with a unique
+  violation, whatever code path tries it.
+- **Application:** `assertEmailFree` (`people/service.ts`) refuses an email
+  that exists anywhere, also in another school, with
+  `people.error.emailTaken`. So creating a person always creates a new user
+  with its first and only membership.
+- **Sign-in:** `verifyCredentials` (`src/server/auth/credentials.ts`) signs
+  the user in to the school of their only membership; there is no school
+  picker.
+- `User` itself has no `school_id`: sign-in looks the user up by email before
+  a school is known. The school-scoped client still refuses to read a user's
+  relations (see `src/server/db/school-scope.ts`), because a user reached
+  through a plain FK (e.g. an audit actor) may belong to another school.
 
-## Implementation sketch (after approval)
+## Consequences
 
-- Migration: `memberships.archived_at timestamptz null`; backfill
-  `archived_at = users.deleted_at` for users archived in v1 (all single-school).
-- `people/service.ts`: `archivePerson`/`restorePerson` update the membership
-  through the scoped client (no more global `User` write); new
-  `assertSingleSchool(scope, userId, users)` used by `updatePersonIdentity`
-  and `setPassword`.
-- `findMember` returns `membership.archivedAt` instead of `user.deletedAt`;
-  callers and UI badges follow.
-- Auth: `findCredentialUser` selects `archivedAt` on memberships;
-  `verifyCredentials` picks the oldest non-archived membership.
-- Tests: unit tests for both rules with a two-school fixture (school A admin
-  can't rename/reset a user who is in B; archiving in A leaves B signed in),
-  and the permission e2e suite extended accordingly.
-
-## Open questions for the owner
-
-1. OK to keep `User.deletedAt` only for a future platform-level disable, with
-   no UI in v1/P6?
-2. Is "read-only for multi-school users" acceptable for name/email/password,
-   or should the school where the user was created first ("home school")
-   keep the right to change them?
+- No per-membership archive, no "home school", no read-only identity for
+  shared users: `User.deletedAt` remains the archive flag.
+- If the product ever needs one person in several schools, revisit this
+  record first: the unique index, sign-in (school choice) and the admin
+  writes above all assume one school per user.
