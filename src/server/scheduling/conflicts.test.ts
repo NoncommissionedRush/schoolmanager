@@ -12,7 +12,15 @@ import {
   checkSlot,
   checkTimetable,
 } from "./conflicts";
-import { context, group, h, lesson, slot, TERM } from "./testing/fixtures";
+import {
+  context,
+  group,
+  h,
+  lesson,
+  room,
+  slot,
+  TERM,
+} from "./testing/fixtures";
 import type { SchedulingContext, SlotCandidate } from "./types";
 
 const types = (conflicts: Conflict[]) => conflicts.map((c) => c.type);
@@ -225,6 +233,55 @@ describe("checkSlot", () => {
     ]);
   });
 
+  describe("archived rooms", () => {
+    const rooms = [room("r1"), room("r2", { archived: true })];
+
+    it("blocks a new slot in an archived room", () => {
+      expect(check(candidate(), { rooms })).toMatchObject([
+        {
+          type: "ROOM_ARCHIVED",
+          severity: "blocking",
+          key: "ROOM_ARCHIVED",
+          params: { room: "Room r2" },
+          refs: { roomId: "r2" },
+        },
+      ]);
+    });
+
+    it("blocks moving a slot into an archived room", () => {
+      const existing = slot("a");
+      expect(
+        types(
+          check({ ...existing, roomId: "r2" }, { rooms, slots: [existing] }),
+        ),
+      ).toEqual(["ROOM_ARCHIVED"]);
+    });
+
+    it("lets a slot already in an archived room keep running and be edited", () => {
+      const existing = slot("a", { roomId: "r2", groupId: "g2" });
+      const ctx = { rooms, slots: [existing] };
+      expect(check(existing, ctx)).toEqual([]);
+      expect(
+        check({ ...existing, startMinute: h(11), endMinute: h(12) }, ctx),
+      ).toEqual([]);
+      expect(checkTimetable(buildCalendar(context(ctx)), TERM.id)).toEqual(
+        new Map(),
+      );
+    });
+
+    it("still checks slots in an archived room for clashes", () => {
+      const ctx = {
+        rooms,
+        slots: [
+          slot("a", { roomId: "r2", groupId: "g2" }),
+          slot("b", { roomId: "r2", groupId: "g3", teacherId: "t3" }),
+        ],
+      };
+      const result = checkTimetable(buildCalendar(context(ctx)), TERM.id);
+      expect(types(result.get("a")!)).toEqual(["ROOM_DOUBLE_BOOKED"]);
+    });
+  });
+
   it("applies weekly unavailability unless a date exception lifts it", () => {
     const availability = [
       {
@@ -396,6 +453,47 @@ describe("checkLesson", () => {
       endsAt: new Date("2026-12-01T09:00:00Z"),
     });
     expect(types(checkLesson(calendar(), late))).toEqual(["OUTSIDE_TERM"]);
+  });
+
+  it("blocks moving a lesson into an archived room, not keeping it there", () => {
+    const rooms = [room("r1"), room("r2", { archived: true })];
+    const inR2 = slot("a", { weekday: 2, roomId: "r2", groupId: "g2" });
+    const stored = lesson("l", {
+      timetableSlotId: "a",
+      occurrenceDate: "2026-10-13",
+      groupId: "g2",
+      roomId: "r2",
+    });
+    const ctx = { rooms, slots: [inR2], lessons: [stored] };
+    // Generating, editing or substituting a lesson of a slot in that room.
+    const generated = { ...stored, id: undefined };
+    expect(checkLesson(calendar({ rooms, slots: [inR2] }), generated)).toEqual(
+      [],
+    );
+    expect(
+      checkLesson(calendar(ctx), { ...stored, substituteTeacherId: "t3" }),
+    ).toEqual([]);
+    // An ad-hoc lesson, or a lesson of another room moved there.
+    expect(
+      types(
+        checkLesson(
+          calendar({ rooms }),
+          lesson("x", {
+            groupId: "g2",
+            roomId: "r2",
+          }),
+        ),
+      ),
+    ).toEqual(["ROOM_ARCHIVED"]);
+    const elsewhere = lesson("m", { groupId: "g2", roomId: "r1" });
+    expect(
+      types(
+        checkLesson(calendar({ rooms, lessons: [elsewhere] }), {
+          ...elsewhere,
+          roomId: "r2",
+        }),
+      ),
+    ).toEqual(["ROOM_ARCHIVED"]);
   });
 
   it("blocks a lesson that ends before it starts", () => {

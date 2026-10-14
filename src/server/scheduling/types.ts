@@ -72,6 +72,11 @@ export type RoomInfo = {
   kind: "PHYSICAL" | "ONLINE";
   /** Null for online rooms without a limit. */
   capacity: number | null;
+  /**
+   * Archived rooms (`Room.archivedAt`) cannot get new slots or lessons;
+   * slots and lessons already in them keep running and are still checked.
+   */
+  archived: boolean;
 };
 
 export type PersonInfo = { id: string; name: string };

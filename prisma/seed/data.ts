@@ -38,6 +38,11 @@ export const LEVELS = [
 
 export type LevelCode = (typeof LEVELS)[number]["code"];
 
+/** No longer offered: hidden from pickers, has no courses or groups. */
+export const ARCHIVED_LEVELS = [
+  { code: "C2", name: "Proficiency", rank: 6 },
+] as const;
+
 export const COURSES: { key: string; name: string; level: LevelCode }[] = [
   ...LEVELS.map((l) => ({
     key: `general-${l.code.toLowerCase()}`,
@@ -161,6 +166,20 @@ export const ROOMS = [
 ] as const;
 
 export type RoomKey = (typeof ROOMS)[number]["key"];
+
+/** Closed rooms: hidden from pickers, no slots may be added to them. */
+export const ARCHIVED_ROOMS = [
+  {
+    key: "room-5",
+    name: "Room 5 (Old annex)",
+    kind: "PHYSICAL",
+    capacity: 6,
+    meetingUrl: null,
+  },
+] as const;
+
+/** When the archived levels and rooms were archived. */
+export const ARCHIVED_AT = new Date("2026-06-30T00:00:00Z");
 
 export const TERM = {
   key: "autumn-2026",

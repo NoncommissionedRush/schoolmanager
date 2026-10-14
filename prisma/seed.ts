@@ -17,6 +17,9 @@ import {
   HOLIDAYS,
   LESSON_GENERATION_END,
   LESSON_LOG_TOPICS,
+  ARCHIVED_AT,
+  ARCHIVED_LEVELS,
+  ARCHIVED_ROOMS,
   LEVELS,
   ROOMS,
   SCHOOL,
@@ -68,10 +71,18 @@ async function main() {
 
   // --- Levels & courses ---------------------------------------------------
   const levelIds = new Map<string, string>();
-  for (const level of LEVELS) {
+  const levels = [
+    ...LEVELS.map((level) => ({ ...level, archivedAt: null })),
+    ...ARCHIVED_LEVELS.map((level) => ({ ...level, archivedAt: ARCHIVED_AT })),
+  ];
+  for (const level of levels) {
     const row = await db.level.upsert({
       where: { schoolId_code: { schoolId, code: level.code } },
-      update: { name: level.name, rank: level.rank },
+      update: {
+        name: level.name,
+        rank: level.rank,
+        archivedAt: level.archivedAt,
+      },
       create: { id: id("level", level.code), schoolId, ...level },
     });
     levelIds.set(level.code, row.id);
@@ -165,12 +176,17 @@ async function main() {
 
   // --- Rooms, term, holidays ----------------------------------------------
   const roomIds = new Map<string, string>();
-  for (const room of ROOMS) {
+  const rooms = [
+    ...ROOMS.map((room) => ({ ...room, archivedAt: null })),
+    ...ARCHIVED_ROOMS.map((room) => ({ ...room, archivedAt: ARCHIVED_AT })),
+  ];
+  for (const room of rooms) {
     const data = {
       name: room.name,
       kind: room.kind,
       capacity: room.capacity,
       meetingUrl: room.meetingUrl,
+      archivedAt: room.archivedAt,
     };
     const row = await db.room.upsert({
       where: { schoolId_name: { schoolId, name: room.name } },

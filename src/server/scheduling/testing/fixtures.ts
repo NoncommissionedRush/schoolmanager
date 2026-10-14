@@ -42,6 +42,7 @@ export function room(id: string, extra: Partial<RoomInfo> = {}): RoomInfo {
     name: `Room ${id}`,
     kind: "PHYSICAL",
     capacity: 12,
+    archived: false,
     ...extra,
   };
 }

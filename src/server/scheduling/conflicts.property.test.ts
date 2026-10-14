@@ -228,6 +228,47 @@ describe.each(SEEDS)("realistic school, seed %i", (seed) => {
     expect([...published]).toEqual([...draft]);
   });
 
+  it("lets archived rooms keep their slots but take no new ones", () => {
+    const archivedIds = new Set(school.rooms.slice(0, 4).map((r) => r.id));
+    const archived: SchedulingContext = {
+      ...contextOf(school, random),
+      rooms: school.rooms.map((r) => ({
+        ...r,
+        archived: archivedIds.has(r.id),
+      })),
+    };
+    const before = checkTimetable(
+      buildCalendar(contextOf(school, random)),
+      school.term.id,
+    );
+    const calendar = buildCalendar(archived);
+    // Existing slots: nothing changes, clashes included.
+    expect([...checkTimetable(calendar, school.term.id)]).toEqual([...before]);
+
+    const r = prng(seed * 31);
+    let moved = 0;
+    for (const slot of random) {
+      const target = r.pick(school.rooms);
+      const blocked = archivedIds.has(target.id) && target.id !== slot.roomId;
+      const asEdit = checkSlot(calendar, { ...slot, roomId: target.id });
+      const asNew = checkSlot(calendar, {
+        ...slot,
+        id: undefined,
+        roomId: target.id,
+      });
+      expect(
+        asEdit.some((c) => c.type === "ROOM_ARCHIVED"),
+        slot.id,
+      ).toBe(blocked);
+      expect(
+        asNew.some((c) => c.type === "ROOM_ARCHIVED"),
+        slot.id,
+      ).toBe(archivedIds.has(target.id));
+      if (blocked) moved++;
+    }
+    expect(moved).toBeGreaterThan(0);
+  });
+
   it("builds a clash-free timetable when used for placement", () => {
     const { placed: slots, unplaced } = placed();
     expect(slots.length).toBeGreaterThanOrEqual(110);

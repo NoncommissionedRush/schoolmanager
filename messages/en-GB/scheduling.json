@@ -7,6 +7,7 @@
     "INVALID_TIME": "The start time must be before the end time, within one day.",
     "OUTSIDE_TERM": "This is outside the term {term} ({termStart} – {termEnd}).",
     "GROUP_ARCHIVED": "{group} is archived and cannot get new lessons.",
+    "ROOM_ARCHIVED": "{room} is archived and cannot get new lessons.",
     "TEACHER_DOUBLE_BOOKED": "{teacher} is already teaching {otherGroup} ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}.",
     "ROOM_DOUBLE_BOOKED": "{room} is already used by {otherGroup} ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}.",
     "GROUP_DOUBLE_BOOKED": "{group} already has a lesson at that time ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}.",

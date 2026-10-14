@@ -366,6 +366,41 @@ describe.skipIf(!url)("timetable service (database)", () => {
     ]);
   });
 
+  it("keeps slots in an archived room but refuses new ones there", async () => {
+    await client.room.update({
+      where: { id: ids.room },
+      data: { archivedAt: NOW },
+    });
+    try {
+      // mondaySlot (now on Tuesdays) is in the archived room.
+      expect(await publishTerm(db, actor, ids.term, NOW)).toMatchObject({
+        ok: true,
+      });
+      const kept = await validateSlot(
+        db,
+        { slotId: mondaySlot, slot: slotInput({ weekday: 2 }) },
+        NOW,
+      );
+      expect(kept.map((c) => c.type)).not.toContain("ROOM_ARCHIVED");
+      const result = await saveSlot(
+        db,
+        actor,
+        { slot: slotInput({ termId: ids.draftTerm, weekday: 3 }) },
+        NOW,
+      );
+      expect(result).toMatchObject({
+        ok: false,
+        reason: "BLOCKING_CONFLICTS",
+        conflicts: [{ type: "ROOM_ARCHIVED", params: { room: "Room" } }],
+      });
+    } finally {
+      await client.room.update({
+        where: { id: ids.room },
+        data: { archivedAt: null },
+      });
+    }
+  });
+
   it("waits for the per-school timetable lock", async () => {
     let acquired!: () => void;
     let release!: () => void;
