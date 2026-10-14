@@ -20,6 +20,7 @@ import settings from "./settings.json";
 import students from "./students.json";
 import teachers from "./teachers.json";
 import terms from "./terms.json";
+import timetable from "./timetable.json";
 import validation from "./validation.json";
 
 const messages = {
@@ -43,6 +44,7 @@ const messages = {
   students,
   teachers,
   terms,
+  timetable,
   validation,
 };
 

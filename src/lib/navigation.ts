@@ -56,6 +56,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/timetable",
       icon: "calendar-days",
       phase: 1,
+      enabled: true,
       section: "schedule",
     },
     {
@@ -160,6 +161,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/teacher/timetable",
       icon: "calendar-days",
       phase: 1,
+      enabled: true,
       section: "teaching",
     },
     {
@@ -212,6 +214,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/student/timetable",
       icon: "calendar-days",
       phase: 1,
+      enabled: true,
       tab: true,
     },
     {

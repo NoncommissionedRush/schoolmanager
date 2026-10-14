@@ -9,9 +9,11 @@ import {
 
 describe("navigationFor", () => {
   it("shows only shipped items (P0: the dashboards)", () => {
-    // The admin data screens (CARM-24) ship ahead of the rest of P1.
+    // The admin data screens (CARM-24) and the timetables (CARM-25) ship
+    // ahead of the rest of P1.
     expect(navigationFor("ADMIN", 0).map((i) => i.href)).toEqual([
       "/admin",
+      "/admin/timetable",
       "/admin/students",
       "/admin/teachers",
       "/admin/groups",
@@ -20,9 +22,11 @@ describe("navigationFor", () => {
     ]);
     expect(navigationFor("TEACHER", 0).map((i) => i.href)).toEqual([
       "/teacher",
+      "/teacher/timetable",
     ]);
     expect(navigationFor("STUDENT", 0).map((i) => i.href)).toEqual([
       "/student",
+      "/student/timetable",
     ]);
   });
 
@@ -66,7 +70,7 @@ describe("groupNavigation", () => {
 
 describe("studentTabs", () => {
   it("is hidden while there is a single destination", () => {
-    expect(studentTabs(navigationFor("STUDENT", 0))).toEqual({
+    expect(studentTabs(navigationFor("STUDENT", 0).slice(0, 1))).toEqual({
       tabs: [],
       more: false,
     });

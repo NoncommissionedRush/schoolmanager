@@ -1,0 +1,240 @@
+{
+  "title": "Timetable",
+  "myTitle": "My timetable",
+  "prevWeek": "Previous week",
+  "nextWeek": "Next week",
+  "today": "Today",
+  "weekRange": "{start} – {end}",
+  "jumpToWeek": "Go to week",
+  "jumpToWeekLabel": "Go to week, currently {range}",
+  "gridLabel": "Timetable, {range}",
+  "dayListLabel": "Lessons on {date}",
+  "view": {
+    "label": "View",
+    "week": "Week",
+    "day": "Day"
+  },
+  "filter": {
+    "teacher": "Teacher",
+    "room": "Room",
+    "group": "Group",
+    "any": "Any"
+  },
+  "editTimetable": "Edit timetable",
+  "type": {
+    "group": "Group lesson",
+    "oneOnOne": "1-on-1 lesson"
+  },
+  "oneOnOneWith": "1-on-1 with {teacher}",
+  "status": {
+    "scheduled": "Scheduled",
+    "cancelled": "Cancelled",
+    "completed": "Completed"
+  },
+  "substitute": {
+    "badge": "Substitute",
+    "instead": "{substitute} (instead of {teacher})",
+    "youAre": "You're substituting",
+    "for": "for {teacher}",
+    "coveredBy": "Covered by {substitute}",
+    "detail": "{substitute} — substitute for {teacher}"
+  },
+  "holiday": "Holiday",
+  "holidayNamed": "Holiday — {name}",
+  "dayChip": "{date}, {count, plural, =0 {no lessons} one {# lesson} other {# lessons}}",
+  "moreLessons": "+{count} more",
+  "blockLabel": "{group}, {weekday} {from} to {to}, {details}",
+  "details": {
+    "status": "Status",
+    "when": "When",
+    "whenValue": "{date}, {time} ({minutes} min)",
+    "duration": "{minutes} min",
+    "typeLevel": "Type and level",
+    "typeLevelValue": "{type} · {level}",
+    "teacher": "Teacher",
+    "room": "Room",
+    "noRoom": "No room",
+    "joinOnline": "Join online",
+    "students": "Students ({count})",
+    "cancelReason": "Reason: {reason}",
+    "openInEditor": "Open in editor"
+  },
+  "empty": {
+    "week": "No lessons this week.",
+    "day": "No lessons on {weekday}.",
+    "nextLesson": "Next lesson: {date} at {time}",
+    "none": "The timetable for this term hasn't been published yet.",
+    "noTerm": "No term this week.",
+    "nextTerm": "Next term starts {date}.",
+    "noGroups": "You're not in any group yet. The school office will add you.",
+    "filtered": "No lessons match your filters."
+  },
+  "result": {
+    "created": "{count, plural, one {# lesson created} other {# lessons created}}",
+    "removed": "{count, plural, one {# future lesson removed} other {# future lessons removed}}",
+    "cancelled": "{count, plural, one {# cancelled because it has history} other {# cancelled because they have history}}",
+    "none": "No lessons changed."
+  },
+  "editor": {
+    "title": "Timetable editor",
+    "term": "Term",
+    "draft": "Draft",
+    "published": "Published {date}",
+    "asOf": "As of",
+    "view": {
+      "label": "View",
+      "byRoom": "By room",
+      "week": "Week"
+    },
+    "day": "Day",
+    "noRoom": "No room",
+    "seats": "{count} seats",
+    "online": "Online",
+    "weekNeedsFilter": "Choose a teacher, room or group to see their week.",
+    "hideOthers": "Hide others",
+    "newSlot": "New slot",
+    "issues": "Issues",
+    "issuesCount": "Issues, {count}",
+    "noIssues": "No issues",
+    "more": "More actions",
+    "fromDate": "From {date}",
+    "untilDate": "Until {date}",
+    "acknowledgedBy": "Warning acknowledged by {name} on {date}",
+    "publishedBanner": "This timetable is published. Changes apply to future lessons from the date you choose and are visible to teachers and students right away.",
+    "copyFrom": "Copy slots from another term…",
+    "copyFromTerm": "Copy from {term}",
+    "copySummary": "Copy {count} slots. {skipped, plural, =0 {} other {# with archived groups or teachers are skipped.}} {noRoom, plural, =0 {} other {# lose their room because it's archived.}}",
+    "regenerate": "Check & regenerate lessons",
+    "viewPublished": "View published timetable",
+    "missing": "To add slots you need at least one group and one teacher.",
+    "changedOn": "Changed on {date}",
+    "warningCount": "{count, plural, one {# warning} other {# warnings}}",
+    "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
+    "acknowledged": "Warnings acknowledged",
+    "empty": {
+      "title": "No slots yet",
+      "description": "Click a free time in the grid or use New slot.",
+      "noTerm": {
+        "title": "Create a term first",
+        "description": "The timetable belongs to a term with start and end dates.",
+        "action": "Go to Terms & holidays"
+      }
+    },
+    "desktopRecommended": "The timetable editor works best on a larger screen. Open it on a computer, or view the timetable here."
+  },
+  "slot": {
+    "newTitle": "New slot",
+    "editTitle": "Edit slot",
+    "group": "Group",
+    "groupOption": "{name} · {type} · {level} · {members, plural, one {# student} other {# students}}",
+    "teacher": "Teacher",
+    "room": "Room",
+    "roomOnline": "{name} · Online",
+    "roomSeats": "{name} · {count} seats",
+    "choose": "Choose…",
+    "day": "Day",
+    "start": "Start",
+    "end": "End",
+    "duration": "{minutes} min",
+    "effectiveFrom": "Effective from",
+    "effectiveFromHint": "Lessons before this date stay as they are.",
+    "runs": "Every {weekday}, {start} – {end} ({count, plural, one {# lesson} other {# lessons}})",
+    "runsSkipped": "{count, plural, =0 {} one {# date skipped for holidays} other {# dates skipped for holidays}}",
+    "runsNone": "No lessons in this term.",
+    "splitNote": "From {date} this continues as a changed slot. Lessons before {date} stay as they were.",
+    "saveAnyway": "Save anyway",
+    "history": "History",
+    "historyRow": "Until {date}: {teacher}, {room}, {weekday} {time}",
+    "endInstead": "End slot instead",
+    "moreOptions": "More options",
+    "validFrom": "First lesson",
+    "validUntil": "Last lesson",
+    "notSchoolDay": "{weekday} (no school)",
+    "save": "Save slot",
+    "duplicate": "Duplicate",
+    "move": "Move…",
+    "endSlot": "End slot…",
+    "delete": "Delete slot",
+    "menu": "Slot actions",
+    "required": "Choose a {field}."
+  },
+  "severity": {
+    "blocking": "Conflict",
+    "warning": "Warning",
+    "newBadge": "New"
+  },
+  "check": {
+    "title": "Check",
+    "checking": "Checking…",
+    "ok": "No conflicts.",
+    "summary": "{conflicts, plural, one {# conflict} other {# conflicts}} · {warnings, plural, one {# warning} other {# warnings}}",
+    "conflicts": "Conflicts",
+    "warnings": "Warnings",
+    "fixFirst": "Fix the conflicts before saving.",
+    "changed": "Something changed since the last check. Review the issues again.",
+    "showSlot": "Show slot",
+    "availability": "Availability",
+    "members": "Members",
+    "room": "Room",
+    "schoolSettings": "School settings",
+    "chooseGroup": "Choose another group",
+    "chooseRoom": "Choose another room",
+    "showDates": "Show dates",
+    "moreDates": "+{count} more"
+  },
+  "override": {
+    "reason": "Reason (optional)",
+    "acknowledge": "I've checked this",
+    "acknowledgeLabel": "I've checked this: {message}",
+    "required": "Tick each warning to save anyway."
+  },
+  "conflict": {
+    "generic": "This slot has a scheduling issue."
+  },
+  "toast": {
+    "slotSaved": "Slot saved",
+    "slotMoved": "Moved {group} to {weekday} {time}",
+    "slotDeleted": "Slot deleted",
+    "slotEnded": "Slot ends on {date}.",
+    "slotSavedResult": "Slot saved. {result}",
+    "slotEndedResult": "Slot ends on {date}. {result}",
+    "regenerated": "Lessons checked. {result}"
+  },
+  "end": {
+    "title": "End {group} on {weekday}s?",
+    "lastLesson": "Last lesson",
+    "hint": "Want to change the teacher, room or time instead? Edit the slot and choose from which date.",
+    "description": "Lessons after {date} are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled (\"Timetable changed\"), so no one loses information.",
+    "confirm": "End slot"
+  },
+  "delete": {
+    "title": "Delete this slot?",
+    "description": "{group}, every {weekday} {time}. This can't be undone."
+  },
+  "issues": {
+    "title": "Issues in {term}",
+    "includeAcknowledged": "Include acknowledged warnings",
+    "empty": "No issues in this term.",
+    "show": "Show",
+    "slotSummary": "{group} · {weekday} {time}"
+  },
+  "publish": {
+    "action": "Publish",
+    "title": "Publish {term}?",
+    "description": "Teachers and students will see their lessons right away. You can still change slots later; changes apply from a date you choose.",
+    "slots": "{count, plural, one {# slot} other {# slots}}",
+    "range": "Lessons will be created from {start} to {end}",
+    "warnings": "{count, plural, one {# warning acknowledged} other {# warnings acknowledged}}",
+    "review": "Review",
+    "blocked": "Fix {count, plural, one {# conflict} other {# conflicts}} before publishing.",
+    "showIssues": "Show issues",
+    "confirm": "Publish timetable",
+    "running": "Publishing… creating lessons",
+    "failed": "Couldn't publish. Nothing was changed. Try again.",
+    "done": "{term} published. {count, plural, one {# lesson} other {# lessons}} created."
+  },
+  "regenerate": {
+    "description": "Makes sure every slot has its lessons from today on, without duplicates. Earlier lessons are not touched.",
+    "run": "Run"
+  }
+}

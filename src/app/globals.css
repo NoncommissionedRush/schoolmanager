@@ -158,3 +158,12 @@
     scroll-padding-bottom: 5rem;
   }
 }
+
+/* Timetable: holiday columns and teacher unavailability (decorative). */
+@utility stripes {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--muted-foreground) 12%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+}
