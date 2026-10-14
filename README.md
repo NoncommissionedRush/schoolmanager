@@ -10,7 +10,7 @@ Tailwind CSS + shadcn/ui, next-intl, Vitest, Playwright. Package manager: pnpm.
 
 ## Run locally
 
-Prerequisites: Node.js 22+, pnpm 10 (`corepack enable`), Docker.
+Prerequisites: Node.js 22 (see `.nvmrc`), pnpm 10 (`corepack enable`), Docker.
 
 ```bash
 pnpm install                 # also generates the Prisma client

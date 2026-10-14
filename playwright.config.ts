@@ -22,5 +22,12 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      // Auth.js refuses to start without a secret. CI has no `.env`, so fall
+      // back to a test-only value; a real AUTH_SECRET always wins.
+      AUTH_SECRET:
+        process.env.AUTH_SECRET ??
+        "e2e-only-secret-not-for-production-0123456789",
+    },
   },
 });
