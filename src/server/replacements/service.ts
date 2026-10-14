@@ -493,8 +493,27 @@ export async function deleteAbsence(
       overridden = decision.overridden;
     }
 
+    // Bookings the credit backed before it came back (cancelled or
+    // rejected) are history of a credit that no longer exists: they go with
+    // it. Active bookings are never touched; they keep the credit USED and
+    // refuse the delete below (§3).
+    let removedBookings: string[] = [];
     if (credit) {
-      // Conditional: a credit spent meanwhile is never deleted.
+      const history = await tx.replacementRequest.findMany({
+        where: {
+          makeupCreditId: credit.id,
+          status: { in: ["CANCELLED", "REJECTED"] },
+        },
+        select: { id: true },
+      });
+      removedBookings = history.map((b) => b.id);
+      if (removedBookings.length > 0) {
+        await tx.replacementRequest.deleteMany({
+          where: { id: { in: removedBookings } },
+        });
+      }
+      // Conditional: a credit spent meanwhile is never deleted (the
+      // transaction then rolls the history back too).
       const { count } = await tx.makeupCredit.deleteMany({
         where: { id: credit.id, status: { not: "USED" } },
       });
@@ -533,6 +552,7 @@ export async function deleteAbsence(
             studentId: report.studentId,
             creditId: credit?.id ?? null,
             creditStatus: credit ? creditState(credit, now) : null,
+            removedBookings,
             lessonRestored: restoresLesson,
             overriddenConflicts: overridden.map((c) => ({
               type: c.type,

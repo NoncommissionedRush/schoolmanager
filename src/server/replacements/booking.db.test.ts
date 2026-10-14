@@ -32,7 +32,7 @@ import {
   rescheduleByAdmin,
   rescheduleLesson,
 } from "./reschedule";
-import { reportAbsence } from "./service";
+import { deleteAbsence, reportAbsence } from "./service";
 import { loadLessonRoster, loadStudentAbsences } from "./views";
 
 const url = process.env.SCHEDULING_TEST_DATABASE_URL;
@@ -1129,5 +1129,216 @@ describe.skipIf(!url)("replacements & reschedules (database)", () => {
         rescheduleByAdmin(otherDb, { userId: user.OtherAdmin }, input, NOW),
       ),
     ).toBe("common.error.notFound");
+  });
+  // --- Review follow-ups (CARM-43) ------------------------------------------
+
+  it("deleting an absence whose credit was booked and released takes the booking history with it", async () => {
+    const loser = await client.studentProfile.findFirstOrThrow({
+      where: { userId: user.Loser },
+    });
+    const absence = await client.absenceReport.findFirstOrThrow({
+      where: { studentId: loser.id, lessonId: lessons.aWed },
+    });
+    const history = await client.replacementRequest.findMany({
+      where: { makeupCreditId: credits.loser },
+      select: { id: true, status: true },
+    });
+    // Booked, cancelled by the student, rebooked, released by the school.
+    expect(history.length).toBeGreaterThan(0);
+    expect(history.every((b) => b.status === "CANCELLED")).toBe(true);
+    const result = await deleteAbsence(db, admin(), absence.id, [], NOW);
+    expect(result).toMatchObject({ status: "deleted" });
+    expect(
+      await client.makeupCredit.count({ where: { id: credits.loser } }),
+    ).toBe(0);
+    expect(
+      await client.replacementRequest.count({
+        where: { id: { in: history.map((b) => b.id) } },
+      }),
+    ).toBe(0);
+    const audit = await client.auditLog.findFirstOrThrow({
+      where: { schoolId, action: "absence.deleted", entityId: absence.id },
+    });
+    expect(audit.data).toMatchObject({
+      removedBookings: expect.arrayContaining(history.map((b) => b.id)),
+    });
+  });
+
+  it("an active booking still refuses the delete and keeps every row", async () => {
+    const winner = await client.studentProfile.findFirstOrThrow({
+      where: { userId: user.Winner },
+    });
+    const booked = await bookReplacement(
+      db,
+      { userId: user.Winner },
+      { creditId: credits.winner, targetLessonId: lessons.bFri },
+      NOW,
+    );
+    expect(booked.status).toBe("booked");
+    const absence = await client.absenceReport.findFirstOrThrow({
+      where: { studentId: winner.id, lessonId: lessons.aWed },
+    });
+    const before = await client.replacementRequest.count({
+      where: { makeupCreditId: credits.winner },
+    });
+    expect(
+      await refusal(() => deleteAbsence(db, admin(), absence.id, [], NOW)),
+    ).toBe("absences.errors.ABSENCE_CREDIT_USED");
+    expect(
+      await client.replacementRequest.count({
+        where: { makeupCreditId: credits.winner },
+      }),
+    ).toBe(before);
+    expect(
+      await client.makeupCredit.findUniqueOrThrow({
+        where: { id: credits.winner },
+      }),
+    ).toMatchObject({ status: "USED" });
+  });
+
+  it("a former student of a 1-on-1 group doesn't see the next student's rescheduled lessons", async () => {
+    const pia = await client.user.create({
+      data: { name: "Pia", email: `pia-${randomUUID()}@example.test` },
+    });
+    users.push(pia.id);
+    await client.membership.create({
+      data: { schoolId, userId: pia.id, role: "STUDENT" },
+    });
+    const profile = await client.studentProfile.create({
+      data: { schoolId, userId: pia.id, levelId: ids.b1 },
+    });
+    await client.groupMembership.create({
+      data: {
+        schoolId,
+        groupId: ids.oneOnOne,
+        studentId: profile.id,
+        joinedAt: new Date("2026-08-01T00:00:00Z"),
+        leftAt: new Date("2026-09-01T00:00:00Z"),
+      },
+    });
+    // Olga has upcoming rescheduled lessons in the group by now.
+    expect(
+      await client.lesson.count({
+        where: {
+          groupId: ids.oneOnOne,
+          rescheduledFromId: { not: null },
+          status: "SCHEDULED",
+        },
+      }),
+    ).toBeGreaterThan(0);
+    const view = await loadStudentAbsences(
+      db,
+      { id: profile.id, userId: pia.id },
+      { shownHistory: 20 },
+      NOW,
+    );
+    expect(view.bookings).toEqual([]);
+    expect(JSON.stringify(view)).not.toContain("Tess");
+  });
+
+  it("student actions refuse other students' credits, lessons and bookings, and staff", async () => {
+    const olgaCredit = await creditOf(ids.olga, lessons.oThu);
+    const someBooking = await client.replacementRequest.findFirstOrThrow({
+      where: { makeupCreditId: credits.winner, status: "AUTO_APPROVED" },
+    });
+    const startsAt = local("2026-10-28", "16:00").toISOString();
+    const cases: [string, () => Promise<unknown>][] = [
+      [
+        "another student's credit in the reschedule sheet",
+        () =>
+          loadRescheduleSheet(
+            db,
+            { userId: user.Cara },
+            { creditId: olgaCredit.id },
+            NOW,
+          ),
+      ],
+      [
+        "a 1-on-1 the student isn't in",
+        () =>
+          loadRescheduleSheet(
+            db,
+            { userId: user.Cara },
+            { lessonId: lessons.oFri },
+            NOW,
+          ),
+      ],
+      [
+        "rescheduling with another student's credit",
+        () =>
+          rescheduleLesson(
+            db,
+            { userId: user.Cara },
+            { creditId: olgaCredit.id, startsAt },
+            NOW,
+          ),
+      ],
+      [
+        "rescheduling a 1-on-1 the student isn't in",
+        () =>
+          rescheduleLesson(
+            db,
+            { userId: user.Cara },
+            { lessonId: lessons.oFri, startsAt },
+            NOW,
+          ),
+      ],
+      [
+        "cancelling another student's booking",
+        () => cancelBooking(db, { userId: user.Eve }, someBooking.id, NOW),
+      ],
+      [
+        "booking with another student's credit",
+        () =>
+          bookReplacement(
+            db,
+            { userId: user.Eve },
+            { creditId: credits.winner, targetLessonId: lessons.bThu },
+            NOW,
+          ),
+      ],
+      ...(["Tess", "Admin"] as const).flatMap(
+        (name): [string, () => Promise<unknown>][] => [
+          [
+            `${name} cancelling a booking`,
+            () =>
+              cancelBooking(db, { userId: user[name] }, someBooking.id, NOW),
+          ],
+          [
+            `${name} rescheduling a student's 1-on-1`,
+            () =>
+              rescheduleLesson(
+                db,
+                { userId: user[name] },
+                { lessonId: lessons.oFri, startsAt },
+                NOW,
+              ),
+          ],
+          [
+            `${name} loading a student's reschedule sheet`,
+            () =>
+              loadRescheduleSheet(
+                db,
+                { userId: user[name] },
+                { creditId: olgaCredit.id },
+                NOW,
+              ),
+          ],
+        ],
+      ),
+    ];
+    const before = await client.replacementRequest.findMany({
+      where: { schoolId },
+      orderBy: { id: "asc" },
+    });
+    for (const [name, call] of cases) {
+      expect(await refusal(call), name).toBe("common.error.notFound");
+    }
+    expect(
+      await client.replacementRequest.findMany({
+        where: { schoolId },
+        orderBy: { id: "asc" },
+      }),
+    ).toEqual(before);
   });
 });

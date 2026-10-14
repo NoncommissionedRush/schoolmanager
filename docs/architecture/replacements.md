@@ -137,9 +137,13 @@ uses the admin reschedule (§7). Audit: `absence.reported` with the actor.
   - If its credit is `USED`, the delete is refused (`ABSENCE_CREDIT_USED`).
     The admin first rejects the replacement or cancels the rescheduled
     lesson, which releases the credit (§4), and then deletes. A delete
-    never cascades into bookings.
+    never cancels or moves a booking: an active one keeps the credit
+    `USED` and refuses the delete.
   - Otherwise the report and its credit (`AVAILABLE` or `EXPIRED`) are
-    deleted together.
+    deleted together, with the bookings the credit backed before it came
+    back (`CANCELLED` or `REJECTED`; they reference the credit, so they
+    can't outlive it). Their ids are kept in the `absence.deleted` audit
+    entry (CARM-43 review).
   - For a 1-on-1 the lesson that was cancelled as `STUDENT_CANCELLED`
     returns to `SCHEDULED`, if it hasn't started. Before that,
     `checkLesson` is run on it, the same check the admin's lesson move
