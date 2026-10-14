@@ -25,12 +25,12 @@ the conflict checker); a replacement is _active_ when its status is
 
 ## 1. Where things live
 
-| Path                                    | What                                                                                                              |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `src/server/scheduling/replacements.ts` | Pure rules: `earnsCredit`, `creditExpiry`, `creditState`, `seatsTaken`, `checkReplacement`, `studentClashes`      |
-| `src/server/scheduling/reschedule.ts`   | Pure rules: `checkReschedule`, `rescheduleOptions` (built on `checkLesson`)                                       |
-| `src/server/replacements/service.ts`    | Database service (Developer, CARM-42/43): loads plain data, calls the rules, writes in one transaction per action |
-| `messages/en-GB/replacements.json`      | Reason messages (`replacements.reasons.<CODE>`), service errors                                                   |
+| Path                                    | What                                                                                                                              |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `src/server/scheduling/replacements.ts` | Pure rules: `earnsCredit`, `creditExpiry`, `creditState`, `seatsTaken`, `checkReplacement`, `reviewReplacement`, `studentClashes` |
+| `src/server/scheduling/reschedule.ts`   | Pure rules: `checkReschedule`, `rescheduleOptions` (built on `checkLesson`)                                                       |
+| `src/server/replacements/service.ts`    | Database service (Developer, CARM-42/43): loads plain data, calls the rules, writes in one transaction per action                 |
+| `messages/en-GB/replacements.json`      | Reason messages (`replacements.reasons.<CODE>`), service errors                                                                   |
 
 The rule files follow the scheduling module's contract: no Prisma, no
 Next.js, plain-data inputs, deterministic output (reasons sorted by a fixed
@@ -76,15 +76,43 @@ A student may report an absence for lesson `L` when all hold:
 | Group       | `AbsenceReport` + `MakeupCredit` (usable for a group replacement). The lesson runs for the others.                                                    | `AbsenceReport` only, no credit. Lesson runs.                                               |
 | 1-on-1      | `AbsenceReport` + `MakeupCredit` (usable only to reschedule, §7). The lesson is **cancelled** (`STUDENT_CANCELLED`) so the teacher and room are free. | `AbsenceReport` only, no credit. The lesson stays `SCHEDULED` (the teacher keeps the time). |
 
+- **A rescheduled 1-on-1 lesson never earns a new credit.** If the lesson
+  is the result of a reschedule (§7, `Lesson.rescheduledFromId` set), the
+  student's options before the cutoff are:
+  - _Reschedule_ again with the **same** credit, which is cancelled and
+    moved as one step.
+  - _Cancel_, which records the absence and releases the original credit
+    with its original `expiresAt`, or `EXPIRED` if that date has passed.
+
+  After the cutoff they get the same as any late 1-on-1 cancellation. That
+  way repeated cancelling can never move the expiry back (§4).
+
 - A report is **final** in v1: students cannot withdraw it. Withdrawing
   would take back a seat a replacement student may already hold (§5), and
-  for a 1-on-1 the cancelled lesson's time may already be taken. An admin
-  can delete a report (and its unused credit) if it was a mistake; audited
-  as `absence.deleted`.
+  for a 1-on-1 the cancelled lesson's time may already be taken.
+- **Admins can delete a report** if it was a mistake. The deletion is
+  audited as `absence.deleted`.
+  - If its credit is `USED`, the delete is refused (`ABSENCE_CREDIT_USED`).
+    The admin first rejects the replacement or cancels the rescheduled
+    lesson, which releases the credit (§4), and then deletes. A delete
+    never cascades into bookings.
+  - Otherwise the report and its credit (`AVAILABLE` or `EXPIRED`) are
+    deleted together.
+  - For a 1-on-1 the lesson that was cancelled as `STUDENT_CANCELLED`
+    returns to `SCHEDULED`, if it hasn't started. Before that,
+    `checkLesson` is run on it, the same check the admin's lesson move
+    uses. Blocking conflicts refuse the delete, because the teacher or
+    room may have been taken in the meantime. Overridable conflicts need
+    the admin to acknowledge them.
+  - For a group lesson the student takes their seat back, and the lesson
+    may then be over capacity (flagged, §5).
 - No reports after a lesson has started — that is attendance, which v1
   does not track (owner decision, `data-model.md`).
-- If the school later cancels the missed lesson (holiday, timetable change)
-  the credit stays: the student has it already and nobody else is harmed.
+- If the school cancels the missed lesson without a successor (a holiday,
+  an ended slot, or a timetable change that moves it out of that week) the
+  credit stays. The student already has it and nobody else is harmed.
+  When a slot split has a **successor** lesson in the same week, the
+  absence moves to it instead (§5, _Slot splits_).
 
 ## 4. Makeup credit lifecycle
 
@@ -110,9 +138,11 @@ spent on a lesson that **starts before** `expiresAt`, and only while
 `status = AVAILABLE` and `now ≥ expiresAt`, otherwise `status`. Every read
 and every booking uses the effective state, so correctness never depends on
 a background job. The stored `status` is brought up to date lazily — any
-write touching the credit, plus an idempotent
-`UPDATE … SET status = 'EXPIRED' WHERE status = 'AVAILABLE' AND expires_at <= now()`
-run when a student or admin list loads (cheap, indexed). A real scheduler
+write touching the credit, plus an idempotent, school-scoped
+`UPDATE makeup_credits SET status = 'EXPIRED' WHERE school_id = $school AND status = 'AVAILABLE' AND expires_at <= $now`
+run when a student or admin list loads (cheap, indexed by
+`(school_id, status, expires_at)`). `$now` is the request's `now`, the
+same instant the rules use, never the database's `now()` (§8). A real scheduler
 can replace that later (P5 notifications will want one anyway).
 
 **Releasing a used credit.** When an active replacement stops being active
@@ -124,10 +154,13 @@ goes back:
 | Student cancels their replacement before the cutoff        | `AVAILABLE` with the same `expiresAt` (or `EXPIRED` if that has passed)                 |
 | Admin **rejects** the replacement                          | `AVAILABLE`, `expiresAt = max(expiresAt, now + 7 days)` — the student did nothing wrong |
 | The target / rescheduled lesson is cancelled by the school | `AVAILABLE`, `expiresAt = max(expiresAt, now + 7 days)`                                 |
+| Student cancels their rescheduled 1-on-1 before the cutoff | `AVAILABLE` with the same `expiresAt` (or `EXPIRED`), no new credit (§3)                |
 
 The 7-day grace is a constant (`RELEASE_GRACE_DAYS`) in the rules module,
-not a setting; listed as an open question below. `usedAt` is cleared on
-release. A credit is never deleted once used (except with its absence, §3).
+not a setting; listed as an open question below. `usedAt` and
+`rescheduledLessonId` are cleared on release. The rescheduled lesson keeps
+its own link back (`Lesson.rescheduledFromId`), so "Rescheduled to …"
+history never depends on the credit. A credit is only deleted with its absence, and never while `USED` (§3).
 
 **Admin override and approve** do not change the credit (it stays `USED`).
 An admin cannot mint credits in v1.
@@ -171,18 +204,46 @@ automatically because the room changed:
   `seatsTaken(L)` instead of the enrolled count (see §9, checker change).
   The admin either picks another room or overrides; the override is audited
   as today.
-- A timetable slot edit regenerates lessons. Lessons with replacements are
-  _touched_, so `planLessonSync` **cancels** them (`TIMETABLE_CHANGED`)
-  rather than deleting them; their active replacements are released
-  (`CANCELLED`, reason `LESSON_CANCELLED`) and the credits returned with
-  grace (§4). The editor's existing confirmation copy ("lessons with
-  absences … are kept as cancelled") already covers this.
+- A timetable slot edit regenerates lessons. See _Slot splits_ below.
 - A lesson over capacity takes no further bookings until seats free up, and
   the admin review queue flags it (`OVER_CAPACITY`).
 
 Admins adding a member to a group do not re-check replacement seats in v1;
 an upcoming lesson that ends up over capacity is flagged in the review
 queue the same way.
+
+### Slot splits
+
+Editing a slot that already has lessons, from date D, **splits** it
+(`planSlotEdit`). The old slot ends on D − 1, and a new slot with a new id
+generates lessons from D. Without a rule, the new slot would bring back
+occurrences the student already cancelled. The absence would stay on the
+cancelled old lesson, so the student would count again in `seatsTaken` and
+`studentClashes`, and would still hold the credit.
+
+An absence belongs to the **weekly occurrence**, not to the row. So in a
+split, every old-slot lesson `L` from D on that is being cancelled or is
+already `STUDENT_CANCELLED` is matched with its **successor** `S`. `S` is
+the new slot's occurrence in the same ISO week, in the school's time zone,
+if there is one. A weekday change still matches, because a weekly slot
+has one occurrence per week. `planSlotEdit` returns these pairs as
+`carryOver: { fromLessonId, toSlotId, toDate }[]`. It is pure and
+deterministic, and I'll add it to `lesson-sync.ts`. In the same
+transaction the service then does the following:
+
+| What `L` has                     | What happens with successor `S`                                                                                                                                                                                                                                                           |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Absence reports (group lesson)   | Moved to `S`, with their credits' `sourceLessonId` and the `originalLessonId` of their replacements. No new credit is earned, and `expiresAt` stays the same. The student is absent from `S`, so they don't count in its seats or their clashes.                                          |
+| `STUDENT_CANCELLED` (1-on-1)     | `S` is created already `CANCELLED` (`STUDENT_CANCELLED`). Absence, credit and the rescheduled lesson's `rescheduledFromId` are moved to `S`. That keeps lesson generation idempotent through the existing `(slot, occurrenceDate)` row, so the student never gets the week's lesson back. |
+| Active replacements **into** `L` | Moved to `S` if `reviewReplacement` on `S` (§6) has no failing reasons. Otherwise they are released (`CANCELLED`, `LESSON_CANCELLED`) and the credit is returned with grace (§4).                                                                                                         |
+
+Once everything is moved, `L` is judged by the existing rule: it is
+deleted if it is untouched, and cancelled (`TIMETABLE_CHANGED`) otherwise,
+for example when it still has a log or notes. Without a successor, because
+the slot was ended, a holiday was added, or the new weekday falls before D
+in that week, nothing moves. `L` is cancelled and its replacements are
+released as above. Its absences and credits stay (§3). The editor's
+existing confirmation copy still holds.
 
 ## 6. Group replacement eligibility
 
@@ -245,10 +306,27 @@ replacement; they cancel the replacement instead.
 ### Admin review
 
 New replacements are `AUTO_APPROVED` and show in the admin review queue
-until reviewed. The queue evaluates `checkReplacement` live (ignoring
-`LESSON_STARTED` and the credit's `USED` state, which are expected), so an
-admin sees bookings that became problematic after the fact: level changed,
-room changed, over capacity, new clash.
+until reviewed. The queue evaluates **`reviewReplacement(booking, target,
+now)`** live, so an admin sees bookings that became problematic after the
+fact: level changed, room changed, over capacity, new clash.
+`reviewReplacement` is `checkReplacement` with **the booking under review
+left out of every input**, so it never counts against itself:
+
+- `ALREADY_ATTENDING` ignores this booking. It still fires when the student
+  has since joined the target's group, or holds another active booking
+  into it.
+- `STUDENT_CLASH` ignores this booking's target as one of "the student's
+  lessons".
+- `ROOM_FULL` uses `seatsTaken(target) − 1` (without this booking) `+ 1 >
+capacity`, i.e. `seatsTaken(target) > capacity`. A lesson that is exactly
+  full passes.
+- `CREDIT_UNAVAILABLE` accepts the credit being `USED` **by this
+  booking**.
+- `LESSON_STARTED` isn't evaluated, because the actions below are only
+  offered before the start.
+
+The same function checks an Override's new target, and the successor in a
+slot split (§5). There the booking is left out the same way.
 
 | Action       | Allowed on                          | Effect                                                                                                                                                                                                                                                      |
 | ------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -272,9 +350,17 @@ another student's lesson.
 
 **Representation.** The original lesson is **cancelled**
 (`cancelReason STUDENT_CANCELLED`, §3) and the new time is a new **ad-hoc**
-lesson (`timetableSlotId` and `occurrenceDate` null) in the same group,
-linked from the credit (`MakeupCredit.rescheduledLessonId`). Why not move
-the lesson in place:
+lesson (`timetableSlotId` and `occurrenceDate` null) in the same group.
+It's linked two ways:
+
+- `Lesson.rescheduledFromId` points to the lesson it replaces. This is
+  permanent history and survives a release.
+- `MakeupCredit.rescheduledLessonId` points to the lesson the credit is
+  currently spent on. It is cleared when the credit is released.
+
+Re-rescheduling chains these links: the new lesson points to the previous
+ad-hoc lesson, and the credit moves to the new one. Why not move the
+lesson in place:
 
 - The original stays in history at its original time ("Rescheduled to Thu
   14 Nov 16:00"), and the generated `(slot, occurrenceDate)` row keeps lesson
@@ -289,6 +375,8 @@ the lesson in place:
 steps in one transaction (report absence → credit → spend it on the chosen
 time). "Cancel" alone gives the student an `AVAILABLE` credit to reschedule
 later from the Credits screen. After the cutoff neither is offered (§3).
+On a lesson that is itself a reschedule, both reuse the original credit
+and never mint a new one (§3).
 
 **Where it can move** — `checkReschedule(calendar, request, now)`; every
 condition is blocking for students:
@@ -342,9 +430,13 @@ everything, then writes.
 - Two students booking the last seat: the second waits for the lock,
   recounts `seatsTaken`, gets `ROOM_FULL`.
 - The same student spending one credit twice (two tabs): the credit update
-  is conditional — `UPDATE makeup_credits SET status='USED' … WHERE id = ?
-AND status = 'AVAILABLE' AND expires_at > now()` — and must affect one
-  row; plus the partial unique indexes below.
+  is conditional — `UPDATE makeup_credits SET status='USED' … WHERE
+school_id = $school AND id = $id AND status = 'AVAILABLE' AND expires_at >
+$now` — and must affect one row; plus the partial unique indexes below.
+- **One clock.** The service takes `now` once per request and passes it to
+  the rules and, as a parameter, to every SQL condition. No SQL in this
+  area uses the database's `now()`, so the rules and the conditional
+  update can't disagree about expiry at the boundary.
 - A booking racing a timetable change (slot edit cancels the target, admin
   moves the lesson to a smaller room, admin publishes a holiday) or a
   reschedule racing another teacher booking: same lock, so one of them sees
@@ -384,8 +476,9 @@ absence and credit parts; CARM-43 the replacement and reschedule parts).
   and `@unique`; `expiresAt` **required** (credits always expire).
 - Add `usedAt DateTime?` (set with `USED`, cleared on release).
 - Add `rescheduledLessonId String? @unique` → `Lesson` (composite FK,
-  `onDelete: Restrict`), the ad-hoc lesson a 1-on-1 credit was spent on.
-  CHECK: `rescheduled_lesson_id IS NULL OR status = 'USED'`.
+  `onDelete: Restrict`), the ad-hoc lesson a 1-on-1 credit is currently
+  spent on. CHECK: `rescheduled_lesson_id IS NULL OR status = 'USED'`.
+  History lives on `Lesson.rescheduledFromId`, not here.
 - Keep `@@unique([studentId, sourceLessonId])` and the status index; add
   `@@index([schoolId, status, expiresAt])` for the lazy expiry update.
 
@@ -409,9 +502,13 @@ absence and credit parts; CARM-43 the replacement and reschedule parts).
 
 **`Lesson`**
 
-- No new column. New `cancelReason` value `STUDENT_CANCELLED`
+- Add `rescheduledFromId String? @unique`, a composite self-FK
+  `[schoolId, rescheduledFromId]` → `Lesson` (`onDelete: Restrict`). It is
+  the lesson this one replaces after a 1-on-1 reschedule. CHECK:
+  `rescheduled_from_id IS NULL OR timetable_slot_id IS NULL` (only ad-hoc
+  lessons are reschedules).
+- New `cancelReason` value `STUDENT_CANCELLED`
   (`scheduling.cancelReasons.STUDENT_CANCELLED` "Cancelled by student").
-  The reschedule link lives on the credit.
 
 **`AuditLog`** — new actions: `school.settings.updated`, `absence.reported`,
 `absence.deleted`, `replacement.booked | cancelled | approved | rejected |
@@ -425,10 +522,12 @@ overridden`, `lesson.rescheduled`.
   optional `replacements: { lessonId, studentId }[]` and `absences` in
   `SchedulingContext`; `checkSlot` keeps counting enrolled students (a
   weekly slot has no per-date replacements). I own this change.
-- `planLessonSync`: when it cancels a lesson, release its active
-  replacements (`LESSON_CANCELLED`) and the credits of a cancelled
-  rescheduled 1-on-1 lesson. The plan already lists cancellations; the
-  service applies the releases in the same transaction.
+- `planSlotEdit` / `planLessonSync`: return the `carryOver` pairs for a
+  split (§5, _Slot splits_), and create successors of `STUDENT_CANCELLED`
+  lessons as cancelled. When the plan cancels a lesson without a
+  successor, the service releases its active replacements
+  (`LESSON_CANCELLED`) and the credit of a cancelled rescheduled 1-on-1
+  lesson in the same transaction. I own the lesson-sync part.
 - Student lesson access (`canStudentSeeLesson`): an active replacement
   into a lesson gives the same access as membership (log and homework once
   it has started, never `TeacherNote`). Rejected or cancelled replacements
@@ -442,6 +541,18 @@ overridden`, `lesson.rescheduled`.
   earns a credit; a target starting exactly at `expiresAt` does not
   qualify; back-to-back is not a clash; DST weeks for expiry and the
   15-minute grid), each release path in §4.
+- Unit, the cases from the CARM-40 review:
+  - Cancelling or re-rescheduling a rescheduled 1-on-1, any number of
+    times, never creates a credit and never changes `expiresAt`.
+  - `reviewReplacement` passes on a booking into an exactly full lesson,
+    and doesn't report its own target as a clash or its own credit as
+    used.
+  - Slot splits: same-day and weekday-change successors; a successor
+    falling before D; a 1-on-1 `STUDENT_CANCELLED` successor created
+    cancelled and staying so after `planLessonSync` runs again
+    (idempotent); a replacement moved versus released.
+  - Admin absence delete: refused while the credit is `USED`; a 1-on-1
+    lesson is restored only without blocking conflicts.
 - Property (seeded realistic schools from `testing/`, 20 teachers, 60
   groups, 15 rooms, ~330 students): apply a random sequence of absences,
   bookings, cancellations, rejections and room moves through the rules, and
