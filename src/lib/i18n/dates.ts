@@ -124,18 +124,44 @@ export function formatCalendarDate(
   }).format(parse(date));
 }
 
-/** Week label for a timetable toolbar, e.g. "13–19 Oct 2026" for en-GB. */
+/**
+ * Formats a range with a fixed separator between its start and end parts.
+ * ICU versions disagree on the separator's spacing ("12–18" vs "12 – 18",
+ * thin vs regular spaces), so the output would otherwise vary by runtime.
+ */
+function formatRangeWith(
+  formatter: Intl.DateTimeFormat,
+  start: Date,
+  end: Date,
+  separator: string,
+): string {
+  const parts = formatter.formatRangeToParts(start, end);
+  const lastStart = parts.findLastIndex((part) => part.source === "startRange");
+  const firstEnd = parts.findIndex((part) => part.source === "endRange");
+  // Start and end collapsed into one value (e.g. same day): nothing to join.
+  if (lastStart === -1 || firstEnd === -1) return formatter.format(start);
+  return [
+    ...parts.slice(0, lastStart + 1),
+    { value: separator },
+    ...parts.slice(firstEnd),
+  ]
+    .map((part) => part.value)
+    .join("");
+}
+
+/** Week label for a timetable toolbar, e.g. "13 – 19 Oct 2026" for en-GB. */
 export function formatWeekRange(
   locale: string,
   start: CalendarDate,
   end: CalendarDate = addDays(start, 6),
 ): string {
-  return new Intl.DateTimeFormat(locale, {
+  const formatter = new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
     timeZone: "UTC",
-  }).formatRange(parse(start), parse(end));
+  });
+  return formatRangeWith(formatter, parse(start), parse(end), " – ");
 }
 
 /** Lesson time range in the school's time zone, e.g. "09:30–11:00". */
@@ -145,9 +171,10 @@ export function formatTimeRange(
   end: Date,
   timeZone: string,
 ): string {
-  return new Intl.DateTimeFormat(locale, {
+  const formatter = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
     timeZone,
-  }).formatRange(start, end);
+  });
+  return formatRangeWith(formatter, start, end, "–");
 }

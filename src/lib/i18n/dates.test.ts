@@ -89,13 +89,14 @@ describe("formatting (en-GB)", () => {
   });
 
   it("formats week ranges", () => {
-    // Intl separates multi-month ranges with thin spaces (U+2009).
-    expect(formatWeekRange("en-GB", "2026-10-12")).toBe("12–18 Oct 2026");
-    expect(formatWeekRange("en-GB", "2026-10-26")).toBe(
-      "26 Oct\u2009–\u20091 Nov 2026",
-    );
+    // The separator is fixed so output doesn't depend on the ICU version.
+    expect(formatWeekRange("en-GB", "2026-10-12")).toBe("12 – 18 Oct 2026");
+    expect(formatWeekRange("en-GB", "2026-10-26")).toBe("26 Oct – 1 Nov 2026");
     expect(formatWeekRange("en-GB", "2026-12-28")).toBe(
-      "28 Dec 2026\u2009–\u20093 Jan 2027",
+      "28 Dec 2026 – 3 Jan 2027",
+    );
+    expect(formatWeekRange("en-GB", "2026-10-14", "2026-10-14")).toBe(
+      "14 Oct 2026",
     );
   });
 
