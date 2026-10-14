@@ -1,0 +1,92 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  generateLessonOccurrences,
+  type SlotTemplate,
+} from "./generate-lessons";
+
+const monday: SlotTemplate = {
+  id: "slot-mon",
+  groupId: "g1",
+  teacherId: "t1",
+  roomId: "r1",
+  weekday: 1,
+  startMinute: 9 * 60,
+  endMinute: 10 * 60 + 30,
+};
+const wednesday: SlotTemplate = { ...monday, id: "slot-wed", weekday: 3 };
+
+// 2026-10-12 is a Monday; DST ends 2026-10-25.
+const term = { startDate: "2026-10-12", endDate: "2026-11-01" };
+const timeZone = "Europe/Bratislava";
+
+describe("generateLessonOccurrences", () => {
+  it("creates one lesson per matching weekday in the term", () => {
+    const lessons = generateLessonOccurrences({
+      slots: [monday, wednesday],
+      term,
+      holidays: [],
+      timeZone,
+    });
+    expect(lessons.map((l) => `${l.timetableSlotId}@${l.date}`)).toEqual([
+      "slot-mon@2026-10-12",
+      "slot-wed@2026-10-14",
+      "slot-mon@2026-10-19",
+      "slot-wed@2026-10-21",
+      "slot-mon@2026-10-26",
+      "slot-wed@2026-10-28",
+    ]);
+  });
+
+  it("skips holidays (inclusive ranges)", () => {
+    const lessons = generateLessonOccurrences({
+      slots: [monday, wednesday],
+      term,
+      holidays: [{ startDate: "2026-10-19", endDate: "2026-10-21" }],
+      timeZone,
+    });
+    expect(lessons.map((l) => l.date)).toEqual([
+      "2026-10-12",
+      "2026-10-14",
+      "2026-10-26",
+      "2026-10-28",
+    ]);
+  });
+
+  it("keeps the local wall-clock time across a DST change", () => {
+    const [before, , after] = generateLessonOccurrences({
+      slots: [monday],
+      term,
+      holidays: [],
+      timeZone,
+    });
+    expect(before.startsAt.toISOString()).toBe("2026-10-12T07:00:00.000Z");
+    expect(before.endsAt.toISOString()).toBe("2026-10-12T08:30:00.000Z");
+    expect(after.startsAt.toISOString()).toBe("2026-10-26T08:00:00.000Z");
+  });
+
+  it("clips an explicit range to the term", () => {
+    const lessons = generateLessonOccurrences({
+      slots: [monday],
+      term,
+      holidays: [],
+      timeZone,
+      range: { startDate: "2026-01-01", endDate: "2026-10-18" },
+    });
+    expect(lessons.map((l) => l.date)).toEqual(["2026-10-12"]);
+  });
+
+  it("copies group, teacher and room from the slot", () => {
+    const [lesson] = generateLessonOccurrences({
+      slots: [monday],
+      term,
+      holidays: [],
+      timeZone,
+    });
+    expect(lesson).toMatchObject({
+      groupId: "g1",
+      teacherId: "t1",
+      roomId: "r1",
+    });
+  });
+});
