@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — Admin data screens (CARM-22)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .hatch {
+        background: repeating-linear-gradient(
+          135deg,
+          #fde68a 0 4px,
+          #fffbeb 4px 8px
+        );
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <!-- Wireframe control bar (not part of the product) -->
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Admin data</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* ---------------------------------------------------------------- data */
+      const TEACHERS = [
+        ["Tomas Horvat", "tomas@lingua.test", 4, 9, "#0d9488"],
+        ["Ana Kral", "ana@lingua.test", 3, 7, "#ea580c"],
+        ["Peter Varga", "peter@lingua.test", 2, 4, "#7c3aed"],
+        ["Eva Simon", "eva@lingua.test", 5, 11, "#e11d48"],
+      ];
+      const STUDENTS = [
+        [
+          "Mia Kovac",
+          "mia@lingua.test",
+          "B1",
+          "B1 Evening",
+          "+421 900 111 222",
+        ],
+        [
+          "Jan Novak",
+          "jan@lingua.test",
+          "B1",
+          "B1 Evening, B1 Grammar 1-on-1",
+          "+421 900 333 444",
+        ],
+        ["Lea Toth", "lea@lingua.test", "A2", "A2 Kids", ""],
+        ["Marek Blaho", "marek@lingua.test", "C1", "—", "+421 905 555 666"],
+        ["Zuzana Hudak", "zuzana@lingua.test", "B2", "B2 Conversation", ""],
+      ];
+      const GROUPS = [
+        [
+          "B1 Evening",
+          "Group",
+          "B1",
+          "General English B1",
+          "8 / 10",
+          "Tomas Horvat",
+        ],
+        ["A2 Kids", "Group", "A2", "—", "10 / 10", "Ana Kral"],
+        ["B1 Grammar 1-on-1", "1-on-1", "B1", "—", "1 / 1", "Tomas Horvat"],
+        [
+          "B2 Conversation",
+          "Group",
+          "B2",
+          "Conversation B2",
+          "5 / 8",
+          "Eva Simon",
+        ],
+      ];
+      const ROOMS = [
+        ["Room 1", "Physical", "12", "", 6],
+        ["Room 2", "Physical", "10", "", 5],
+        ["Room 3", "Physical", "8", "", 4],
+        ["Online 1", "Online", "No limit", "meet.example.com", 3],
+        ["Room 4", "Physical", "6", "", 1, true],
+      ];
+      const LEVELS = [
+        ["A1", "Beginner", 6, 1],
+        ["A2", "Elementary", 14, 2],
+        ["B1", "Intermediate", 21, 3],
+        ["B2", "Upper intermediate", 9, 2],
+        ["C1", "Advanced", 3, 0],
+        ["C2", "Proficiency", 0, 0, true],
+      ];
+
+      /* --------------------------------------------------------------- helpers */
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          destructive: "bg-destructive text-white",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const badge = (t, tone = "muted") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border ${c}">${t}</span>`;
+      };
+      const field = (label, value = "", opts = {}) => `
+        <div class="space-y-2">
+          <label class="block font-medium">${label}${opts.req ? ' <span class="text-muted-foreground font-normal">(required)</span>' : opts.opt ? ' <span class="text-muted-foreground font-normal">(optional)</span>' : ""}</label>
+          <div class="flex gap-2"><input class="h-9 w-full rounded-md border ${opts.err ? "border-destructive" : "border-input"} px-3" value="${value}" placeholder="${opts.ph || ""}" ${opts.ro ? "readonly" : ""} aria-invalid="${!!opts.err}" />${opts.after || ""}</div>
+          ${opts.hint ? `<p class="text-xs text-muted-foreground">${opts.hint}</p>` : ""}
+          ${opts.err ? `<p class="text-xs text-destructive">${opts.err}</p>` : ""}
+        </div>`;
+      const select = (label, value, opts = {}) =>
+        field(label, value + " ▾", { ...opts, ro: true });
+      const pageHeader = (title, desc, action) => `
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div><h1 class="text-2xl font-semibold">${title}</h1>${desc ? `<p class="text-muted-foreground mt-1">${desc}</p>` : ""}</div>
+          ${action || ""}
+        </div>`;
+      const filterBar = (search, selects = [], status = true) => `
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <input type="search" class="h-9 w-72 rounded-md border border-input px-3 bg-white" placeholder="${search}" value="${cur.state === 3 ? "xyz" : ""}" />
+          ${selects.map((s) => `<button class="h-9 px-3 rounded-md border border-input bg-white">${s} ▾</button>`).join("")}
+          ${status ? `<button class="h-9 px-3 rounded-md border border-input bg-white">Status: Active ▾</button>` : ""}
+          ${cur.state === 3 ? `<a href="#" class="text-primary underline ml-2">Clear filters</a>` : ""}
+        </div>`;
+      const table = (cols, rows) => `
+        <div class="bg-white border border-border rounded-lg overflow-hidden">
+          <table class="w-full text-left">
+            <thead class="bg-muted text-muted-foreground"><tr>${cols.map((c) => `<th class="px-3 py-2 font-medium">${c}</th>`).join("")}<th class="w-10"><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody>${rows.map((r) => `<tr class="border-t border-border hover:bg-accent">${r.map((c, i) => `<td class="px-3 py-2 ${i === 0 ? "font-medium" : ""} tnum">${i === 0 ? `<a href="#" class="hover:underline">${c}</a>` : c}</td>`).join("")}<td class="px-2"><button class="w-8 h-8 rounded-md hover:bg-muted" aria-label="Actions for ${String(r[0]).replace(/<[^>]+>/g, "")}">⋯</button></td></tr>`).join("")}</tbody>
+          </table>
+          <div class="flex items-center justify-between px-3 py-2 border-t border-border text-muted-foreground"><span class="tnum">Showing 1–${rows.length} of ${rows.length}</span><span class="flex gap-2">${btn("Previous", "outline")}${btn("Next", "outline")}</span></div>
+        </div>`;
+      const skeletonTable = () => `
+        <div class="bg-white border border-border rounded-lg p-3 space-y-3">${Array.from({ length: 8 }, () => `<div class="flex gap-4"><div class="skeleton h-4 w-40"></div><div class="skeleton h-4 w-56"></div><div class="skeleton h-4 w-16"></div><div class="skeleton h-4 w-24"></div></div>`).join("")}</div>`;
+      const emptyCard = (title, desc, action, extra = "") => `
+        <div class="bg-white border border-border rounded-lg py-16 px-6 text-center">
+          <div class="w-10 h-10 rounded-full bg-muted mx-auto mb-4"></div>
+          <h2 class="text-lg font-semibold">${title}</h2>
+          <p class="text-muted-foreground mt-1 max-w-md mx-auto">${desc}</p>
+          <div class="mt-4 flex justify-center gap-2">${action ? btn(action) : ""}${extra}</div>
+        </div>`;
+      const noResults = (ent) => `
+        <div class="bg-white border border-border rounded-lg py-12 text-center"><p>No ${ent} match your filters.</p><a href="#" class="text-primary underline">Clear filters</a></div>`;
+      const errorAlert = () => `
+        <div role="alert" class="border border-red-300 bg-red-50 text-red-700 rounded-lg p-4 flex items-start justify-between gap-4">
+          <div><p class="font-semibold">Couldn't load this page</p><p>Check your connection and try again.</p></div>${btn("Try again", "outline")}
+        </div>`;
+      const dialog = (title, body, footer, w = "max-w-lg") => `
+        <div class="absolute inset-0 bg-black/50 grid place-items-center p-6 z-20">
+          <div role="dialog" aria-modal="true" aria-label="${title}" class="bg-white rounded-lg shadow-lg w-full ${w} p-6">
+            <div class="flex items-start justify-between mb-4"><h2 class="text-lg font-semibold">${title}</h2><button aria-label="Close" class="w-8 h-8 rounded-md hover:bg-muted">✕</button></div>
+            <div class="space-y-4">${body}</div>
+            <div class="flex justify-end gap-2 mt-6">${footer}</div>
+          </div>
+        </div>`;
+
+      const NAV = [
+        ["Dashboard", "dashboard"],
+        ["— Schedule"],
+        ["Timetable", "timetable"],
+        ["— People"],
+        ["Students", "students"],
+        ["Teachers", "teachers"],
+        ["— Academics"],
+        ["Courses & groups", "groups"],
+        ["Skill levels", "levels"],
+      ];
+      const shell = (active, content, overlay = "") => `
+        <div class="relative w-[1280px] h-[820px] bg-muted border border-slate-300 shadow-xl overflow-hidden flex flex-col">
+          <header class="h-14 bg-white border-b border-border flex items-center gap-3 px-4 shrink-0">
+            <span class="w-8 h-8 rounded-md bg-primary text-white grid place-items-center text-xs font-semibold">LL</span>
+            <span class="font-semibold">Lingua Language School</span>
+            <span class="ml-auto flex items-center gap-2"><span class="w-8 h-8 rounded-full bg-slate-200 grid place-items-center text-xs">AN</span>Anna ▾</span>
+          </header>
+          <div class="flex flex-1 min-h-0">
+            <nav aria-label="Main" class="w-64 bg-white border-r border-border p-3 flex flex-col gap-0.5 shrink-0">
+              ${NAV.map(([l, k]) => (l.startsWith("—") ? `<div class="text-xs text-muted-foreground px-2 pt-4 pb-1">${l.slice(2)}</div>` : `<a href="#" data-go="${SCREENS.some((s) => s.k === k) ? k : ""}" class="px-2 h-9 rounded-md flex items-center ${active === k ? "bg-accent text-accent-foreground font-medium" : "hover:bg-muted"}">${l}</a>`)).join("")}
+              <a href="#" data-go="terms" class="mt-auto px-2 h-9 rounded-md flex items-center ${["terms", "rooms"].includes(active) ? "bg-accent text-accent-foreground font-medium" : "hover:bg-muted"}">Settings</a>
+            </nav>
+            <main id="content" class="flex-1 overflow-auto p-6">${content}</main>
+          </div>
+          ${overlay}
+        </div>`;
+
+      /* --------------------------------------------------------------- screens */
+      function teachers(st) {
+        let body;
+        if (st === 1) body = skeletonTable();
+        else if (st === 2)
+          body = emptyCard(
+            "No teachers yet",
+            "Add your teachers so you can assign them to groups and the timetable.",
+            "Add teacher",
+          );
+        else if (st === 3) body = noResults("teachers");
+        else if (st === 4) body = errorAlert();
+        else
+          body = table(
+            ["Name", "Email", "Groups", "Lessons / week"],
+            TEACHERS.map(([n, e, g, l, c]) => [
+              `<span class="inline-flex items-center gap-2"><span class="w-6 h-6 rounded-full text-white text-[10px] grid place-items-center" style="background:${c}">${n
+                .split(" ")
+                .map((x) => x[0])
+                .join("")}</span>${n}</span>`,
+              e,
+              g,
+              l,
+            ]),
+          );
+        let overlay = "";
+        if (st === 5)
+          overlay = dialog(
+            "New teacher",
+            field("Full name", "Ivana Bel", { req: true }) +
+              field("Email", "tomas@lingua.test", {
+                req: true,
+                err: "This email is already used by another account.",
+              }) +
+              field("Password", "", {
+                req: true,
+                err: "Use at least 10 characters.",
+                hint: "At least 10 characters. You'll see it once after saving so you can share it.",
+                after: btn("✦ Generate", "outline"),
+              }) +
+              `<fieldset class="space-y-2"><legend class="font-medium mb-2">Timetable colour <span class="text-muted-foreground font-normal">(optional)</span></legend><div class="flex gap-2">${["#2563eb", "#0d9488", "#16a34a", "#ea580c", "#e11d48", "#7c3aed", "#475569", "#b45309"].map((c, i) => `<span class="w-7 h-7 rounded-full grid place-items-center text-white text-xs ${i === 1 ? "ring-2 ring-offset-2 ring-ring" : ""}" style="background:${c}">${i === 1 ? "✓" : ""}</span>`).join("")}</div></fieldset>`,
+            btn("Cancel", "outline") + btn("Create teacher"),
+          );
+        if (st === 6)
+          overlay = dialog(
+            "Share these sign-in details",
+            `<div class="bg-muted rounded-md p-4 font-medium tnum space-y-1"><div>Email: ivana@lingua.test</div><div>Password: Rk7vT-m2Qe9x</div></div>${btn("Copy sign-in details", "outline")}<p class="text-muted-foreground">This password won't be shown again. Ask Ivana to keep it safe.</p>`,
+            btn("Done"),
+            "max-w-md",
+          );
+        if (st === 7)
+          overlay = dialog(
+            "Tomas Horvat can't be archived yet",
+            `<p>Tomas Horvat still teaches 4 timetable slots in current or upcoming terms. End or reassign them in the timetable first.</p><ul class="list-disc pl-5 text-muted-foreground"><li>B1 Evening · Mon 17:00</li><li>B1 Evening · Wed 17:00</li><li>B1 Grammar 1-on-1 · Thu 15:00</li><li>+1 more</li></ul>`,
+            btn("Close", "outline") + btn("Open timetable"),
+          );
+        if (st === 8)
+          overlay = dialog(
+            "Archive Peter Varga?",
+            `<ul class="list-disc pl-5"><li>Peter won't be able to sign in.</li><li>Past lessons and attendance are kept.</li><li>He's hidden from lists and pickers. You can restore him later.</li></ul>`,
+            btn("Cancel", "outline") + btn("Archive", "destructive"),
+          );
+        return shell(
+          "teachers",
+          pageHeader("Teachers", "4 active teachers", btn("+ New teacher")) +
+            (st === 2 ? "" : filterBar("Search by name or email")) +
+            body,
+          overlay,
+        );
+      }
+
+      function teacherDetail(st) {
+        const tabs = `<div role="tablist" class="flex gap-1 border-b border-border mb-6">${["Profile", "Availability", "Groups"].map((t, i) => `<button role="tab" aria-selected="${i === 1}" class="px-3 h-9 -mb-px ${i === 1 ? "border-b-2 border-primary font-medium" : "text-muted-foreground"}">${t}</button>`).join("")}</div>`;
+        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const strip = `<div aria-hidden="true" class="grid grid-cols-[40px_repeat(6,1fr)] text-xs text-muted-foreground mb-4">
+          <div></div>${days.map((d) => `<div class="text-center pb-1">${d}</div>`).join("")}
+          <div class="relative" style="height:168px">${["07", "10", "13", "16", "19"].map((h, i) => `<div class="absolute tnum" style="top:${i * 36}px">${h}:00</div>`).join("")}</div>
+          ${days.map((d, i) => `<div class="relative border-l border-border bg-white" style="height:168px">${i === 0 ? `<div class="hatch absolute inset-x-0 border border-amber-300 rounded-sm" style="top:0;height:60px"></div>` : ""}${i === 4 ? `<div class="hatch absolute inset-x-0 border border-amber-300 rounded-sm" style="top:108px;height:60px"></div>` : ""}</div>`).join("")}
+        </div>`;
+        const weekly =
+          st === 1
+            ? `<p class="text-muted-foreground">Tomas is available during all school hours.</p>`
+            : `${strip}<ul class="divide-y divide-border border border-border rounded-md">${[
+                ["Every Monday · 07:00–12:00", "Other job"],
+                ["Every Friday · 16:00–21:00", ""],
+              ]
+                .map(
+                  ([t, n]) =>
+                    `<li class="flex items-center gap-3 px-3 py-2"><span class="tnum font-medium">${t}</span><span class="text-muted-foreground">${n}</span><span class="ml-auto flex gap-1"><button class="h-8 px-2 rounded-md hover:bg-muted" aria-label="Edit ${t}">Edit</button><button class="h-8 px-2 rounded-md hover:bg-muted" aria-label="Delete ${t}">Delete</button></span></li>`,
+                )
+                .join("")}</ul>`;
+        const exc =
+          st === 1
+            ? `<p class="text-muted-foreground">No exceptions planned.</p>`
+            : `<table class="w-full text-left"><thead class="text-muted-foreground"><tr><th class="py-2">Date</th><th>Type</th><th>Time</th><th>Note</th><th></th></tr></thead><tbody class="tnum">
+              <tr class="border-t border-border"><td class="py-2">Tue 4 Nov 2026</td><td>${badge("Unavailable", "warning")}</td><td>Whole day</td><td>Doctor</td><td class="text-right">⋯</td></tr>
+              <tr class="border-t border-border"><td class="py-2">Mon 10 Nov 2026</td><td>${badge("Available", "success")}</td><td>09:00–12:00</td><td>Covers exams</td><td class="text-right">⋯</td></tr></tbody></table>
+              <label class="flex items-center gap-2 mt-3 text-muted-foreground"><input type="checkbox" /> Show past exceptions</label>`;
+        const content = `
+          <a href="#" data-go="teachers" class="text-primary">‹ Teachers</a>
+          ${pageHeader("Tomas Horvat", "", `<div class="flex gap-2">${btn("Set new password", "outline")}${btn("⋯", "outline")}</div>`)}
+          ${tabs}
+          <p class="text-muted-foreground mb-4">The timetable editor warns you when a lesson is planned while Tomas is unavailable.</p>
+          <div class="grid grid-cols-2 gap-6">
+            <section class="bg-white border border-border rounded-lg p-6"><div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Weekly unavailability</h2>${btn("+ Add unavailable time", "outline")}</div>${weekly}</section>
+            <section class="bg-white border border-border rounded-lg p-6"><div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Exceptions</h2>${btn("+ Add exception", "outline")}</div>${exc}</section>
+          </div>`;
+        let overlay = "";
+        if (st === 2)
+          overlay = dialog(
+            "Add exception",
+            `<fieldset><legend class="font-medium mb-2">Type</legend><label class="flex gap-2 items-center"><input type="radio" checked /> Unavailable on this date</label><label class="flex gap-2 items-center"><input type="radio" /> Available on this date (overrides the weekly rule)</label></fieldset>
+             <div class="grid grid-cols-2 gap-3">${field("Date", "Tue 4 Nov 2026", { req: true })}${field("To date", "", { opt: true })}</div>
+             <label class="flex items-center gap-2"><span class="w-9 h-5 rounded-full bg-primary relative"><span class="absolute right-0.5 top-0.5 w-4 h-4 rounded-full bg-white"></span></span> Whole day</label>
+             ${field("Note", "Doctor", { opt: true })}
+             <div class="border border-amber-300 bg-amber-50 text-amber-800 rounded-md p-3"><p class="font-medium">2 scheduled lessons are affected on these dates.</p><ul class="list-disc pl-5 tnum"><li>Tue 4 Nov · 17:00 · B1 Evening</li><li>Tue 4 Nov · 19:00 · B1 Grammar 1-on-1</li></ul></div>`,
+            btn("Cancel", "outline") + btn("Save"),
+          );
+        if (st === 3)
+          overlay = dialog(
+            "Add unavailable time",
+            `<fieldset><legend class="font-medium mb-2">Days <span class="text-muted-foreground font-normal">(required)</span></legend><div class="flex gap-3">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => `<label class="flex items-center gap-1"><input type="checkbox" ${i < 2 ? "checked" : ""}/> ${d}</label>`).join("")}</div></fieldset>
+             <div class="grid grid-cols-2 gap-3">${select("From", "14:00", { req: true })}${select("To", "13:00", { req: true, err: "The end time must be after the start time." })}</div>${field("Note", "", { opt: true })}`,
+            btn("Cancel", "outline") + btn("Save"),
+          );
+        return shell("teachers", content, overlay);
+      }
+
+      function students(st) {
+        let body;
+        if (st === 1) body = skeletonTable();
+        else if (st === 2)
+          body = emptyCard(
+            "No students yet",
+            "Add students, then enrol them in groups.",
+            "Add student",
+          );
+        else if (st === 3) body = noResults("students");
+        else
+          body = table(
+            ["Name", "Email", "Level", "Groups", "Phone"],
+            STUDENTS.map(([n, e, l, g, p]) => [n, e, badge(l), g, p || "—"]),
+          );
+        let overlay = "";
+        if (st === 4)
+          overlay = dialog(
+            "New student",
+            field("Full name", "Mia Kovac", { req: true }) +
+              field("Email", "mia.kovac@example.com", { req: true }) +
+              field("Password", "Rk7vT-m2Qe9x", {
+                req: true,
+                after: btn("✦ Generate", "outline"),
+                hint: "At least 10 characters. You'll see it once after saving so you can share it.",
+              }) +
+              `<div class="grid grid-cols-2 gap-3">${select("Level", "B1", { opt: true, hint: "Used to match replacement lessons to the right level." })}${field("Phone", "", { opt: true })}</div>` +
+              select("Add to group", "B1 Evening (8 / 10)", { opt: true }),
+            btn("Cancel", "outline") + btn("Create student"),
+          );
+        if (st === 5)
+          overlay = dialog(
+            "Archive Jan Novak?",
+            `<ul class="list-disc pl-5"><li>Jan won't be able to sign in.</li><li>Jan will leave: B1 Evening, B1 Grammar 1-on-1.</li><li>Past lessons and attendance are kept.</li></ul>`,
+            btn("Cancel", "outline") + btn("Archive", "destructive"),
+          );
+        return shell(
+          "students",
+          pageHeader("Students", "48 active students", btn("+ New student")) +
+            (st === 2
+              ? ""
+              : filterBar("Search by name, email or phone", [
+                  "Level: Any",
+                  "Group: Any",
+                ])) +
+            body,
+          overlay,
+        );
+      }
+
+      function groups(st) {
+        if (st >= 2) return groupDetail(st);
+        const tabs = `<div role="tablist" class="flex gap-1 border-b border-border mb-4"><button role="tab" aria-selected="true" class="px-3 h-9 -mb-px border-b-2 border-primary font-medium">Groups</button><button role="tab" class="px-3 h-9 text-muted-foreground">Courses</button></div>`;
+        const body =
+          st === 1
+            ? emptyCard(
+                "No groups yet",
+                "Create group classes and 1-on-1s, then add students.",
+                "New group",
+              )
+            : table(
+                ["Name", "Type", "Level", "Course", "Members", "Teachers"],
+                GROUPS.map(([n, t, l, c, m, te]) => [
+                  n,
+                  t === "Group"
+                    ? `<span class="inline-flex items-center gap-1 text-blue-900">👥 Group lesson</span>`
+                    : `<span class="inline-flex items-center gap-1 text-violet-900">👤 1-on-1</span>`,
+                  badge(l),
+                  c,
+                  m === "10 / 10" ? `${m} ${badge("Full", "warning")}` : m,
+                  te,
+                ]),
+              );
+        return shell(
+          "groups",
+          pageHeader("Courses & groups", "", btn("+ New group")) +
+            tabs +
+            (st === 1
+              ? ""
+              : filterBar("Search groups", [
+                  "Type: All",
+                  "Level: Any",
+                  "Course: Any",
+                ])) +
+            body,
+        );
+      }
+      function groupDetail(st) {
+        const members = [
+          ["Mia Kovac", "B1", "1 Sep 2026"],
+          ["Jan Novak", "B1", "1 Sep 2026"],
+          ["Sara Mraz", "B1", "8 Sep 2026"],
+        ];
+        const content = `<a href="#" class="text-primary">‹ Courses & groups</a>
+          ${pageHeader(`B1 Evening <span class="align-middle">${badge("Group lesson", "info")} ${badge("B1")}</span>`, "Members 8 / 10", btn("⋯", "outline"))}
+          <div role="tablist" class="flex gap-1 border-b border-border mb-4">${["Members", "Details", "Timetable"].map((t, i) => `<button role="tab" aria-selected="${i === 0}" class="px-3 h-9 -mb-px ${i === 0 ? "border-b-2 border-primary font-medium" : "text-muted-foreground"}">${t}</button>`).join("")}</div>
+          <div class="flex justify-between mb-3"><p class="text-muted-foreground">2 places left</p>${btn("+ Add members")}</div>
+          ${table(
+            ["Name", "Level", "Joined"],
+            members.map(([n, l, j]) => [n, badge(l), j]),
+          )}
+          <details class="mt-4 bg-white border border-border rounded-lg p-3"><summary class="font-medium cursor-pointer">Past members (2)</summary><p class="text-muted-foreground mt-2">Petra Lukac · joined 1 Sep · left 30 Sep</p></details>`;
+        const overlay =
+          st === 3
+            ? dialog(
+                "Add members to B1 Evening",
+                `<p class="font-medium">2 places left</p>
+               <input type="search" class="h-9 w-full rounded-md border border-input px-3" placeholder="Search students" />
+               <label class="flex items-center gap-2 text-muted-foreground"><input type="checkbox" checked /> Show all levels</label>
+               <ul class="border border-border rounded-md divide-y divide-border max-h-60 overflow-auto">
+                 <li class="flex items-center gap-2 px-3 py-2"><input type="checkbox" checked /> Lea Toth <span class="ml-auto">${badge("Level A2", "warning")}</span></li>
+                 <li class="flex items-center gap-2 px-3 py-2"><input type="checkbox" checked /> Marek Blaho <span class="ml-auto">${badge("Time clash with B2 Conversation", "warning")}</span></li>
+                 <li class="flex items-center gap-2 px-3 py-2 text-muted-foreground"><input type="checkbox" disabled /> Zuzana Hudak</li>
+               </ul>
+               <p class="text-sm text-amber-700">The group is full. Increase the capacity to add more.</p>
+               ${field("First day in the group", "Mon 20 Oct 2026", { req: true })}`,
+                btn("Cancel", "outline") + btn("Add 2 members"),
+              )
+            : "";
+        return shell("groups", content, overlay);
+      }
+
+      function levels(st) {
+        const body =
+          st === 1
+            ? emptyCard(
+                "No levels yet",
+                "Add the levels you teach, from easiest to hardest.",
+                "Add level",
+                btn("Add CEFR levels (A1–C2)", "outline"),
+              )
+            : filterBar("Search levels", [], true).replace(
+                "Status: Active",
+                "Status: All",
+              ) +
+              table(
+                ["Order", "Code", "Name", "Students", "Groups"],
+                LEVELS.map(([c, n, s, g, a], i) => [
+                  `${i + 1}`,
+                  badge(c),
+                  a ? `${n} ${badge("Archived")}` : n,
+                  s,
+                  g,
+                ]),
+              );
+        const overlay =
+          st === 2
+            ? dialog(
+                "Archive B2?",
+                `<p>9 students and 2 groups keep this level. It's hidden when you pick a level for new students, groups and courses.</p><p class="text-muted-foreground">You can restore it later.</p>`,
+                btn("Cancel", "outline") + btn("Archive", "destructive"),
+                "max-w-md",
+              )
+            : "";
+        return shell(
+          "levels",
+          pageHeader(
+            "Skill levels",
+            "Levels order your groups and decide which replacement lessons a student can join.",
+            btn("+ New level"),
+          ) +
+            body +
+            (st === 1
+              ? ""
+              : `<p class="text-muted-foreground mt-3">Reorder with “Move up / Move down” in each row's menu. Every level can be archived. Unused levels (C1) can also be deleted; for the others, Delete is disabled with “In use by …”. Archived levels keep their place in the order.</p>`),
+          overlay,
+        );
+      }
+
+      function terms(st) {
+        const sub = `<nav aria-label="Settings" class="flex gap-1 mb-6">${["School", "Terms & holidays", "Rooms", "Administrators"].map((t, i) => `<a href="#" data-go="${i === 2 ? "rooms" : i === 1 ? "terms" : ""}" class="px-3 h-9 rounded-md flex items-center ${i === 1 ? "bg-white border border-border font-medium" : "hover:bg-white"}">${t}</a>`).join("")}</nav>`;
+        const termsT =
+          st === 1
+            ? emptyCard(
+                "No terms yet",
+                "A term sets the dates your timetable runs. Start with the current one.",
+                "Add term",
+              )
+            : table(
+                ["Name", "Dates", "Status", "Slots", "Holidays"],
+                [
+                  [
+                    "Autumn 2026",
+                    "1 Sep – 20 Dec 2026",
+                    `${badge("Published", "success")} ${badge("Current", "info")}`,
+                    24,
+                    3,
+                  ],
+                  ["Spring 2027", "11 Jan – 18 Jun 2027", badge("Draft"), 0, 1],
+                ],
+              );
+        const hol = `<section class="mt-6"><div class="flex justify-between items-center mb-3"><h2 class="text-lg font-semibold">Holidays</h2><div class="flex gap-2"><button class="h-9 px-3 rounded-md border border-input bg-white">Show: All ▾</button>${btn("+ Add holiday", "outline")}</div></div>
+          ${table(
+            ["Name", "Dates", "Applies to"],
+            [
+              ["Christmas break", "21 Dec 2026 – 6 Jan 2027", "All terms"],
+              ["Autumn break", "29 – 30 Oct 2026", "Autumn 2026"],
+              ["National holiday", "17 Nov 2026", "All terms"],
+            ],
+          )}</section>`;
+        let overlay = "";
+        if (st === 2)
+          overlay = dialog(
+            "New term",
+            field("Name", "Spring 2027", {
+              req: true,
+              ph: "e.g. Autumn 2026",
+            }) +
+              `<div class="grid grid-cols-2 gap-3">${field("First day", "11 Jan 2027", { req: true })}${field("Last day", "10 Jan 2027", { req: true, err: "The last day must be on or after the first day." })}</div>`,
+            btn("Cancel", "outline") + btn("Create term"),
+          );
+        if (st === 3)
+          overlay = dialog(
+            "Add holiday",
+            field("Name", "National holiday", { req: true }) +
+              `<div class="grid grid-cols-2 gap-3">${field("First day", "17 Nov 2026", { req: true })}${field("Last day", "17 Nov 2026", { req: true })}</div>
+               <fieldset><legend class="font-medium mb-2">Applies to</legend><label class="flex gap-2 items-center"><input type="radio" checked /> All terms (school-wide)</label><label class="flex gap-2 items-center"><input type="radio" /> Only Autumn 2026</label></fieldset>
+               <div class="border border-amber-300 bg-amber-50 text-amber-800 rounded-md p-3">Lessons on these dates from today on are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled ("Holiday").</div>`,
+            btn("Cancel", "outline") + btn("Add holiday"),
+          );
+        return shell(
+          "terms",
+          pageHeader("Settings", "") +
+            sub +
+            `<div class="flex justify-between mb-3"><h2 class="text-lg font-semibold">Terms</h2>${btn("+ New term")}</div>` +
+            termsT +
+            (st === 1 ? "" : hol),
+          overlay,
+        );
+      }
+
+      function rooms(st) {
+        const sub = `<nav aria-label="Settings" class="flex gap-1 mb-6">${["School", "Terms & holidays", "Rooms", "Administrators"].map((t, i) => `<a href="#" data-go="${i === 1 ? "terms" : i === 2 ? "rooms" : ""}" class="px-3 h-9 rounded-md flex items-center ${i === 2 ? "bg-white border border-border font-medium" : "hover:bg-white"}">${t}</a>`).join("")}</nav>`;
+        const body =
+          st === 1
+            ? emptyCard(
+                "No rooms yet",
+                "Add classrooms and online rooms to use them in the timetable.",
+                "Add room",
+              )
+            : table(
+                ["Name", "Type", "Capacity", "Meeting link", "Used in slots"],
+                ROOMS.map(([n, k, c, u, s, a]) => [
+                  a ? `${n} ${badge("Archived")}` : n,
+                  k === "Online" ? "🎥 Online" : "🚪 Physical",
+                  c,
+                  u
+                    ? `<a href="#" class="text-primary underline">${u} ↗<span class="sr-only">(opens in new tab)</span></a>`
+                    : "—",
+                  s,
+                ]),
+              );
+        const overlay =
+          st === 2
+            ? dialog(
+                "Edit room",
+                field("Name", "Room 3", { req: true }) +
+                  `<fieldset><legend class="font-medium mb-2">Type</legend><label class="flex gap-2 items-center"><input type="radio" checked /> Physical room</label><label class="flex gap-2 items-center"><input type="radio" /> Online room</label></fieldset>` +
+                  field("Capacity", "8", { req: true }) +
+                  `<div class="border border-amber-300 bg-amber-50 text-amber-800 rounded-md p-3">B1 Evening has 10 students; the timetable will show a capacity warning.</div>`,
+                btn("Cancel", "outline") + btn("Save"),
+              )
+            : st === 3
+              ? dialog(
+                  "Archive Room 3?",
+                  `<p>4 slots still use this room. They keep running and are still checked. To move them, edit them in the timetable.</p><p class="text-muted-foreground">New slots can't use an archived room. You can restore it later.</p>`,
+                  btn("Cancel", "outline") +
+                    btn("Open timetable", "outline") +
+                    btn("Archive", "destructive"),
+                  "max-w-md",
+                )
+              : "";
+        return shell(
+          "rooms",
+          pageHeader("Settings", "") +
+            sub +
+            `<div class="flex justify-between mb-3"><div class="flex gap-2"><input type="search" class="h-9 w-64 rounded-md border border-input px-3 bg-white" placeholder="Search rooms" /><button class="h-9 px-3 rounded-md border border-input bg-white">Type: All ▾</button><button class="h-9 px-3 rounded-md border border-input bg-white">Status: All ▾</button></div>${btn("+ New room")}</div>` +
+            body,
+          overlay,
+        );
+      }
+
+      function dashboard() {
+        const steps = [
+          ["Add a term", 1],
+          ["Add rooms", 1],
+          ["Add skill levels", 1],
+          ["Add teachers", 1],
+          ["Add students", 0],
+          ["Create groups and add students", 0],
+          ["Build and publish the timetable", 0],
+        ];
+        return shell(
+          "dashboard",
+          pageHeader(
+            "Good morning, Anna",
+            "Today is Wednesday 14 October 2026",
+          ) +
+            `<section class="bg-white border border-border rounded-lg p-6 max-w-2xl"><div class="flex justify-between mb-4"><h2 class="text-lg font-semibold">Set up your school</h2><span class="text-muted-foreground tnum">4 of 7 done</span></div>
+            <ol class="divide-y divide-border">${steps.map(([l, d]) => `<li class="flex items-center gap-3 py-3">${d ? `<span class="w-5 h-5 rounded-full bg-green-700 text-white grid place-items-center text-xs">✓</span><span class="sr-only">Done</span>` : `<span class="w-5 h-5 rounded-full border-2 border-input"></span>`}<a href="#" class="${d ? "text-muted-foreground" : "font-medium text-primary underline"}">${l}</a></li>`).join("")}</ol></section>`,
+        );
+      }
+
+      /* ---------------------------------------------------------------- render */
+      const SCREENS = [
+        {
+          k: "dashboard",
+          label: "Setup checklist",
+          states: ["default"],
+          fn: dashboard,
+        },
+        {
+          k: "teachers",
+          label: "Teachers",
+          states: [
+            "list",
+            "loading",
+            "empty",
+            "no results",
+            "error",
+            "create · errors",
+            "credentials",
+            "archive blocked",
+            "archive confirm",
+          ],
+          fn: teachers,
+        },
+        {
+          k: "teacher",
+          label: "Teacher › Availability",
+          states: ["default", "empty", "add exception", "add weekly · error"],
+          fn: teacherDetail,
+        },
+        {
+          k: "students",
+          label: "Students",
+          states: [
+            "list",
+            "loading",
+            "empty",
+            "no results",
+            "create",
+            "archive confirm",
+          ],
+          fn: students,
+        },
+        {
+          k: "groups",
+          label: "Groups",
+          states: [
+            "list",
+            "empty",
+            "detail · members",
+            "add members (capacity)",
+          ],
+          fn: groups,
+        },
+        {
+          k: "levels",
+          label: "Levels",
+          states: ["list", "empty (preset)", "archive confirm"],
+          fn: levels,
+        },
+        {
+          k: "terms",
+          label: "Terms & holidays",
+          states: ["list", "empty", "new term · error", "add holiday · impact"],
+          fn: terms,
+        },
+        {
+          k: "rooms",
+          label: "Rooms",
+          states: [
+            "list",
+            "empty",
+            "edit · capacity warning",
+            "archive confirm",
+          ],
+          fn: rooms,
+        },
+      ];
+      let cur = { screen: "teachers", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go && go.dataset.go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>

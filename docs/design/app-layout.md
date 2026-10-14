@@ -282,7 +282,8 @@ P0 empty state:
 ### 7.5 Weekly timetable — first look (`/admin/timetable`, `/teacher/timetable`, `/student/timetable`)
 
 Read-only view of dated **Lesson instances** for one week (P1). The editor for
-recurring `TimetableSlot`s and drag & drop get their own spec later.
+recurring `TimetableSlot`s, drag & drop and the full weekly-view states are
+specified in `docs/design/timetable.md`.
 
 Toolbar (one row desktop, wraps on mobile):
 `‹` `Today` `›` · week label "13 – 19 Oct 2026" (`timetable.weekRange`) ·

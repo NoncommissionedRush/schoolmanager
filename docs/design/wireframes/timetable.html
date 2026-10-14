@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — Timetable editor & weekly views (CARM-22)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .hatch {
+        background: repeating-linear-gradient(
+          135deg,
+          #fde68a55 0 4px,
+          transparent 4px 10px
+        );
+      }
+      .holiday {
+        background: repeating-linear-gradient(
+          135deg,
+          #f8fafc 0 8px,
+          #f1f5f9 8px 16px
+        );
+      }
+      .lg-group {
+        background: #eff6ff;
+        border-left: 3px solid #2563eb;
+        color: #1e3a8a;
+      }
+      .lg-one {
+        background: #f5f3ff;
+        border-left: 3px solid #7c3aed;
+        color: #4c1d95;
+      }
+      .lg-sub {
+        background: #ecfeff;
+        border-left: 3px solid #0891b2;
+        color: #164e63;
+      }
+      .lg-cancel {
+        background: #f8fafc;
+        border-left: 3px dashed #94a3b8;
+        color: #475569;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Timetable</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* --------------------------------------------------------------- helpers */
+      const HOUR = 48; // px per hour in the wireframe (64 in product)
+      const START = 7,
+        END = 21;
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          destructive: "bg-destructive text-white",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const badge = (t, tone = "muted") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border ${c}">${t}</span>`;
+      };
+      const sel = (label, value) =>
+        `<div class="space-y-1"><label class="block font-medium">${label}</label><button class="h-9 w-full rounded-md border border-input bg-white px-3 text-left">${value} ▾</button></div>`;
+      const toMin = (t) => {
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + m;
+      };
+      const yOf = (t) => ((toMin(t) - START * 60) / 60) * HOUR;
+      const height = (a, b) => ((toMin(b) - toMin(a)) / 60) * HOUR;
+
+      const SLOTS = [
+        // room, from, to, group, teacher, kind, flag
+        ["Room 1", "09:00", "10:30", "A2 Morning", "Ana Kral", "g", ""],
+        ["Room 1", "17:00", "18:30", "B1 Evening", "Tomas Horvat", "g", ""],
+        [
+          "Room 2",
+          "10:00",
+          "11:00",
+          "B1 Grammar 1-on-1",
+          "Tomas Horvat",
+          "o",
+          "",
+        ],
+        [
+          "Room 2",
+          "16:00",
+          "17:30",
+          "B2 Conversation",
+          "Eva Simon",
+          "g",
+          "over",
+        ],
+        ["Room 3", "15:00", "16:30", "A2 Kids", "Ana Kral", "g", "warn"],
+        [
+          "Online 1",
+          "18:00",
+          "19:00",
+          "C1 Business",
+          "Peter Varga",
+          "g",
+          "until",
+        ],
+        [
+          "Online 1",
+          "19:00",
+          "19:45",
+          "Jan Novak 1-on-1",
+          "Eva Simon",
+          "o",
+          "",
+        ],
+      ];
+      const ICON = { warn: "⚠", block: "⛔", over: "🛡" };
+      const slotBlock = (s, i, selected) => {
+        const [, a, b, g, t, k, f] = s;
+        const flag =
+          f === "warn"
+            ? `<span title="1 warning" class="absolute top-0.5 right-1 text-amber-700">⚠<span class="sr-only">1 warning</span></span>`
+            : f === "block"
+              ? `<span class="absolute top-0.5 right-1 text-red-700">⛔<span class="sr-only">1 conflict</span></span>`
+              : f === "over"
+                ? `<span title="Warning acknowledged by Anna Novak on 2 Oct" class="absolute top-0.5 right-1 text-slate-500 text-xs">🛡<span class="sr-only">Warning acknowledged</span></span>`
+                : "";
+        return `<button data-slot="${i}" class="absolute inset-x-1 rounded-sm px-2 py-1 text-left text-xs overflow-hidden ${k === "g" ? "lg-group" : "lg-one"} ${selected ? "ring-2 ring-ring shadow-sm" : ""} ${cur.dim && !g.includes("Tomas") && t !== "Tomas Horvat" ? "opacity-40" : ""}" style="top:${yOf(a)}px;height:${height(a, b)}px" aria-label="${g}, Monday ${a} to ${b}, ${t}">
+          ${flag}<div class="tnum">${a}–${b}</div><div class="font-semibold truncate">${k === "g" ? "👥" : "👤"} ${g}</div><div class="truncate">${t}</div>${f === "until" ? `<div class="italic">Until 14 Nov</div>` : ""}
+        </button>`;
+      };
+      const timeAxis = () =>
+        `<div class="relative" style="height:${(END - START) * HOUR}px">${Array.from({ length: END - START }, (_, i) => `<div class="absolute right-2 text-xs text-muted-foreground tnum" style="top:${i * HOUR - 6}px">${String(START + i).padStart(2, "0")}:00</div>`).join("")}</div>`;
+      const gridLines = () =>
+        Array.from(
+          { length: END - START },
+          (_, i) =>
+            `<div class="absolute inset-x-0 border-t border-border" style="top:${i * HOUR}px"></div><div class="absolute inset-x-0 border-t border-dotted border-slate-100" style="top:${i * HOUR + HOUR / 2}px"></div>`,
+        ).join("");
+
+      const dialog = (title, body, footer, w = "max-w-lg") => `
+        <div class="absolute inset-0 bg-black/50 grid place-items-center p-6 z-30">
+          <div role="dialog" aria-modal="true" aria-label="${title}" class="bg-white rounded-lg shadow-lg w-full ${w} p-6">
+            <div class="flex items-start justify-between mb-4"><h2 class="text-lg font-semibold">${title}</h2><button aria-label="Close" class="w-8 h-8 rounded-md hover:bg-muted">✕</button></div>
+            <div class="space-y-4">${body}</div>
+            <div class="flex justify-end gap-2 mt-6">${footer}</div>
+          </div>
+        </div>`;
+      const sheet = (title, body, footer) => `
+        <div class="absolute inset-0 bg-black/30 z-30 flex justify-end">
+          <aside role="dialog" aria-modal="true" aria-label="${title}" class="w-[420px] bg-white h-full shadow-lg flex flex-col">
+            <div class="flex items-center justify-between px-6 h-14 border-b border-border"><h2 class="text-lg font-semibold">${title}</h2><button class="w-8 h-8 rounded-md hover:bg-muted" aria-label="Close">✕</button></div>
+            <div class="flex-1 overflow-auto p-6 space-y-4">${body}</div>
+            <div class="flex justify-end gap-2 p-4 border-t border-border">${footer}</div>
+          </aside>
+        </div>`;
+
+      const shell = (
+        content,
+        overlay = "",
+        active = "Timetable",
+        role = "admin",
+      ) => {
+        const nav =
+          role === "admin"
+            ? [
+                "Dashboard",
+                "Timetable",
+                "Students",
+                "Teachers",
+                "Courses & groups",
+                "Skill levels",
+              ]
+            : ["Dashboard", "My timetable", "My groups & students"];
+        return `<div class="relative w-[1280px] h-[860px] bg-muted border border-slate-300 shadow-xl overflow-hidden flex flex-col">
+          <header class="h-14 bg-white border-b border-border flex items-center gap-3 px-4 shrink-0">
+            <span class="w-8 h-8 rounded-md bg-primary text-white grid place-items-center text-xs font-semibold">LL</span><span class="font-semibold">Lingua Language School</span>
+            <span class="ml-auto flex items-center gap-2"><span class="w-8 h-8 rounded-full bg-slate-200 grid place-items-center text-xs">${role === "admin" ? "AN" : "TH"}</span>${role === "admin" ? "Anna" : "Tomas"} ▾</span>
+          </header>
+          <div class="flex flex-1 min-h-0">
+            <nav aria-label="Main" class="w-56 bg-white border-r border-border p-3 space-y-0.5 shrink-0">${nav.map((n) => `<a href="#" class="px-2 h-9 rounded-md flex items-center ${n === active ? "bg-accent text-accent-foreground font-medium" : "hover:bg-muted"}">${n}</a>`).join("")}</nav>
+            <main class="flex-1 overflow-auto p-6">${content}</main>
+          </div>${overlay}</div>`;
+      };
+
+      /* ------------------------------------------------------------- editor */
+      const issuesList = (kind) => {
+        const rows = {
+          clean: `<p class="text-green-700 flex items-center gap-2">✓ No conflicts.</p>`,
+          warn: `<p class="font-medium">0 conflicts · 2 warnings</p>
+            <h3 class="font-semibold mt-2">Warnings <span class="font-normal text-muted-foreground">· Can be overridden</span></h3>
+            <ul class="space-y-2">
+              <li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>Room 3 holds 8 students, but the group has 10. <a href="#" class="underline">Room</a> · <a href="#" class="underline">Show dates</a><label class="flex items-center gap-2 mt-2 font-medium"><input type="checkbox" ${cur.state === 4 ? "checked" : ""} /> I've checked this</label></li>
+              <li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>Ana Kral is not available all day on this weekday (2 dates, first on Mon 2 Nov 2026). <a href="#" class="underline">Availability</a> · <a href="#" class="underline">Show dates</a><label class="flex items-center gap-2 mt-2 font-medium"><input type="checkbox" ${cur.state === 4 ? "checked" : ""} /> I've checked this</label></li>
+            </ul>
+            <div class="space-y-1"><label class="block font-medium">Reason <span class="font-normal text-muted-foreground">(optional)</span></label><textarea class="w-full rounded-md border border-input p-2" rows="2">${cur.state === 4 ? "Only class time that works for the kids; Ana confirmed." : ""}</textarea></div>`,
+          block: `<p class="font-medium">1 conflict · 1 warning</p>
+            <div role="alert" class="text-red-700 font-medium">Fix the conflicts before saving.</div>
+            <h3 class="font-semibold mt-2">Conflicts <span class="font-normal text-muted-foreground">· Cannot be saved</span></h3>
+            <ul><li class="border border-red-300 bg-red-50 rounded-md p-3 text-red-900"><div class="font-medium">⛔ Conflict</div>Tomas Horvat is already teaching B1 Evening (17:00–18:30) on 15 dates, first on Mon 7 Sep 2026. <a href="#" class="underline">Show slot</a> · <a href="#" class="underline">Show dates</a></li></ul>
+            <h3 class="font-semibold mt-2">Warnings <span class="font-normal text-muted-foreground">· Can be overridden</span></h3>
+            <ul><li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>2 students (Mia Kovac, Jan Novak) also attend B1 Evening (17:00–18:30) on 15 dates, first on Mon 7 Sep 2026.</li></ul>
+            <p class="text-xs text-muted-foreground">Warnings can be acknowledged once the conflict is fixed.</p>`,
+          archived: `<p class="font-medium">1 conflict · 0 warnings</p>
+            <div role="alert" class="text-red-700 font-medium">Fix the conflicts before saving.</div>
+            <h3 class="font-semibold mt-2">Conflicts <span class="font-normal text-muted-foreground">· Cannot be saved</span></h3>
+            <ul><li class="border border-red-300 bg-red-50 rounded-md p-3 text-red-900"><div class="font-medium">⛔ Conflict</div>Room 4 is archived. <a href="#" class="underline">Choose another room</a></li></ul>
+            <p class="text-xs text-muted-foreground">Shown when a slot is moved into an archived room, e.g. after a copy or when someone archived the room while this sheet was open. An existing slot that already uses an archived room is not flagged.</p>`,
+        }[kind];
+        return `<section aria-live="polite" class="border-t border-border pt-4 space-y-2"><h3 class="text-base font-semibold">Check</h3>${rows}</section>`;
+      };
+      const slotSheet = (kind, published) =>
+        sheet(
+          published ? "Edit slot" : kind === "clean" ? "New slot" : "Edit slot",
+          `${sel("Group (required)", kind === "block" ? "B1 Grammar 1-on-1 · B1 · 1/1" : "A2 Kids · A2 · 10/10")}
+           ${sel("Teacher (required)", kind === "block" ? "Tomas Horvat" : "Ana Kral")}
+           ${kind === "archived" ? `<div class="space-y-1"><label class="block font-medium">Room (optional)</label><button class="h-9 w-full rounded-md border border-destructive bg-white px-3 text-left">Room 4 · 6 seats <span class="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-sm border bg-slate-100 text-slate-700 border-slate-300">Archived</span> ▾</button></div>` : sel("Room (optional)", kind === "block" ? "Room 2 · 10 seats" : "Room 3 · 8 seats")}
+           <div class="grid grid-cols-3 gap-2">${sel("Day", "Monday")}${sel("Start", kind === "block" ? "17:30" : "15:00")}${sel("End", kind === "block" ? "18:15" : "16:30")}</div>
+           <div class="flex gap-2 items-center text-muted-foreground"><span class="tnum">${kind === "block" ? "45" : "90"} min</span>${["45", "60", "90"].map((m) => `<button class="h-7 px-2 rounded-md border border-input text-xs">${m} min</button>`).join("")}</div>
+           ${
+             published
+               ? `<div class="space-y-1"><label class="block font-medium">Effective from</label><button class="h-9 w-full rounded-md border border-input px-3 text-left">Wed 14 Oct 2026 (today) 📅</button><p class="text-xs text-muted-foreground">Lessons before this date stay as they are.</p></div>
+                  <div class="rounded-md border border-blue-300 bg-blue-50 text-blue-900 p-3">From Wed 14 Oct this continues as a changed slot. Lessons before Wed 14 Oct stay as they were.</div>`
+               : `<p class="text-muted-foreground">Every Monday, 1 Sep – 20 Dec 2026 · 15 lessons · 1 date skipped for holidays · <a href="#" class="text-primary underline">More options</a></p>`
+           }
+           ${issuesList(kind)}`,
+          `<div class="mr-auto">${btn("⋯", "ghost")}</div>${btn("Cancel", "outline")}${btn(kind === "warn" && cur.state === 4 ? "Save anyway" : "Save slot")}`,
+        );
+
+      function editor(st) {
+        const published = (st >= 7 && st <= 9) || st === 12;
+        const rooms = [
+          "Room 1",
+          "Room 2",
+          "Room 3 · 8 seats",
+          "Online 1 · Online",
+        ];
+        const roomKeys = ["Room 1", "Room 2", "Room 3", "Online 1"];
+        const loading = st === 1;
+        const empty = st === 10 || st === 14;
+        const grid = loading
+          ? `<div class="bg-white border border-border rounded-lg p-4 space-y-4">${[1, 2, 3, 4].map(() => `<div class="skeleton h-14 w-1/4"></div>`).join("")}</div>`
+          : `<div class="relative bg-white border border-border rounded-lg overflow-hidden">
+            <div class="grid grid-cols-[56px_repeat(4,1fr)] border-b border-border sticky top-0 bg-white z-10">${["", ...rooms].map((r) => `<div class="px-2 py-2 font-medium text-center">${r.replace(" · ", '<div class="text-xs text-muted-foreground font-normal">') + (r.includes("·") ? "</div>" : "")}</div>`).join("")}</div>
+            <div class="grid grid-cols-[56px_repeat(4,1fr)] overflow-auto" style="max-height:560px">
+              ${timeAxis()}
+              ${roomKeys.map((rk) => `<div class="relative border-l border-border" style="height:${(END - START) * HOUR}px">${gridLines()}${empty ? "" : SLOTS.map((s, i) => (s[0] === rk ? slotBlock(st === 6 && i === 4 ? [...s.slice(0, 6), "block"] : s, i, (st >= 2 && st <= 5 && i === 4) || (st === 8 && i === 1)) : "")).join("")}</div>`).join("")}
+            </div>
+            ${empty ? `<div class="absolute inset-0 grid place-items-center pointer-events-none"><div class="bg-white border border-border rounded-lg p-6 text-center shadow-sm pointer-events-auto"><h2 class="text-lg font-semibold">No slots yet</h2><p class="text-muted-foreground mt-1">Click a free time in the grid or use New slot.</p><div class="flex gap-2 justify-center mt-4">${btn("+ New slot")}${btn("Copy from Autumn 2026", "outline")}</div></div></div>` : ""}
+          </div>`;
+        const header = `<div class="flex flex-wrap items-center gap-3 mb-4">
+            <h1 class="text-2xl font-semibold mr-4">Timetable editor</h1>
+            <button class="h-9 px-3 rounded-md border border-input bg-white">Term: ${empty ? "Spring 2027" : "Autumn 2026"} ▾</button>
+            ${published ? badge("Published 2 Oct 2026", "success") : badge("Draft")}
+            ${published ? `<span class="text-muted-foreground">As of</span><button class="h-9 px-3 rounded-md border border-input bg-white tnum">20 Oct 2026 📅</button>` : ""}
+            <span class="ml-auto flex gap-2">${btn("⋯", "outline")}${published ? "" : btn("Publish")}</span>
+          </div>`;
+        const banner = published
+          ? `<div role="status" class="border border-blue-300 bg-blue-50 text-blue-800 rounded-md p-3 mb-4 flex justify-between"><span>This timetable is published. Changes apply to future lessons from the date you choose and are visible to teachers and students right away.</span><button aria-label="Dismiss">✕</button></div>`
+          : "";
+        const toolbar = `<div class="flex flex-wrap items-center gap-2 mb-3">
+            <div role="group" aria-label="View" class="inline-flex border border-input rounded-md overflow-hidden bg-white"><button class="h-9 px-3 bg-accent text-accent-foreground font-medium" aria-pressed="true">By room</button><button class="h-9 px-3" aria-pressed="false">Week</button></div>
+            <div role="tablist" aria-label="Day" class="inline-flex gap-1 ml-2">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => `<button role="tab" aria-selected="${i === 0}" class="h-9 px-3 rounded-md ${i === 0 ? "bg-white border border-border font-medium" : "hover:bg-white"}">${d}</button>`).join("")}</div>
+            <span class="ml-4 flex gap-2">${["Teacher: Any", "Room: Any", "Group: Any"].map((f) => `<button class="h-9 px-3 rounded-md border border-input bg-white">${f} ▾</button>`).join("")}</span>
+            <span class="ml-auto flex gap-2"><button data-act="issues" class="h-9 px-3 rounded-md border border-amber-300 bg-amber-50 text-amber-800 font-medium">⚠ Issues <span class="ml-1 rounded-full bg-amber-700 text-white text-xs px-1.5">${st === 6 ? 3 : 2}</span></button>${btn("+ New slot")}</span>
+          </div>`;
+        let overlay = "";
+        if (st === 2) overlay = slotSheet("clean", false);
+        if (st === 3) overlay = slotSheet("warn", false);
+        if (st === 4) overlay = slotSheet("warn", false);
+        if (st === 5) overlay = slotSheet("block", false);
+        if (st === 6)
+          overlay = dialog(
+            "Publish Autumn 2026?",
+            `<ul class="space-y-1 tnum"><li>24 slots</li><li>Lessons will be created from 14 Oct to 20 Dec 2026</li><li>1 warning acknowledged · <a href="#" class="text-primary underline">Review</a></li></ul>
+             <div role="alert" class="border border-red-300 bg-red-50 text-red-800 rounded-md p-3 flex justify-between items-center"><div><p class="font-medium">Fix 1 conflict before publishing.</p><p>A2 Kids · Mon 15:00 — Room 3 is already used by B1 Grammar 1-on-1.</p></div></div>
+             <p class="text-muted-foreground">Teachers and students will see their lessons right away. You can still change slots later; changes apply from a date you choose.</p>`,
+            btn("Cancel", "outline") + btn("Show issues"),
+          );
+        if (st === 7) overlay = slotSheet("clean", true);
+        if (st === 13) overlay = slotSheet("archived", false);
+        if (st === 14)
+          overlay = dialog(
+            "Copy slots from another term",
+            `${sel("Copy from", "Autumn 2026 · 24 slots")}
+             <div class="rounded-md bg-muted p-3 tnum">Copy 22 slots. 2 with archived groups or teachers are skipped. 1 loses its room because it's archived.</div>
+             <p class="text-muted-foreground">Copied slots are checked like new ones. Any issues open in the Issues panel.</p>
+             <p class="text-xs text-muted-foreground">P1 nice-to-have (owner decision 3).</p>`,
+            btn("Cancel", "outline") + btn("Copy 22 slots"),
+          );
+        if (st === 8)
+          overlay = dialog(
+            "End B1 Evening on Mondays?",
+            `<div class="space-y-1"><label class="block font-medium">Last lesson</label><button class="h-9 w-full rounded-md border border-input px-3 text-left tnum">Mon 10 Nov 2026 ▾</button></div>
+             <div class="rounded-md bg-muted p-3">Lessons after 10 Nov are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled ("Timetable changed"), so no one loses information.</div>
+             <p class="text-muted-foreground">Want to change the teacher, room or time instead? Edit the slot and choose from which date.</p>`,
+            btn("Cancel", "outline") + btn("End slot", "destructive"),
+          );
+        if (st === 9)
+          overlay = sheet(
+            "Issues in Autumn 2026",
+            `<label class="flex items-center gap-2 text-muted-foreground"><input type="checkbox" /> Include acknowledged warnings</label>
+             <h3 class="font-semibold">Warnings (2)</h3>
+             ${[
+               [
+                 "A2 Kids · Mon 15:00",
+                 "Room 3 holds 8 students, but the group has 10.",
+               ],
+               [
+                 "B1 Evening · Thu 17:00",
+                 "Tomas Horvat is not available on Tue 4 Nov 2026.",
+               ],
+             ]
+               .map(
+                 ([s, m]) =>
+                   `<div class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ ${s}</div><p>${m}</p><div class="flex gap-3 mt-1"><a href="#" class="underline">Show</a><a href="#" class="underline">Edit</a></div></div>`,
+               )
+               .join("")}`,
+            btn("Close", "outline"),
+          );
+        if (st === 12)
+          overlay = `<div role="status" class="absolute bottom-6 right-6 z-30 w-[420px] bg-white border border-border rounded-lg shadow-lg p-4 flex items-start gap-3"><span class="text-green-700">✓</span><p class="flex-1">Slot saved. 9 lessons created, 8 future lessons removed, 1 cancelled because it has history.</p><a href="#" class="text-primary underline font-medium">View</a></div>`;
+        if (st === 11)
+          return shell(
+            `<div class="max-w-md mx-auto mt-6"></div>` +
+              `<div class="w-[390px] mx-auto bg-white border border-border rounded-lg p-4 space-y-3"><div role="status" class="border border-blue-300 bg-blue-50 text-blue-800 rounded-md p-3">The timetable editor works best on a larger screen. Here you can view the timetable.</div><p class="text-muted-foreground">(Below 1024 px the editor route shows the read-only weekly view.)</p></div>`,
+          );
+        return shell(header + banner + toolbar + grid, overlay);
+      }
+
+      /* ------------------------------------------------------------- weekly views */
+      const LESSONS = [
+        // day index, from, to, title, sub, kind
+        [0, "17:00", "18:30", "B1 Evening", "Room 1 · B1", "g"],
+        [1, "10:00", "11:00", "B1 Grammar 1-on-1", "Room 2 · Jan Novak", "o"],
+        [2, "17:00", "18:30", "B1 Evening", "Room 1 · B1", "g"],
+        [
+          3,
+          "15:00",
+          "16:30",
+          "A2 Kids",
+          "Room 3 · You're substituting for Ana Kral",
+          "sub",
+        ],
+        [3, "17:00", "18:30", "B1 Evening", "Covered by Eva Simon", "cover"],
+        [
+          4,
+          "10:00",
+          "11:00",
+          "B1 Grammar 1-on-1",
+          "Cancelled · Room 2",
+          "cancel",
+        ],
+      ];
+      function teacherWeek(st) {
+        const days = [
+          "Mon 13",
+          "Tue 14",
+          "Wed 15",
+          "Thu 16",
+          "Fri 17",
+          "Sat 18",
+        ];
+        const toolbar = `<div class="flex flex-wrap items-center gap-2 mb-4"><h1 class="text-2xl font-semibold mr-4">My timetable</h1>
+          <button class="h-9 w-9 rounded-md border border-input bg-white" aria-label="Previous week">‹</button>${btn("Today", "outline")}<button class="h-9 w-9 rounded-md border border-input bg-white" aria-label="Next week">›</button>
+          <button class="h-9 px-3 rounded-md hover:bg-white font-medium tnum">13 – 19 Oct 2026 📅</button>
+          <div role="group" aria-label="View" class="ml-auto inline-flex border border-input rounded-md overflow-hidden bg-white"><button class="h-9 px-3 bg-accent text-accent-foreground font-medium" aria-pressed="true">Week</button><button class="h-9 px-3">Day</button></div></div>`;
+        if (st === 2)
+          return shell(
+            toolbar +
+              `<div class="bg-white border border-border rounded-lg p-12 text-center"><h2 class="text-lg font-semibold">The timetable for this term hasn't been published yet.</h2></div>`,
+            "",
+            "My timetable",
+            "teacher",
+          );
+        if (st === 3)
+          return shell(
+            toolbar +
+              `<div class="bg-white border border-border rounded-lg p-12 text-center"><h2 class="text-lg font-semibold">No lessons this week.</h2><a href="#" class="text-primary underline">Next lesson: Mon 27 Oct at 17:00</a></div>`,
+            "",
+            "My timetable",
+            "teacher",
+          );
+        const cls = {
+          g: "lg-group",
+          o: "lg-one",
+          sub: "lg-sub",
+          cover: "lg-cancel",
+          cancel: "lg-cancel",
+        };
+        const grid = `<div class="bg-white border border-border rounded-lg overflow-hidden">
+          <div class="grid grid-cols-[56px_repeat(6,1fr)] border-b border-border">${["", ...days].map((d, i) => `<div class="px-2 py-2 text-center font-medium ${i === 3 ? "bg-accent text-accent-foreground" : ""}" ${i === 3 ? 'aria-current="date"' : ""}>${d}</div>`).join("")}</div>
+          <div class="grid grid-cols-[56px_repeat(6,1fr)] overflow-auto" style="max-height:600px">${timeAxis()}
+            ${days
+              .map(
+                (
+                  d,
+                  di,
+                ) => `<div class="relative border-l border-border ${di === 5 ? "holiday" : ""}" style="height:${(END - START) * HOUR}px">${gridLines()}${di === 5 ? `<div class="absolute top-2 inset-x-1 text-center text-xs text-muted-foreground">Holiday — Open day</div>` : ""}
+              ${di === 2 ? `<div class="absolute inset-x-0 border-t-2 border-red-600" style="top:${yOf("16:10")}px"><span class="sr-only">Now</span></div>` : ""}
+              ${LESSONS.filter((l) => l[0] === di)
+                .map(
+                  ([, a, b, t, s, k]) =>
+                    `<button data-lesson class="absolute inset-x-1 rounded-sm px-2 py-1 text-left text-xs overflow-hidden ${cls[k]}" style="top:${yOf(a)}px;height:${height(a, b)}px"><div class="tnum ${k === "cancel" ? "line-through" : ""}">${a}–${b}</div><div class="font-semibold truncate">${k === "o" ? "👤" : k === "sub" || k === "cover" ? "⟳" : k === "cancel" ? "⊘" : "👥"} ${t}</div><div class="truncate">${s}</div>${k === "sub" ? badge("Substitute", "info") : k === "cancel" ? badge("Cancelled", "danger") : ""}</button>`,
+                )
+                .join("")}</div>`,
+              )
+              .join("")}
+          </div></div>`;
+        const overlay =
+          st === 1
+            ? sheet(
+                "A2 Kids",
+                `<dl class="space-y-3">
+                  <div><dt class="text-muted-foreground">Status</dt><dd>${badge("Scheduled", "info")} ${badge("Substitute", "info")}</dd></div>
+                  <div><dt class="text-muted-foreground">When</dt><dd class="tnum">Thursday 16 October 2026, 15:00–16:30 (90 min)</dd></div>
+                  <div><dt class="text-muted-foreground">Type and level</dt><dd>Group lesson · A2</dd></div>
+                  <div><dt class="text-muted-foreground">Teacher</dt><dd>Tomas Horvat — substitute for Ana Kral</dd></div>
+                  <div><dt class="text-muted-foreground">Room</dt><dd>Room 3</dd></div>
+                  <div><dt class="text-muted-foreground">Students (10)</dt><dd>Lea Toth, Filip Hruby, Nina Polak, … </dd></div>
+                </dl>`,
+                btn("Close", "outline"),
+              )
+            : "";
+        return shell(toolbar + grid, overlay, "My timetable", "teacher");
+      }
+
+      function studentMobile(st) {
+        const days = [
+          ["Mo", 13, 1],
+          ["Tu", 14, 0],
+          ["We", 15, 2],
+          ["Th", 16, 0],
+          ["Fr", 17, 1],
+          ["Sa", 18, 0],
+          ["Su", 19, 0],
+        ];
+        const card = (time, title, sub, kind, extra = "") =>
+          `<button class="w-full text-left rounded-lg p-4 ${kind} space-y-1"><div class="flex justify-between items-center"><span class="text-lg font-semibold tnum ${kind === "lg-cancel" ? "line-through" : ""}">${time}</span>${extra}</div><div class="font-semibold">${title}</div><div>${sub}</div></button>`;
+        let list;
+        if (st === 2)
+          list = `<div class="text-center py-10"><p class="font-medium">The timetable for this term hasn't been published yet.</p></div>`;
+        else if (st === 3)
+          list = `<div class="text-center py-10"><p class="font-medium">No lessons on Thursday.</p><a href="#" class="text-primary underline">Next lesson: Fri 17 Oct at 10:00</a></div>`;
+        else if (st === 4)
+          list = `<div class="space-y-3">${[1, 2].map(() => `<div class="skeleton h-24"></div>`).join("")}</div>`;
+        else
+          list = `<div class="space-y-3">
+            ${card("17:00–18:30", "👥 B1 Evening", "Room 1 · Tomas Horvat", "lg-group", badge("Group", "info"))}
+            ${card("19:00–19:45", "👤 1-on-1 with Ana Kral", "Online 1", "lg-sub", badge("⟳ Substitute", "info"))}
+            <p class="text-sm px-1 -mt-2">Ana Kral (instead of Eva Simon)</p>
+            <a href="#" class="flex h-11 items-center justify-center rounded-md border border-input bg-white font-medium">Join online ↗<span class="sr-only">(opens in new tab)</span></a>
+            ${st === 1 ? card("10:00–11:00", "⊘ B1 Grammar", "Reason: Teacher ill", "lg-cancel", badge("Cancelled", "danger")) : ""}
+          </div>`;
+        return `<div class="w-[390px] h-[844px] bg-white border border-slate-300 shadow-xl rounded-[28px] overflow-hidden flex flex-col text-base">
+          <header class="h-14 border-b border-border flex items-center gap-3 px-4 shrink-0"><button aria-label="Menu" class="w-11 h-11">≡</button><span class="font-semibold text-sm">Lingua Language School</span><span class="ml-auto w-8 h-8 rounded-full bg-slate-200 grid place-items-center text-xs">MK</span></header>
+          <main class="flex-1 overflow-auto p-4 space-y-4">
+            <h1 class="text-2xl font-semibold">Timetable</h1>
+            <div class="flex items-center justify-between"><button class="w-11 h-11 rounded-md border border-input" aria-label="Previous week">‹</button><span class="font-medium tnum">13 – 19 Oct</span><button class="w-11 h-11 rounded-md border border-input" aria-label="Next week">›</button><button class="h-11 px-3 rounded-md border border-input">Today</button></div>
+            <div class="grid grid-cols-7 gap-1">${days.map(([d, n, c], i) => `<button aria-pressed="${i === 2}" aria-label="${d} ${n} October, ${c} lessons" class="h-[52px] rounded-md flex flex-col items-center justify-center text-sm ${i === 2 ? "bg-primary text-white" : i === 3 ? "ring-2 ring-ring" : "bg-muted"}"><span>${d}</span><span class="font-semibold tnum">${n}</span>${c ? `<span class="w-1 h-1 rounded-full ${i === 2 ? "bg-white" : "bg-slate-600"}"></span>` : ""}</button>`).join("")}</div>
+            <h2 class="text-lg font-semibold">${st === 3 ? "Thursday 16 October" : "Wednesday 15 October"}</h2>
+            ${list}
+          </main>
+          <nav aria-label="Primary" class="h-16 border-t border-border grid grid-cols-4 text-xs shrink-0">${["Home", "Timetable", "Homework", "More"].map((t, i) => `<a href="#" class="flex flex-col items-center justify-center ${i === 1 ? "text-primary font-medium" : "text-muted-foreground"}" ${i === 1 ? 'aria-current="page"' : ""}><span class="text-lg">${["⌂", "▦", "☰", "≡"][i]}</span>${t}</a>`).join("")}</nav>
+        </div>`;
+      }
+
+      /* ---------------------------------------------------------------- render */
+      const SCREENS = [
+        {
+          k: "editor",
+          label: "Admin editor",
+          states: [
+            "draft grid",
+            "loading",
+            "new slot · ok",
+            "slot · warnings",
+            "slot · warnings acknowledged",
+            "slot · conflict",
+            "publish blocked",
+            "published · edit from date",
+            "end slot",
+            "issues panel",
+            "empty term",
+            "< 1024 px",
+            "saved · result toast",
+            "slot · archived room",
+            "copy from term",
+          ],
+          fn: editor,
+        },
+        {
+          k: "teacher",
+          label: "Teacher week",
+          states: ["week", "lesson details", "not published", "empty week"],
+          fn: teacherWeek,
+        },
+        {
+          k: "student",
+          label: "Student mobile",
+          states: [
+            "day",
+            "with cancelled",
+            "not published",
+            "empty day",
+            "loading",
+          ],
+          fn: studentMobile,
+        },
+      ];
+      let cur = { screen: "editor", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>
