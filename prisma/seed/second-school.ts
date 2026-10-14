@@ -1,6 +1,7 @@
 import type { PrismaClient } from "../../src/generated/prisma/client";
 import { toSchoolSlug } from "../../src/server/schools";
 import { generateLessonOccurrences } from "../../src/server/scheduling/generate-lessons";
+import { creditExpiry } from "../../src/server/scheduling/replacements";
 import { fromIsoDate } from "../../src/server/scheduling/time";
 import { LESSON_GENERATION_END } from "./data";
 import { seedId } from "./ids";
@@ -39,6 +40,7 @@ export const SECOND_NAMES = {
   teacherNote: "NORTHBRIDGE-INTERNAL-NOTE: Bianca needs a level check.",
   lessonLog: "Northbridge lesson log: Dativ und Akkusativ",
   homework: "Northbridge homework: Arbeitsbuch S. 12",
+  absenceReason: "NORTHBRIDGE-ABSENCE: Bianca at the dentist",
   availabilityNote: "Northbridge staff meeting",
 } as const;
 
@@ -303,6 +305,40 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
       schoolId,
       lessonId: lessonIds[0],
       ...log,
+    },
+  });
+
+  // A cancellation with its makeup credit (Phase 3), so absences and
+  // credits have rows in both schools.
+  const absenceLesson = occurrences[1];
+  const absenceId = id("absence", "bauer");
+  await db.absenceReport.upsert({
+    where: { id: absenceId },
+    update: {},
+    create: {
+      id: absenceId,
+      schoolId,
+      lessonId: lessonIds[1],
+      studentId: student.id,
+      reportedById: student.userId,
+      reason: SECOND_NAMES.absenceReason,
+      createdAt: new Date(absenceLesson.startsAt.getTime() - 2 * 86_400_000),
+    },
+  });
+  await db.makeupCredit.upsert({
+    where: { id: id("makeup-credit", "bauer") },
+    update: {},
+    create: {
+      id: id("makeup-credit", "bauer"),
+      schoolId,
+      studentId: student.id,
+      sourceLessonId: lessonIds[1],
+      absenceReportId: absenceId,
+      expiresAt: creditExpiry(
+        absenceLesson.startsAt,
+        30,
+        SECOND_SCHOOL.timezone,
+      ).expiresAt,
     },
   });
 

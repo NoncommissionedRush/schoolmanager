@@ -7,6 +7,7 @@ import { mondayOf } from "@/server/timetable/week";
 import { teacherContext } from "@/server/lessons/context";
 import { loadTeacherLesson } from "@/server/lessons/teacher";
 import { loadLessonNotes } from "@/server/notes/teacher-notes";
+import { loadLessonRoster } from "@/server/replacements/views";
 
 import { TeacherLessonClient } from "./lesson-page-client";
 
@@ -26,7 +27,11 @@ async function TeacherLesson({
     viewer.school.timezone,
   );
   if (!lesson) notFound();
-  const internalNotes = await loadLessonNotes(db, noteViewer, lesson.id, now);
+  const [internalNotes, roster] = await Promise.all([
+    loadLessonNotes(db, noteViewer, lesson.id, now),
+    // The lesson is the teacher's (checked above), so its roster may show.
+    loadLessonRoster(db, lesson.id, now),
+  ]);
 
   const t = await getTranslations("lessons.back");
   const fromList = (await searchParams).from === "list";
@@ -41,6 +46,7 @@ async function TeacherLesson({
       key={lesson.id}
       lesson={lesson}
       internalNotes={internalNotes}
+      roster={roster}
       back={back}
       query={fromList ? "?from=list" : ""}
     />

@@ -29,7 +29,8 @@ import {
 } from "@/server/scheduling";
 
 export type SchoolDb = ReturnType<typeof scopeToSchool>;
-type Tx = Parameters<Parameters<SchoolDb["$transaction"]>[0]>[0];
+/** A transaction on the school-scoped client. */
+export type Tx = Parameters<Parameters<SchoolDb["$transaction"]>[0]>[0];
 
 /** The signed-in admin performing the change (`User.id`), for the audit log. */
 export type Actor = { userId: string };
@@ -241,7 +242,7 @@ async function load(tx: Tx, termId: string, now: Date): Promise<Loaded> {
  * Serializes timetable changes per school, so two admins saving at once
  * cannot both pass the conflict check and double-book a teacher.
  */
-async function lockTimetable(tx: Tx, schoolId: string) {
+export async function lockTimetable(tx: Tx, schoolId: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${timetableLockKey(schoolId)}, 0))`;
 }
 
@@ -873,6 +874,19 @@ export async function validateLesson(
     const loaded = await load(tx, candidate.termId, now);
     return checkLesson(buildCalendar(loaded.context), candidate);
   });
+}
+
+/**
+ * `validateLesson` inside the caller's transaction, which has already taken
+ * the timetable lock (absences restoring a cancelled lesson, CARM-42).
+ */
+export async function checkLessonInTransaction(
+  tx: Tx,
+  candidate: LessonCandidate,
+  now = new Date(),
+): Promise<Conflict[]> {
+  const loaded = await load(tx, candidate.termId, now);
+  return checkLesson(buildCalendar(loaded.context), candidate);
 }
 
 // ---------------------------------------------------------------------------

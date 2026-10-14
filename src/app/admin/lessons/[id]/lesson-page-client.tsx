@@ -3,7 +3,10 @@
 import { CalendarDays, Info, SquarePen } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 
+import { ReportAbsenceDialog } from "@/app/admin/absences/report-absence-dialog";
+import { StudentsCard } from "@/components/absences/students-card";
 import { InternalNotesCard } from "@/components/lessons/internal-notes-card";
 import {
   LessonHeader,
@@ -14,6 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import type { LessonPage } from "@/server/lessons/teacher";
 import type { LessonNotes } from "@/server/notes/teacher-notes";
+import type { LessonRosterView } from "@/server/replacements/views";
 
 import { loadEarlierNotesAction } from "../actions";
 
@@ -24,6 +28,7 @@ import { loadEarlierNotesAction } from "../actions";
 export function AdminLessonClient({
   lesson,
   internalNotes,
+  roster,
   back,
   query,
   timetableHref,
@@ -31,6 +36,8 @@ export function AdminLessonClient({
 }: {
   lesson: LessonPage;
   internalNotes: LessonNotes;
+  /** Students card (absences.md §6.1, §7.4). */
+  roster: LessonRosterView | null;
   back: { href: string; label: string };
   /** Kept on previous/next links (e.g. `?from=list`). */
   query: string;
@@ -41,6 +48,7 @@ export function AdminLessonClient({
   const tl = useTranslations("lessonLog");
   const href = (id: string | null) =>
     id ? `/admin/lessons/${id}${query}` : null;
+  const [reporting, setReporting] = useState<string | null>(null);
 
   return (
     <div className="mx-auto flex max-w-screen-xl flex-col gap-6">
@@ -88,6 +96,12 @@ export function AdminLessonClient({
       </div>
       <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
         <div className="flex flex-col gap-6 lg:col-span-8">
+          {roster && (
+            <StudentsCard
+              roster={roster}
+              onReport={(student) => setReporting(student.id)}
+            />
+          )}
           <ReadOnlyLogCard
             log={lesson.log}
             empty={
@@ -109,6 +123,13 @@ export function AdminLessonClient({
           />
         </div>
       </div>
+      <ReportAbsenceDialog
+        open={reporting !== null}
+        onOpenChange={(open) => !open && setReporting(null)}
+        preset={
+          reporting ? { studentId: reporting, lessonId: lesson.id } : undefined
+        }
+      />
     </div>
   );
 }

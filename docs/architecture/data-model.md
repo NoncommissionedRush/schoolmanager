@@ -83,9 +83,12 @@ student.
 
 ## Absences & replacements
 
-1. Student files an `AbsenceReport` for a lesson (unique per lesson+student).
-2. That earns a `MakeupCredit` (`AVAILABLE` → `USED` / `EXPIRED`), unique per
-   student + missed lesson.
+1. The student (or an admin for them) files an `AbsenceReport` for a lesson
+   (unique per lesson+student; `reportedById` is the actor, `createdAt` when).
+2. Before the school's cutoff (`School.absenceCutoffMinutes`) that earns a
+   `MakeupCredit` (`AVAILABLE` → `USED` / `EXPIRED`), unique per student +
+   missed lesson and per absence, expiring `School.makeupCreditValidDays`
+   after the missed lesson. After the cutoff there is no credit.
 3. The student books a `ReplacementRequest`: original lesson → target lesson
    of **the same level** (validated server-side against
    `StudentProfile.level` / `Group.level`). It is created `AUTO_APPROVED`; an
@@ -186,7 +189,7 @@ erDiagram
 
   Lesson ||--o{ AbsenceReport : ""
   StudentProfile ||--o{ AbsenceReport : ""
-  AbsenceReport |o--o{ MakeupCredit : earns
+  AbsenceReport ||--o| MakeupCredit : earns
   Lesson ||--o{ MakeupCredit : "missed lesson"
   MakeupCredit |o--o{ ReplacementRequest : "spent on"
   Lesson ||--o{ ReplacementRequest : "original / target"

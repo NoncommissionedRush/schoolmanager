@@ -2,6 +2,7 @@
   "title": "Settings",
   "nav": {
     "school": "School",
+    "absences": "Absences & credits",
     "terms": "Terms & holidays",
     "rooms": "Rooms",
     "admins": "Administrators"
@@ -22,5 +23,24 @@
       "timezone": "Choose a time zone from the list.",
       "noDays": "Choose at least one school day."
     }
+  },
+  "absences": {
+    "title": "Absences & credits",
+    "description": "When students get a makeup credit for a cancelled lesson, and for how long.",
+    "cutoff": "Cancellation cutoff",
+    "cutoffBefore": "Students who cancel at least",
+    "cutoffAfter": "hours before a lesson get a makeup credit.",
+    "cutoffLabel": "Cancellation cutoff, in hours before the lesson",
+    "cutoffExample": "Example: for a lesson on {lessonDateTime}, cancel by {cutoffDateTime}.",
+    "cutoffZero": "Students get a credit until the lesson starts.",
+    "cutoffHint": "The same notice applies to cancelling a replacement and to rescheduling a 1-on-1.",
+    "validity": "Credit validity",
+    "validityBefore": "A makeup credit is valid for",
+    "validityAfter": "days after the missed lesson.",
+    "validityLabel": "Credit validity, in days after the missed lesson",
+    "validityExample": "Example: a credit for {lessonDate} is valid until {expiryDate}.",
+    "appliesToNew": "Changes apply to new cancellations. Existing credits keep their dates.",
+    "save": "Save",
+    "saved": "Settings saved."
   }
 }

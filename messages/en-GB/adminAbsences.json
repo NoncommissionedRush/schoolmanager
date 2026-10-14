@@ -1,0 +1,71 @@
+{
+  "title": "Absences & replacements",
+  "description": "Cancellations by students and the school office, and the makeup credits they earned.",
+  "col": {
+    "lesson": "Lesson",
+    "student": "Student",
+    "cancelledAt": "Cancelled at",
+    "reason": "Reason",
+    "credit": "Credit",
+    "creditStatus": "Credit status",
+    "actions": "Actions"
+  },
+  "status": {
+    "creditEarned": "Credit earned",
+    "lateNoCredit": "Late — no credit"
+  },
+  "creditAvailableUntil": "Available until {date}",
+  "creditUsed": "Used",
+  "creditExpired": "Expired",
+  "byAdmin": "By {name}",
+  "filter": {
+    "from": "From",
+    "to": "To",
+    "student": "Student",
+    "group": "Group",
+    "teacher": "Teacher",
+    "all": "All",
+    "apply": "Apply"
+  },
+  "preset": {
+    "thisWeek": "This week",
+    "next14": "Next 14 days",
+    "last30": "Last 30 days"
+  },
+  "empty": {
+    "absences": "No cancellations in this period."
+  },
+  "entities": "cancellations",
+  "openStudent": "Open student",
+  "openLesson": "Open lesson",
+  "report": {
+    "action": "Report absence",
+    "title": "Report an absence",
+    "student": "Student",
+    "lesson": "Lesson",
+    "chooseStudent": "Choose a student",
+    "chooseLesson": "Choose a lesson",
+    "lessonOption": "{dateTime} · {group}",
+    "credit": "{name} gets a makeup credit, valid until {date}.",
+    "noCredit": "It's after the cutoff, so {name} won't get a makeup credit.",
+    "reasonPlaceholder": "e.g. Phoned the office: ill",
+    "reasonHint": "The student and the teacher see the reason.",
+    "noLessons": "{name} has no upcoming lessons in the next 30 days.",
+    "alreadyCancelled": "{name} already cancelled this lesson.",
+    "loading": "Loading lessons…",
+    "done": "Absence reported for {name}."
+  },
+  "delete": {
+    "action": "Delete absence…",
+    "title": "Delete {name}'s absence on {date}?",
+    "body": "{name} is back on the lesson list. Their unused makeup credit from this lesson is removed.",
+    "bodyOneOnOne": "The 1-on-1 lesson is scheduled again and {name}'s unused makeup credit from it is removed.",
+    "creditUsed": "The credit from this absence is used. Reject that replacement or cancel the rescheduled lesson first.",
+    "overCapacity": "{group} is now over capacity ({taken}/{capacity}).",
+    "conflicts": "The lesson can't be scheduled again as it was:",
+    "acknowledge": "I've checked: {conflict}",
+    "confirm": "Delete absence",
+    "done": "Absence deleted."
+  },
+  "groupOneOnOne": "{group} · 1-on-1"
+}

@@ -76,19 +76,25 @@ enum MakeupCreditStatus {
 // ---------------------------------------------------------------------------
 
 model School {
-  id               String   @id @default(uuid()) @db.Uuid
-  name             String
-  slug             String   @unique
+  id                    String   @id @default(uuid()) @db.Uuid
+  name                  String
+  slug                  String   @unique
   /// IANA timezone used to interpret slot times, e.g. "Europe/Bratislava".
-  timezone         String   @default("Europe/Bratislava")
+  timezone              String   @default("Europe/Bratislava")
   /// ISO weekdays lessons are normally held on (default Mon–Sat). Outside
   /// them, or outside the day window below, the timetable editor warns.
-  teachingWeekdays Int[]    @default([1, 2, 3, 4, 5, 6]) @map("teaching_weekdays")
+  teachingWeekdays      Int[]    @default([1, 2, 3, 4, 5, 6]) @map("teaching_weekdays")
   /// Teaching day window, minutes since midnight (default 07:00–21:00).
-  dayStartMinute   Int      @default(420) @map("day_start_minute")
-  dayEndMinute     Int      @default(1260) @map("day_end_minute")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  dayStartMinute        Int      @default(420) @map("day_start_minute")
+  dayEndMinute          Int      @default(1260) @map("day_end_minute")
+  /// A cancellation earns a makeup credit only this long before the lesson
+  /// starts (0–20160, i.e. up to 14 days; docs/architecture/replacements.md §2).
+  absenceCutoffMinutes  Int      @default(1440) @map("absence_cutoff_minutes")
+  /// A makeup credit can be used up to this many days after the missed
+  /// lesson's date (1–365).
+  makeupCreditValidDays Int      @default(30) @map("makeup_credit_valid_days")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   memberships         Membership[]
   teacherProfiles     TeacherProfile[]
@@ -591,23 +597,29 @@ model TeacherNote {
 // Absences & replacements (Phase 3)
 // ---------------------------------------------------------------------------
 
-/// A student announcing they will miss (or missed) a lesson.
+/// A student cancelling an upcoming lesson ("I won't come"), reported by the
+/// student or by an admin on their behalf. Final for the student; an admin
+/// can delete it. Whether it earned a credit is the credit's existence.
+/// See docs/architecture/replacements.md §3.
 model AbsenceReport {
   id           String   @id @default(uuid()) @db.Uuid
   schoolId     String   @map("school_id") @db.Uuid
   lessonId     String   @map("lesson_id") @db.Uuid
   studentId    String   @map("student_id") @db.Uuid
+  /// Who reported it: the student's user, or an admin's ("via office").
+  /// Null only after that user was deleted. Never a teacher.
   reportedById String?  @map("reported_by_id") @db.Uuid
+  /// Optional, ≤ 300 characters; the teacher and admins see it.
   reason       String?
-  reportedAt   DateTime @default(now()) @map("reported_at")
+  /// When it was reported; the cutoff is evaluated against this.
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  lesson        Lesson         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Cascade)
-  student       StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
-  reportedBy    User?          @relation(fields: [reportedById], references: [id], onDelete: SetNull)
-  makeupCredits MakeupCredit[]
+  school       School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  lesson       Lesson         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Cascade)
+  student      StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+  reportedBy   User?          @relation(fields: [reportedById], references: [id], onDelete: SetNull)
+  makeupCredit MakeupCredit?
 
   @@unique([lessonId, studentId])
   @@unique([schoolId, id])
@@ -615,27 +627,35 @@ model AbsenceReport {
   @@map("absence_reports")
 }
 
-/// Entitlement to one replacement lesson, earned by a reported absence.
+/// Entitlement to one replacement (group) or reschedule (1-on-1), earned by
+/// an absence reported before the cutoff. The stored `status` may lag:
+/// an AVAILABLE credit past `expiresAt` is EXPIRED (`creditState`), and is
+/// brought up to date lazily. See docs/architecture/replacements.md §4.
 model MakeupCredit {
   id              String             @id @default(uuid()) @db.Uuid
   schoolId        String             @map("school_id") @db.Uuid
   studentId       String             @map("student_id") @db.Uuid
   sourceLessonId  String             @map("source_lesson_id") @db.Uuid
-  absenceReportId String?            @map("absence_report_id") @db.Uuid
+  absenceReportId String             @map("absence_report_id") @db.Uuid
   status          MakeupCreditStatus @default(AVAILABLE)
-  expiresAt       DateTime?          @map("expires_at")
+  /// Start of the local day after "valid until"; usable only before it.
+  expiresAt       DateTime           @map("expires_at")
+  /// Set with USED, cleared when the credit is released.
+  usedAt          DateTime?          @map("used_at")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
   school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   student       StudentProfile       @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
   sourceLesson  Lesson               @relation(fields: [schoolId, sourceLessonId], references: [schoolId, id], onDelete: Restrict)
-  absenceReport AbsenceReport?       @relation(fields: [schoolId, absenceReportId], references: [schoolId, id], onDelete: Restrict)
+  absenceReport AbsenceReport        @relation(fields: [schoolId, absenceReportId], references: [schoolId, id], onDelete: Restrict)
   replacements  ReplacementRequest[]
 
   @@unique([studentId, sourceLessonId])
   @@unique([schoolId, id])
+  @@unique([schoolId, absenceReportId])
   @@index([schoolId, studentId, status])
+  @@index([schoolId, status, expiresAt])
   @@map("makeup_credits")
 }
 

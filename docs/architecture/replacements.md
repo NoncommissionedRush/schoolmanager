@@ -1,6 +1,10 @@
 # Absences, makeup credits & replacements (rules, CARM-40)
 
-**Status: proposed for Phase 3, nothing below is implemented yet.** This page
+**Status: Phase 3. Implemented (CARM-42): settings (§2), reporting and
+deleting absences (§3, without the reschedule chains), credit creation and
+expiry (§4), and the schema for those parts (§9). Still proposed (CARM-43):
+replacement booking and review (§5–§6), 1-on-1 reschedule (§7), credit
+release, slot-split carry-over.** This page
 defines the rules the Phase 3 booking flow enforces and the schema changes
 it needs. The screens are specified in `docs/design/absences.md` (CARM-39);
 where the two disagree, raise it on the issue rather than picking one.

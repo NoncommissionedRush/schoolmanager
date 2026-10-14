@@ -123,6 +123,14 @@ const unaimedCases = (ids: SchoolIds): ActionCase[] => [
     ],
   },
   {
+    name: "change the absence settings",
+    action: [
+      "src/app/admin/settings/absences/actions.ts",
+      "saveAbsenceSettingsAction",
+    ],
+    args: [null, formOf({ cutoffHours: "1", validDays: "1" })],
+  },
+  {
     name: "create a room",
     action: ["src/app/admin/settings/rooms/actions.ts", "saveRoomAction"],
     args: [

@@ -72,6 +72,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/absences",
       icon: "calendar-x",
       phase: 3,
+      enabled: true,
       section: "schedule",
     },
     {
@@ -234,6 +235,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/student/absences",
       icon: "calendar-x",
       phase: 3,
+      enabled: true,
       tab: true,
     },
     { label: "payments", href: "/student/payments", icon: "wallet", phase: 6 },
