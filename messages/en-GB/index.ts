@@ -11,6 +11,7 @@ import courses from "./courses.json";
 import credits from "./credits.json";
 import dashboard from "./dashboard.json";
 import errors from "./errors.json";
+import generator from "./generator.json";
 import groups from "./groups.json";
 import holidays from "./holidays.json";
 import homework from "./homework.json";
@@ -46,6 +47,7 @@ const messages = {
   credits,
   dashboard,
   errors,
+  generator,
   groups,
   holidays,
   homework,
