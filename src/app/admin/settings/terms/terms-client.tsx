@@ -225,7 +225,7 @@ export function TermRowActions({
             {tc("edit")}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => router.push(`/admin/timetable?term=${term.id}`)}
+            onClick={() => router.push(`/admin/timetable/edit?term=${term.id}`)}
           >
             {t("openTimetable")}
           </DropdownMenuItem>

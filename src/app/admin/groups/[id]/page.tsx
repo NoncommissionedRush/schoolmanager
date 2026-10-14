@@ -98,7 +98,7 @@ async function GroupPage({
     members,
     archived: !!group.deletedAt,
   };
-  const editorHref = `/admin/timetable?group=${group.id}`;
+  const editorHref = `/admin/timetable/edit?group=${group.id}&view=week`;
 
   return (
     <div className="mx-auto flex max-w-screen-xl flex-col gap-6">
