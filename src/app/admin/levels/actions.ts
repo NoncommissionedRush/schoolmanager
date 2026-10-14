@@ -16,6 +16,7 @@ import {
   updateLevel,
 } from "@/server/admin/levels/service";
 import { type ActionResult, msg, ok } from "@/server/admin/result";
+import { assertIds, assertOptionalId } from "@/server/admin/shared";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
 
 const PATH = "/admin/levels";
@@ -28,6 +29,7 @@ export async function saveLevelAction(
   formData: FormData,
 ): Promise<ActionResult<Saved>> {
   return runAdminAction(async (scope) => {
+    assertOptionalId(id);
     const parsed = parseInput(levelSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const level = id
@@ -45,6 +47,7 @@ export async function saveLevelAction(
 
 export async function moveLevelAction(id: string, direction: MoveDirection) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const level = await moveLevel(
       scope,
       id,
@@ -69,6 +72,7 @@ export async function addCefrPresetAction() {
 
 export async function archiveLevelAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     await archiveLevel(scope, id);
     revalidatePath(PATH);
     // The client shows the toast with Undo (§5.3).
@@ -78,6 +82,7 @@ export async function archiveLevelAction(id: string) {
 
 export async function restoreLevelAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const level = await restoreLevel(scope, id);
     revalidatePath(PATH);
     return ok(undefined, msg("common.toast.restored", { name: level.code }));
@@ -86,6 +91,7 @@ export async function restoreLevelAction(id: string) {
 
 export async function deleteLevelAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const level = await deleteLevel(scope, id);
     revalidatePath(PATH);
     return ok(undefined, msg("common.toast.deleted", { name: level.code }));

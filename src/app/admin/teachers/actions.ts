@@ -18,6 +18,7 @@ import {
   updateTeacherSchema,
 } from "@/server/admin/people/schema";
 import { type ActionResult, msg, ok } from "@/server/admin/result";
+import { assertIds, assertOptionalId } from "@/server/admin/shared";
 import { createTeacher, updateTeacher } from "@/server/admin/teachers/service";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
 
@@ -51,6 +52,7 @@ export async function updateTeacherAction(
   formData: FormData,
 ): Promise<ActionResult<{ updatedAt: string }>> {
   return runAdminAction(async (scope) => {
+    assertIds(teacherId);
     const parsed = parseInput(updateTeacherSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const teacher = await updateTeacher(scope, teacherId, parsed.data);
@@ -66,6 +68,8 @@ export async function saveWeeklyAction(
   formData: FormData,
 ): Promise<ActionResult<{ mergedWeekdays: number[] }>> {
   return runAdminAction(async (scope) => {
+    assertIds(teacherId);
+    assertOptionalId(replaceId);
     const parsed = parseInput(weeklySchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const result = await saveWeekly(scope, teacherId, parsed.data, replaceId);
@@ -88,6 +92,7 @@ export async function saveExceptionAction(
   formData: FormData,
 ): Promise<ActionResult<{ affected: number }>> {
   return runAdminAction(async (scope) => {
+    assertIds(teacherId);
     const parsed = parseInput(exceptionSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const result = await saveException(
@@ -107,6 +112,7 @@ export async function saveExceptionAction(
 
 export async function deleteAvailabilityAction(teacherId: string, id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(teacherId, id);
     await deleteAvailability(scope, teacherId, id);
     revalidatePath(`${PATH}/${teacherId}`);
     return ok(undefined, msg("availability.deleted"));

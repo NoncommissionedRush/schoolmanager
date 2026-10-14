@@ -10,7 +10,7 @@ import {
   setPassword,
 } from "@/server/admin/people/service";
 import { type ActionResult, msg, ok } from "@/server/admin/result";
-import { schoolToday } from "@/server/admin/shared";
+import { assertIds, schoolToday } from "@/server/admin/shared";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
 
 /** Shared by teachers, students and admins (§5.3, §5.4). */
@@ -23,6 +23,7 @@ export async function setPasswordAction(
   formData: FormData,
 ): Promise<ActionResult<Credentials>> {
   return runAdminAction(async (scope) => {
+    assertIds(userId);
     const parsed = parseInput(setPasswordSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const user = await setPassword(scope, userId, parsed.data.password);
@@ -38,6 +39,7 @@ export async function setPasswordAction(
 
 export async function archivePersonAction(userId: string) {
   return runAdminAction(async (scope) => {
+    assertIds(userId);
     const result = await archivePerson(
       scope,
       userId,
@@ -50,6 +52,7 @@ export async function archivePersonAction(userId: string) {
 
 export async function restorePersonAction(userId: string) {
   return runAdminAction(async (scope) => {
+    assertIds(userId);
     const user = await restorePerson(scope, userId);
     revalidatePath("/admin", "layout");
     return ok(undefined, msg("common.toast.restored", { name: user.name }));

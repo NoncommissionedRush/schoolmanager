@@ -13,7 +13,11 @@ import {
   restoreRoom,
   updateRoom,
 } from "@/server/admin/rooms/service";
-import { schoolToday } from "@/server/admin/shared";
+import {
+  assertIds,
+  assertOptionalId,
+  schoolToday,
+} from "@/server/admin/shared";
 import type { Message } from "@/server/admin/result";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
 
@@ -27,6 +31,7 @@ export async function saveRoomAction(
   formData: FormData,
 ): Promise<ActionResult<Saved>> {
   return runAdminAction(async (scope) => {
+    assertOptionalId(id);
     const { db, viewer } = scope;
     const parsed = parseInput(roomSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
@@ -53,6 +58,7 @@ export async function saveRoomAction(
 
 export async function archiveRoomAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     await archiveRoom(scope, id);
     revalidatePath(PATH);
     // The client shows the toast with Undo (§5.3).
@@ -62,6 +68,7 @@ export async function archiveRoomAction(id: string) {
 
 export async function restoreRoomAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const room = await restoreRoom(scope, id);
     revalidatePath(PATH);
     return ok(undefined, msg("common.toast.restored", { name: room.name }));
@@ -70,6 +77,7 @@ export async function restoreRoomAction(id: string) {
 
 export async function deleteRoomAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const room = await deleteRoom(scope, id);
     revalidatePath(PATH);
     return ok(undefined, msg("common.toast.deleted", { name: room.name }));

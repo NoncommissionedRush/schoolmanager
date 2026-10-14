@@ -18,7 +18,11 @@ import {
   updateGroup,
 } from "@/server/admin/groups/service";
 import { type ActionResult, msg, ok } from "@/server/admin/result";
-import { schoolToday } from "@/server/admin/shared";
+import {
+  assertIds,
+  assertOptionalId,
+  schoolToday,
+} from "@/server/admin/shared";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
 import { fromIsoDate } from "@/server/scheduling";
 
@@ -33,6 +37,7 @@ export async function saveGroupAction(
   formData: FormData,
 ): Promise<ActionResult<Saved>> {
   return runAdminAction(async (scope) => {
+    assertOptionalId(id);
     const parsed = parseInput(groupSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const group = id
@@ -54,6 +59,7 @@ export async function saveGroupAction(
 
 export async function archiveGroupAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     await archiveGroup(scope, id, schoolToday(scope.viewer.school.timezone));
     refresh();
     // The client shows the toast with Undo (§5.3).
@@ -63,6 +69,7 @@ export async function archiveGroupAction(id: string) {
 
 export async function restoreGroupAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const group = await restoreGroup(scope, id);
     refresh();
     return ok(undefined, msg("common.toast.restored", { name: group.name }));
@@ -75,6 +82,7 @@ export async function addMembersAction(
   formData: FormData,
 ): Promise<ActionResult<{ count: number }>> {
   return runAdminAction(async (scope) => {
+    assertIds(groupId);
     const parsed = parseInput(addMembersSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const { group, count } = await addMembers(
@@ -98,6 +106,7 @@ export async function addToGroupAction(
   formData: FormData,
 ): Promise<ActionResult<{ count: number }>> {
   return runAdminAction(async (scope) => {
+    assertIds(studentId);
     const parsed = parseInput(addToGroupSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const { group, count } = await addMembers(
@@ -120,6 +129,7 @@ export async function removeMemberAction(
   formData: FormData,
 ): Promise<ActionResult<undefined>> {
   return runAdminAction(async (scope) => {
+    assertIds(membershipId);
     const parsed = parseInput(removeMemberSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const removed = await removeMember(
