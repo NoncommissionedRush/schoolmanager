@@ -15,8 +15,8 @@ import {
 // CARM-26): not on any page a student can open, not in the RSC payload
 // inlined in those pages, not from an API route. Reads go through
 // src/server/notes/teacher-notes.ts, whose unit test also fails if code
-// elsewhere reads the table. No screen shows notes yet; when one does, add
-// its student-reachable variants here.
+// elsewhere reads the table. The teacher lesson page (CARM-35) shows notes;
+// students get the forbidden page there. Add new note screens here.
 
 /** Every note body in the database, both schools. */
 async function noteBodies() {
@@ -33,6 +33,16 @@ async function noteWeeks(schoolId: string) {
     [schoolId],
   );
   return [...new Set(["2026-10-12", ...rows.map((r) => r.week)])];
+}
+
+/** Lessons with notes on them (their teacher lesson pages show the notes). */
+async function notedLessons(schoolId: string) {
+  const rows = await sql<{ id: string }>(
+    `SELECT DISTINCT lesson_id AS id FROM teacher_notes
+     WHERE school_id = $1 AND lesson_id IS NOT NULL`,
+    [schoolId],
+  );
+  return rows.map((r) => r.id);
 }
 
 const studentPaths = (weeks: string[]) => [
@@ -80,6 +90,10 @@ test.describe("teacher notes › never shown to students", () => {
         `/admin/teachers/${ids.teacher}`,
         "/teacher",
         "/teacher/timetable",
+        "/teacher/lessons",
+        ...(await notedLessons(ids.school)).map(
+          (id) => `/teacher/lessons/${id}`,
+        ),
       ]) {
         const { body } = await serverResponse(page, path);
         expect(body, path).toContain("have access to this page");
