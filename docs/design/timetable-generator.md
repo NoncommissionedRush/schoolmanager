@@ -1,1105 +1,762 @@
-# Timetable generator: admin flow (Phase 4)
+# Timetable generator: assign teachers (Phase 4)
 
-Spec for the admin screens that **generate** a term's weekly timetable:
-entering what each group needs per week (demand), running the generator,
-reviewing and editing the resulting **draft**, and publishing it through the
-existing Phase 1 flow. Builds on `docs/design/tokens.md`,
-`docs/design/app-layout.md`, `docs/design/timetable.md` (editor grid, slot
-sheet, conflicts, publish dialog, result toasts) and
-`docs/design/admin-data.md`. Clickable wireframe:
-`docs/design/wireframes/timetable-generator.html`.
+Spec for the admin flow that fills a term's timetable automatically. Every
+group's **days, times and room are set by the admin on the group**. The
+generator's job is to **assign a teacher to each group** who teaches the
+group's level and is free at all of its times, keeping workloads even. The
+admin reviews and edits the draft, then publishes it through the existing
+Phase 1 flow.
 
-The generator's rules — demand model, hard and soft constraints, scoring,
-algorithm, draft storage, publishing and terms that already have lessons —
-are owned by the Scheduling Engineer in `docs/architecture/generator.md`
-(CARM-53). This spec decides how they look and behave in the UI. §9 maps
-each screen to the rules doc's section; where the two differ, the rules
-doc wins.
+Builds on `docs/design/tokens.md`, `docs/design/app-layout.md`,
+`docs/design/timetable.md` (editor grid, conflicts, publish dialog, result
+toasts) and `docs/design/admin-data.md` (group and teacher forms). Clickable
+wireframe: `docs/design/wireframes/timetable-generator.html`.
+
+> **Model decided by the owner on CARM-54 (2026-10-14).** It replaces the
+> first version of this spec, where the generator also chose days and
+> times:
+>
+> 1. Every group has fixed lesson times (e.g. Tue + Thu 17:00–18:30), set
+>    when the group is created, and they carry over from term to term.
+> 2. The room is fixed per group too, set by the admin.
+> 3. The generator assigns **one teacher per group** for the whole term,
+>    from the teachers who teach the group's level and are available.
+> 4. When several teachers fit, it prefers an **even workload**.
+>
+> The rules doc `docs/architecture/generator.md` (CARM-53, PR #29, merged)
+> describes the earlier model and must be revised to match; §10 lists what
+> changes there.
 
 ## 1. Goal
 
-- An admin fills in what every group needs per week once per term, mostly by
-  copying last term and adjusting a few rows, not by typing 60 rows.
-- One click produces a complete draft. The admin sees right away how good it
-  is, and exactly which lessons couldn't be placed, **why**, and what to
-  change.
-- The draft is edited with the same grid and slot sheet as the manual
-  editor. Locking what's right and regenerating the rest is one step.
+- Setting up a term is mostly done already: groups carry their lesson times
+  and room from term to term, teachers carry the levels they teach and their
+  availability. Assigning teachers for 60 groups is one click.
+- The admin sees right away which groups got no teacher and **why, per
+  teacher** ("Eva: unavailable on Thursdays after 16:00 · Tomas: teaching C1
+  Business then"), and what would fix it.
+- Changing an assignment by hand is a dropdown that only offers teachers who
+  can take the group, with their workload, and says why the others can't.
 - Nothing teachers or students see changes until the admin publishes, and
-  the publish dialog says exactly what will happen to existing lessons.
+  the publish dialog says exactly what changes.
 
 ## 2. Roles
 
-| Role    | Access                                                                                                       |
-| ------- | ------------------------------------------------------------------------------------------------------------ |
-| Admin   | Everything on `/admin/timetable/generate` for their own school                                               |
-| Teacher | None. No nav item; the route returns the 403 page (`errors.forbidden.*`). Drafts never appear in their views |
-| Student | None. Same as teacher                                                                                        |
+| Role    | Access                                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------ |
+| Admin   | Everything on `/admin/timetable/generate`, plus the new fields on the group and teacher forms          |
+| Teacher | None. No nav item; the route returns the 403 page (`errors.forbidden.*`). Drafts never appear for them |
+| Student | None. Same as teacher                                                                                  |
 
-Enforced server-side: every page loader and server action goes through the
-admin action wrapper (`requireRole("ADMIN")`) and `getSchoolScopedDb()`.
-Demand, runs and drafts of another school are "not found", never "forbidden"
-(no existence leak). Read-only weekly views and lesson queries only read
-**live** `TimetableSlot`s / `Lesson`s of published terms, so a draft can't
-leak by construction (covered by the Phase 4 e2e permission suite, CARM-57).
+Enforced server-side: every loader and server action goes through the admin
+action wrapper (`requireRole("ADMIN")`) and `getSchoolScopedDb()`. Drafts
+and runs of another school are "not found" (no existence leak). Teacher and
+student views read only live `TimetableSlot`s and `Lesson`s of published
+terms, so a draft can't leak by construction (CARM-57 covers it).
 
 ## 3. Concepts shown in the UI
 
-| Concept (rules doc)          | UI word (key)                                       | Meaning for the admin                                                                             |
-| ---------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Demand (per group and term)  | **Weekly needs** (`generator.demand.title`)         | "B1 Evening needs 2 × 90 min a week with Tomas, in a room for 8."                                 |
-| Generation run               | **Run** (`generator.run.*`)                         | One attempt of the generator, with progress, a seed and a result.                                 |
-| Draft (per term)             | **Draft timetable** (`generator.draft.*`)           | The generator's output plus the admin's edits. Not visible to anyone else until published.        |
-| Draft slot                   | **Slot** (same word as the editor)                  | A weekly slot in the draft. Can be locked.                                                        |
-| Locked draft slot            | **Locked** (`generator.slot.locked`)                | The generator keeps it exactly where it is when it runs again.                                    |
-| Unplaced demand              | **Not placed** (`generator.unplaced.*`)             | Lessons a group needs that the generator couldn't fit, each with a reason.                        |
-| Soft-preference penalty      | **Preference** (`generator.preference.*`)           | Something legal but not ideal (a teacher's gap, a group twice on one day). Never blocks anything. |
-| Score                        | **Quality score** (`generator.score.*`)             | One number for the whole draft, plus a breakdown per preference.                                  |
-| Hard / overridable conflicts | **Conflict** / **Warning** (`timetable.severity.*`) | Exactly as in the editor (`timetable.md` §3.1). The generator only places slots with neither.     |
-
-Three tiers, three looks, so they are never confused:
-
-| Tier       | Badge (key)                                   | Tone + icon                 | Blocks publish?                          |
-| ---------- | --------------------------------------------- | --------------------------- | ---------------------------------------- |
-| Conflict   | **Conflict** (`timetable.severity.blocking`)  | `danger`, `octagon-x`       | Yes                                      |
-| Warning    | **Warning** (`timetable.severity.warning`)    | `warning`, `triangle-alert` | No, once acknowledged (as in the editor) |
-| Preference | **Preference** (`generator.preference.badge`) | `info`, `sparkles`          | Never; only lowers the score             |
+| Concept                      | UI word (key)                                       | Meaning for the admin                                                                                                |
+| ---------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Group lesson time            | **Lesson times** (`groups.lessonTimes.*`)           | "Tue 17:00–18:30, Room 3". A group has one or more; they repeat every week of every term the group runs in.          |
+| Levels a teacher teaches     | **Levels they teach** (`teachers.levels.*`)         | The levels the generator may give this teacher. Admins can still assign anyone by hand.                              |
+| Teacher assignment           | **Teacher** of a group in the draft                 | One teacher for all of a group's lessons in the term.                                                                |
+| Draft                        | **Draft** (`generator.draft.*`)                     | The proposed assignments for one term. Not visible to anyone else until published.                                   |
+| Locked assignment            | **Locked** (`generator.lock.*`)                     | "Keep this teacher." Reassigning never changes it.                                                                   |
+| Group without a teacher      | **No teacher** (`generator.unassigned.*`)           | No teacher could take all of the group's times. Always comes with the reason for each teacher who teaches the level. |
+| Workload                     | **Workload** (`generator.workload.*`)               | Teaching hours a week per teacher. The generator keeps the spread between the busiest and least busy small.          |
+| Hard / overridable conflicts | **Conflict** / **Warning** (`timetable.severity.*`) | As in the editor (`timetable.md` §3.1).                                                                              |
 
 ## 4. User flows
 
-### 4.1 First timetable for a term
+### 4.1 Set up once, assign every term
 
 ```mermaid
 flowchart TD
-  A[Admin › Auto-generate] --> T{Term}
-  T -- "no terms" --> NT[Empty: create a term first]
-  T -- term --> D[Weekly needs table]
-  D -- "no needs yet" --> C{Previous term?}
-  C -- yes --> CP[Copy from previous term] --> D
-  C -- no --> AD[Add all active groups / fill rows] --> D
-  D --> PC[Pre-check: missing fields, overloaded teachers, rooms too small]
-  PC -- "rows incomplete" --> D
-  PC -- ok --> G[Generate draft…: preferences, time limit]
-  G --> R[Run progress]
-  R -- done --> DR[Draft: score, placed / not placed, grid]
-  R -- failed --> ER[Error, nothing changed, Try again]
-  DR -- "not placed > 0" --> FX[Fix: edit needs / availability / rooms, or place by hand]
-  FX --> RG[Regenerate unlocked] --> R
-  DR --> ED[Move, edit, lock slots] --> RG
+  subgraph Setup["Setup (kept from term to term)"]
+    G[Group form: level, lesson times, room] --> GC[Live check: room or group clash]
+    T[Teacher: levels they teach, availability]
+  end
+  Setup --> A[Admin › Assign teachers › term]
+  A --> R[① Groups: readiness check]
+  R -- "groups need attention" --> FX[Fix: add times / room, set levels, skip a group] --> R
+  R --> D[Assign teachers… dialog]
+  D --> RUN[Assigning… a few seconds]
+  RUN --> DR[② Draft: assigned, no teacher, workload]
+  DR -- "no teacher > 0" --> NT[Reasons per teacher → fix data or pick by hand] --> RE[Reassign the unlocked rest] --> RUN
+  DR --> ED[Change teacher, lock] --> RE
   DR --> P[Publish…]
   P -- conflicts --> DR
-  P -- ok --> PUB[Slots created, publishTerm runs, lessons generated]
-  PUB --> E[Term opens in the timetable editor, Published]
+  P -- ok --> PUB[Slots created from group times + teachers, publishTerm, lessons generated]
 ```
 
-### 4.2 Term that already has a timetable
+### 4.2 Term that is already published
 
 ```mermaid
 flowchart TD
-  S[Generate for a term] --> K{Term state}
-  K -- "draft term with manual slots" --> IM[Generate dialog: keep existing slots locked / let the generator move them]
-  K -- "published term" --> AF[Generate dialog: Apply from date, default next Monday on or after tomorrow]
-  AF --> M{Mode}
-  M -- "Add missing lessons only (FILL, default)" --> R
-  M -- "Re-plan the whole week (REPLAN_FROM)" --> R
-  IM --> R[Run → draft]
-  R --> CMP[Draft with Compare to current: new / moved / removed / unchanged]
-  CMP --> P[Publish dialog with impact from previewApply]
-  P -- FILL --> OKF[New slots start on Apply from; no existing lesson changes]
-  P -- REPLAN_FROM --> OKR[Changed slots end the day before; draft slots start on Apply from]
+  S[Assign teachers for a published term] --> M{Dialog: from date D}
+  M -- "default" --> F[Only groups without a teacher<br/>e.g. new groups]
+  M -- option --> RP[Reconsider every group<br/>current teachers kept unless locked off]
+  F --> DR[Draft + Compare: which groups change teacher]
+  RP --> DR
+  DR --> P[Publish: impact from D on lessons, teachers, students]
 ```
 
-FILL and REPLAN_FROM are the rules doc's modes (`generator.md` §5.2).
-Whether REPLAN_FROM ships in v1 is the owner's call (rules doc Q1); if it
-doesn't, the mode choice is hidden and FILL is the only behaviour.
+## 5. Setup screens (additions to `admin-data.md`)
 
-## 5. Screen: `/admin/timetable/generate?term=…&tab=…`
+### 5.1 Group form: lesson times (§6.10 create/edit dialog and Details tab)
 
-Desktop-first (≥ 1024 px). Below 1024 px the route shows the read-only
-summary card (term, status of needs, last run, draft score) and `Alert`
-`layout.desktopRecommended`; no editing.
-
-### 5.1 Page layout
+A new required section **Lesson times** below Capacity:
 
 ```
-┌ H1 Auto-generate timetable ──────────────────────────────────────────────────────┐
-│ [Term: Spring 2027 ▾] (Draft)                       [⋯]  [Generate draft…]        │ page header
-├──────────────────────────────────────────────────────────────────────────────────┤
-│ ① Weekly needs  62 groups · 3 incomplete │ ② Draft  Score 86 · 4 not placed │       │ tabs (Tabs, URL)
-├──────────────────────────────────────────────────────────────────────────────────┤
-│ tab content                                                                      │
-└──────────────────────────────────────────────────────────────────────────────────┘
+Lesson times                                              (required)
+┌ Day ──────┐ ┌ Start ┐ ┌ End ──┐ ┌ Room ─────────────┐
+│ Tuesday ▾ │ │ 17:00▾│ │ 18:30▾│ │ Room 3 · 8 seats ▾│  90 min   ✕
+│ Thursday ▾│ │ 17:00▾│ │ 18:30▾│ │ Room 3 · 8 seats ▾│  90 min   ✕
+└───────────┘ └───────┘ └───────┘ └───────────────────┘
++ Add lesson time
+✓ No clashes.   (live check)
+Every week, in every term this group runs. 2 lessons · 3 h a week.
 ```
 
-- **Term `Select`**: same as the editor (newest first, current term
-  preselected, Draft / Published badge). Term in the URL.
-- **Tabs** (`Tabs`, `tab` in the URL): **Weekly needs** and **Draft**. Each
-  tab label carries a one-line status so the admin knows where they stand
-  without switching:
-  - Needs: "{groups} groups · {incomplete} incomplete" / "Not started".
-  - Draft: "Score {score} · {unplaced} not placed" / "No draft yet" /
-    "Generating… {percent} %" / "Out of date".
-- **Generate draft…** (primary) opens the generate dialog (§5.3). When a
-  draft exists the label is **Regenerate…** and the dialog shows the
-  regenerate options. While a run is in progress the button is replaced by
-  the run status (§5.4).
-- **Overflow `⋯`**: _Copy needs from another term…_, _Open timetable editor_,
-  _Discard draft…_ (when a draft exists; `AlertDialog`, destructive), _Run
-  history_ (sheet with the last 10 runs: when, who, seed, score, placed,
-  duration — for support and "do it again with the same seed").
+| Field | Control                               | Rules                                                                                                                                               |
+| ----- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Day   | `Select` (school days; others marked) | Required. Non-school days allowed with the editor's `OUTSIDE_SCHOOL_DAYS` warning.                                                                  |
+| Start | time `Select`, 15-min steps           | Required; inside school hours or `OUTSIDE_SCHOOL_HOURS` warning.                                                                                    |
+| End   | time `Select`, 15-min steps           | Required, after start (`validation.timeOrder`). Duration shown as text. Quick chips 45 · 60 · 90 min.                                               |
+| Room  | `Combobox` (rooms, online rooms)      | Required (owner decision 2). A new row copies the previous row's room. Capacity shown; fewer seats than members → `ROOM_CAPACITY_EXCEEDED` warning. |
 
-### 5.2 Tab ① Weekly needs (demand)
+- At least one row; up to 7. Two rows of the same group may not overlap
+  (`validation.lessonTimesOverlap`).
+- **Live check** (debounced, as the slot sheet): room double-booked by
+  another group's lesson time (blocking — fix before saving), a member of
+  this group is in another group at the same time (warning, acknowledge to
+  save), capacity, school days and hours. The teacher is not checked here:
+  that's the generator's job.
+- **1-on-1 groups** have lesson times too (the student's regular time);
+  usually one row, often an online room.
+- **Changing times of a group that is in a published term** (Q2): after
+  saving, an info `Alert` "These times are used the next time teachers are
+  assigned. The current timetable of {term} still has the old times." with
+  _Change the current timetable too…_ → opens the editor's slot sheet for
+  that group's slots with _Effective from_ (existing split flow). Saving the
+  group never changes live slots silently.
+- Group list (§6.10) gets a column **Lesson times** ("Tue, Thu 17:00") and a
+  filter _No lesson times_; group detail shows them on the Details tab.
 
-One row per active group of the school (archived groups excluded). Rows of
-groups that shouldn't be scheduled this term are switched off, not deleted,
-so the count stays explainable.
-
-```
-┌ Toolbar ───────────────────────────────────────────────────────────────────────────────┐
-│ [Search groups]  Level [Any▾]  Teacher [Any▾]  Show [All | Incomplete | Off]   [+ Add groups] │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ ☐ │ Group              │ Type   │ Lvl │ Students │ Lessons/wk │ Length │ Teacher          │ Room         │ Fixed times │ ⋯ │
-│ ☐ │ B1 Evening         │ Group  │ B1  │ 7        │ [2]        │ [90▾]  │ [Tomas Horvat▾]  │ Physical ≥ 7 │ —           │ ⋯ │
-│ ☐ │ A2 Kids            │ Group  │ A2  │ 9        │ [2]        │ [60▾]  │ Any of 3 ▾       │ Room 3       │ Sat 09:00   │ ⋯ │
-│ ☐ │ Jan Novak 1-on-1   │ 1-on-1 │ B2  │ 1        │ [1]        │ [45▾]  │ [Eva Simon▾]     │ Online       │ —           │ ⋯ │
-│ ☐ │ ⚠ C1 Business      │ Group  │ C1  │ 6        │ [ ]        │ [  ▾]  │ [Choose▾]        │ Any          │ —           │ ⋯ │
-│   │ ○ B2 Exam prep     │ Off this term                                                        │ Turn on │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ Summary: 61 groups on · 148 lessons a week · 196 teaching hours · 3 incomplete          │ sticky footer
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Columns** (`Table`, dense, sticky header, sortable by group, level,
-teacher):
-
-| Column      | Control                                                          | Rules                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ----------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Select      | `Checkbox`                                                       | For bulk edit. Header checkbox selects the visible (filtered) rows.                                                                                                                                                                                                                                                                                                                                                                     |
-| Group       | link → group detail                                              | Name, then muted members count and type icon (`users` / `user`).                                                                                                                                                                                                                                                                                                                                                                        |
-| Lessons/wk  | number input, inline                                             | Required; 1–14. 1-on-1 groups usually 1–2.                                                                                                                                                                                                                                                                                                                                                                                              |
-| Length      | `Select`: 45, 60, 90, 120 min + _Other…_ (5-min steps, 15–600)   | Required. All lessons of a row have the same length (one row per group in v1; the schema allows more later).                                                                                                                                                                                                                                                                                                                            |
-| Teacher     | `Combobox`: a teacher, or **Any of…** (multi-select of teachers) | Required. **Fixed** teacher = one name. **Any of** = the generator picks one teacher for all of the group's lessons from the list (shown as "Any of 3", hover/expand lists them). Defaults to the teacher of the group's slots in the previous term. Switching to _Any of…_ prefills the teachers who taught this level in the previous term; the admin edits the list. Any teacher may be added: there is no qualification list in v1. |
-| Room        | summary text; edited in the row sheet                            | "Any" (default: physical or online, capacity ≥ enrolled), "Physical ≥ 7", "Online", or specific rooms ("Room 3", "Room 3 or 4").                                                                                                                                                                                                                                                                                                        |
-| Fixed times | summary text; edited in the row sheet                            | Pinned weekday + start times ("Sat 09:00"). Pinned lessons are placed exactly there or reported as not placed — never moved.                                                                                                                                                                                                                                                                                                            |
-| Row menu    | `DropdownMenu`                                                   | _Edit details…_ (row sheet), _Turn off for this term_ / _Turn on_, _Reset to previous term_.                                                                                                                                                                                                                                                                                                                                            |
-
-**Editing and saving.** Inline cells save on blur / Enter (debounced
-500 ms), one row at a time, like a spreadsheet. The row shows a small
-status at its right edge: spinner while saving, nothing when saved, `Alert`
-icon + tooltip `common.error.network` with _Retry_ when it failed (values
-kept). Invalid values are shown on the cell (`aria-invalid`, message under
-the cell, `validation.*`), not saved, and the row counts as incomplete. No
-page-level Save button: losing 60 rows of typing to a missed click is the
-worse failure.
-
-**Incomplete rows** (missing lessons/week, length or teacher, or invalid):
-`triangle-alert` before the name, row background `warning` surface, filter
-_Incomplete_. They are **skipped** by the generator; the generate dialog
-says so (§5.3). Rows that are off are muted, collapsed to one line with
-_Turn on_.
-
-**Row sheet** (_Edit details…_, right `Sheet` 480 px, modal):
-
-| Section        | Fields                                                                                                                                                                                                                                                                                                         |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Lessons        | Lessons a week · Length (same as the row)                                                                                                                                                                                                                                                                      |
-| Teacher        | Radio **Fixed teacher** (`Combobox`) / **Any of these teachers** (multi-select `Combobox` with chips). Under it, muted: "{teacher} is free for {hours} h a week in school hours and has {demand} h of needs this term." (helps spot overload before generating)                                                |
-| Room           | Radio **Any suitable room** / **Physical room** / **Online** / **Specific rooms** (multi-select). _Minimum seats_ number, optional (rooms always need at least the enrolled count; muted hint "7 students enrolled"). _Preferred room_ `Select`, optional (soft). Archived rooms not offered.                  |
-| Fixed times    | List of pinned lessons: Day `Select` + Start time `Select` (15-min steps) per row; _Add fixed time_. At most "lessons a week" rows. Each pinned time is checked live with `validateSlot`-style hard rules (spinner + result line), so an impossible pin is caught here, not after a 2-minute run.              |
-| Preferred time | Optional, soft. _Preferred days_: `ToggleGroup` of the school's teaching weekdays (none = no preference). _Preferred hours_: two time `Select`s **From** / **To** (15-min steps, both or neither; e.g. 16:00–20:00 for adults after work). Muted hint "The generator tries to stay inside these, but may not." |
-
-Footer: _Cancel_ · **Save** (explicit in the sheet, since it holds several
-related fields). Same validation and error rules as `timetable.md` §5.4.
-
-**Bulk edit.** With rows selected, a sticky action bar replaces the toolbar:
-"{count} selected" · _Set lessons a week_ · _Set length_ · _Set teacher_ ·
-_Set room_ · _Turn off_ · _Clear selection_. Each opens a small `Popover`
-with one field and **Apply to {count} groups**. Fixed times are not
-bulk-editable (they're specific to one group). Bulk updates are all or
-nothing (`bulkUpdateDemand`): success toast "{count} groups updated"; if
-any row can't take the value, nothing changes and the `Popover` shows an
-`Alert` listing those rows ("{count} groups can't take this value") so the
-admin can deselect them and apply again.
-
-**Copy from another term** (overflow menu, and the empty state's primary
-action): `Dialog` with source term `Select` (default: the previous term).
-Source:
-
-- needs of that term if it has any; otherwise
-- **derived from its slots** (`demandFromSlots`): lessons a week = slot
-  count per group, length = the slot length, fixed teacher = the slot
-  teacher, preferred room = the most used room, no fixed times. A group
-  whose slots have several teachers or lengths would need several rows; v1
-  keeps the most common (teacher, length) and lists the group in the
-  summary as "check by hand".
-
-Summary before applying: "Copy needs for {count} groups. {new} groups have
-no needs in {source} and stay empty. {skipped} archived groups are skipped."
-Copying only fills groups that have no needs in this term yet
-(`copyDemand`); rows already filled in are never overwritten. To start a row
-again from the previous term, use the row menu's _Reset to previous term_.
-Teachers that are no longer active are cleared, so those rows show as
-incomplete.
-
-**Add groups.** Groups created after the needs table was started appear at
-the top with a "New" badge and empty cells (they're always listed; there's
-nothing to add by hand). _+ Add groups_ is therefore only a link to
-_Courses & groups_ → new group.
-
-**Pre-check** (collapsible card above the table, re-computed after every
-save; cheap, client-or-server summary, no generator run):
-
-| Check                                         | Tone    | Copy (key)                                                                                    | Action                      |
-| --------------------------------------------- | ------- | --------------------------------------------------------------------------------------------- | --------------------------- |
-| Rows incomplete                               | warning | `generator.precheck.incomplete` "{count} groups are incomplete and will be skipped."          | _Show_ (filter Incomplete)  |
-| Teacher needs more hours than they're free    | warning | `generator.precheck.teacherOverloaded` "{teacher} needs {demand} h but is free for {free} h." | _Availability_, _Show rows_ |
-| No room big enough / of the needed kind       | warning | `generator.precheck.noRoom` "{group} needs {seats} seats; the largest room has {max}."        | _Edit details_              |
-| Fixed time impossible (hard conflict)         | danger  | `generator.precheck.pinConflict` "{group}: the fixed time {time} has a conflict."             | _Edit details_              |
-| Student in two groups whose fixed times clash | warning | `generator.precheck.studentPins` "{count} students are in groups with clashing fixed times."  | _Show rows_                 |
-| All good                                      | success | `generator.precheck.ok` "Ready to generate."                                                  | —                           |
-
-The pre-check never blocks generating; it explains in advance what will
-probably end up as "not placed".
-
-### 5.3 Generate dialog
-
-`Dialog` `generator.generate.title` "Generate a draft for {term}" (on
-rerun: "Regenerate the draft for {term}").
-
-| Section         | Content                                                                                                                                                                                                                                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| What's included | "{groups} groups, {lessons} lessons a week." If incomplete rows: warning line "{count} incomplete groups are skipped." + _Review_.                                                                                                                                                                       |
-| Existing slots  | Only when the term is not published and already has slots: radio **Keep them as they are** (imported into the draft as locked, default) / **Let the generator rearrange them** (imported unlocked).                                                                                                      |
-| Published term  | Only for a published term. **Apply from** date picker: default = next Monday on or after tomorrow, never today or earlier, inside the term. Hint "Lessons before this date are not touched." Then radio **Mode** (below).                                                                                |
-| Draft edits     | Only on regenerate: "Keeps {locked} locked slots. {unlocked} unlocked slots may move." + checkbox _Also unlock slots I moved by hand_ (unchecked; moving a slot locks it, §5.6).                                                                                                                         |
-| Preferences     | Collapsible, closed by default. All 12 preferences of the rules doc in three groups (table below). Each a `Select` **Off · Low · Normal · High** (default Normal). _Reset all to Normal_.                                                                                                                |
-| Advanced        | Collapsible. **Time limit** `Select` _Quick (up to 10 s) · Standard (up to 30 s, default) · Thorough (up to 2 min)_. **Seed**: first run "New random seed"; on regenerate "Same as the draft ({seed})" with _Try another variant_ (new seed). _Use seed…_ input in both, so support can reproduce a run. |
-
-**Mode for a published term** (`RadioGroup`, `generator.mode.*`):
-
-| Option                                 | Rules mode    | Help text under the option                                                                                                                     |
-| -------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Add missing lessons only** (default) | `FILL`        | "Current slots stay exactly as they are. Only lessons that aren't in the timetable yet are placed, from {date}. No existing lesson changes."   |
-| **Re-plan the whole week**             | `REPLAN_FROM` | "The generator may move current slots from {date}, keeping as many where they are as it can. You see every change before anything is applied." |
-
-If the owner keeps REPLAN_FROM out of v1 (rules doc Q1), the radio is
-hidden and the dialog shows the FILL help text as a plain line.
-
-Footer: _Cancel_ · **Generate** (primary). Server refuses (§7) are shown as
-an `Alert` inside the dialog; the dialog stays open.
-
-**Preferences.** Levels are labels, not numbers: the rules doc maps
-Off/Low/Normal/High to 0, ⌈w/2⌉, w and 2w of each base weight. An admin can
-reason about "teacher gaps matter more than room changes", not about
-"weight 40 vs 15". In REPLAN_FROM the dialog opens with _Keep lessons at
-their current times_ on **High** (the rules doc's default for that mode).
-Levels apply to this run and are stored with the draft, so _Regenerate…_
-reopens with them. Whether a change also becomes the school's default is
-open (§12, Q2); until then, every new draft starts from Normal.
-
-| Group             | Label (`generator.pref.<CODE>.label`) | Help (`generator.pref.<CODE>.help`)                                         | Rules code                 |
-| ----------------- | ------------------------------------- | --------------------------------------------------------------------------- | -------------------------- |
-| Teachers          | Teacher's daily maximum               | Stay within each teacher's maximum teaching time per day.                   | `TEACHER_DAILY_MAX`        |
-| Teachers          | Same teacher as last term             | When the generator picks the teacher, prefer the group's teacher last term. | `TEACHER_CHANGED`          |
-| Teachers          | Times teachers would rather avoid     | Avoid the times teachers marked as "rather not".                            | `TEACHER_PREFERS_NOT`      |
-| Teachers          | Teachers' days off                    | Avoid dates when the teacher is away.                                       | `TEACHER_DATE_UNAVAILABLE` |
-| Teachers          | No gaps for teachers                  | Avoid idle time between a teacher's lessons on the same day.                | `TEACHER_GAP`              |
-| Groups & students | One lesson a day per group            | Avoid putting a group twice on the same day.                                | `SAME_DAY_REPEAT`          |
-| Groups & students | Preferred days and hours              | Stay within the group's preferred days and hours from weekly needs.         | `OUTSIDE_PREFERRED_TIME`   |
-| Groups & students | Spread over the week                  | Avoid lessons of a group on back-to-back days (groups with up to 3 a week). | `CONSECUTIVE_DAYS`         |
-| Groups & students | Same start time each lesson           | Start a group's lessons at the same time on every day it meets.             | `UNSTABLE_TIME`            |
-| Groups & students | Keep lessons at their current times   | Prefer the times the group had last term (or now, when re-planning).        | `TIME_CHANGED`             |
-| Groups & students | No gaps for students                  | Avoid idle time between a student's lessons in different groups.            | `STUDENT_GAP`              |
-| Rooms             | Preferred room                        | Use the group's preferred room from weekly needs.                           | `NOT_PREFERRED_ROOM`       |
-
-The list is in the rules doc's order of base weight within each group, so
-the ones that matter most by default come first. Each row's `Select` has
-an accessible name with the label ("No gaps for teachers, level").
-
-### 5.4 Run progress
-
-The run happens on the server; the page shows it and survives a reload
-(the `GeneratorRun` row is polled with `getRun` every 2 s while running).
+### 5.2 Teacher: levels they teach (new card on the Profile tab, §6.3)
 
 ```
-┌ Generating a draft for Spring 2027 ──────────────────────────────────┐
-│ ● Placing lessons          132 of 148                                │
-│ ○ Improving the timetable  score 74 → 81                             │
-│ [██████████████░░░░░░░] 0:04 · up to 0:30                             │
-│ You can leave this page; the run continues.        [Stop and keep best] │
-└──────────────────────────────────────────────────────────────────────┘
+Levels they teach
+☑ A1 Beginner   ☑ A2 Elementary   ☑ B1 Intermediate
+☑ B2 Upper-intermediate   ☐ C1 Advanced   ☐ C2 Proficient
+Quick select: [Up to B2 ▾]   [All]   [None]
+The generator only gives Tomas groups of these levels. You can still pick him for any group by hand.
 ```
 
-- Shown in the Draft tab (replacing its content) and as a compact status
-  in the header (`Badge` with spinner "Generating… 60 %") on both tabs.
-- Two phases (`generator.run.phase.*`): **Placing lessons** "{placed} of
-  {total}" then **Improving the timetable** "score {from} → {to}". The bar
-  is time-based against the preset's cap ("{elapsed} · up to {limit}").
-  The budget is really a number of iterations, so most runs finish well
-  before the cap (Standard on a 60-group school in about 3 s): the bar then
-  jumps to 100 % and the result appears. It never claims "about".
-- `aria-live="polite"` announces only phase changes and completion, not
-  every number.
-- **Stop and keep best** (outline): ends the improvement phase early and
-  keeps the best draft found so far. Not offered during the placing phase,
-  where the label is **Cancel run** and nothing is kept (confirm
-  `AlertDialog`).
-- **Cap reached**: the server stops the run at the cap and keeps the best
-  draft; the result says "Stopped at the time limit; this is the best draft
-  found." Lessons the generator hadn't reached yet are reported as not
-  placed with `TIME_LIMIT`.
-- **Interrupted**: if the server restarts mid-run, the run's heartbeat goes
-  stale and the next poll reports it `FAILED` with `RUN_INTERRUPTED`:
-  `generator.run.interrupted` "The run stopped unexpectedly (the server
-  restarted). Your weekly needs and the previous draft are unchanged." +
-  _Try again_.
-- While running, needs and the previous draft are **read-only** (the
-  inputs of the run must not change under it); inputs show a muted
-  "Locked while generating" hint. Another admin opening the page sees the
-  same progress and "Started by {name} at {time}".
-- On completion: toast `generator.run.done` "Draft ready: {placed} of
-  {total} lessons placed, score {score}." and the Draft tab shows the
-  result. If the admin is elsewhere in the app, the toast still appears
-  on the next page load (optional; nice-to-have).
+- A checkbox per active level, ordered by `Level.rank`. **Quick select "Up
+  to…"** ticks every level up to the chosen one in one click — most
+  teachers are "up to X". A teacher who teaches only some levels (e.g. only
+  kids' A1–A2, or only C1–C2 exam prep) just ticks those (Q1).
+- Also in the teacher create dialog (optional there; default none).
+- A teacher with **no levels** is never assigned by the generator; the
+  readiness check lists them (§6.2).
+- Teachers list (§6.1) gets a column **Levels** ("A1–B2", or "A1, C1–C2").
+- Optional field **Max hours a week** (`Input type=number`, empty = no
+  limit) for part-time teachers (Q3). The generator never goes above it.
 
-### 5.5 Tab ② Draft — result summary
+Availability (§6.4) stays exactly as it is: weekly unavailability ("never
+Wednesday afternoons") is a hard limit for the generator; one-off dates are
+not (they're covered by a substitute) and only show as warnings.
 
-Above the grid, a summary strip (always visible on the Draft tab):
+## 6. Assign teachers: `/admin/timetable/generate?term=…&tab=…`
+
+Nav item `nav.autoGenerate` is relabelled **Assign teachers** (icon
+`wand-sparkles` stays). Desktop-first (≥ 1024 px); below that the route
+shows a read-only summary card and `layout.desktopRecommended`.
+
+### 6.1 Layout
 
 ```
-┌ Draft · not visible to teachers or students ─────────────── Generated 14 Oct 10:42 by Anna · seed 51823 ┐
-│ ┌ Placed ───────┐ ┌ Quality score ──────┐ ┌ Not placed ──────┐ ┌ Issues ───────┐   [Compare to current] │
-│ │ 144 / 148     │ │ 86 / 100  ▲ +5      │ │ 4 lessons        │ │ 0 · 2 warnings │   [Publish…]           │
-│ │ lessons       │ │ Details             │ │ 3 groups · Show  │ │ Show           │                        │
-│ └───────────────┘ └─────────────────────┘ └──────────────────┘ └────────────────┘                        │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ H1 Assign teachers ───────────────────────────────────────────────────────────────┐
+│ [Term: Spring 2027 ▾] (Draft term)                       [⋯]  [Assign teachers…]   │
+├────────────────────────────────────────────────────────────────────────────────────┤
+│ ① Groups  58 ready · 3 need attention   │ ② Draft  52 of 58 assigned              │ tabs
+├────────────────────────────────────────────────────────────────────────────────────┤
 ```
 
-- **Draft band**: full-width `info` surface band with `file-pen-line` icon
-  and `generator.draft.band` "Draft · not visible to teachers or students"
-  across the top of the tab — the one thing that must be impossible to miss.
-  Grid blocks in the draft also carry a dashed outline (§5.6).
-- **Placed**: "{placed} / {total} lessons". Success tone when all placed.
-- **Quality score**: "{score} / 100" plus the change from the previous run
-  ("▲ +5" / "▼ −3", with text, not color only). _Details_ opens a popover
-  with the breakdown: one row per preference — name, level (Normal/High…),
-  **count** ("12 teacher gaps", "3 groups twice on one day") and its share
-  of the lost points as a small bar. Each row has _Show_, which highlights
-  the affected slots in the grid. Rows with count 0 are collapsed under
-  "{count} preferences fully met". The score is the rules doc's quality
-  (`generator.md` §3.3): 100 means every preference met; it compares runs
-  of the same term, not terms, so the UI never shows it outside its term.
-  Help icon `generator.score.help` "100 means every preference is met. Use
-  it to compare drafts of this term."
-- **Not placed**: "{count} lessons · {groups} groups", danger tone when > 0;
-  _Show_ opens the not-placed panel (§5.7).
-- **Issues**: conflicts (should be 0 straight after a run) and
-  unacknowledged warnings in the draft, from the same check as the editor's
-  issues panel (`timetable.md` §5.6, run on the draft). _Show_ opens it.
-- Actions: _Compare to current_ (only when the term has live slots, §5.8),
-  **Publish…** (primary, §6).
+- **Term `Select`** as in the editor; term in the URL.
+- **Tabs** (`Tabs`, `tab` in the URL), each with a one-line status:
+  - Groups: "{ready} ready · {attention} need attention".
+  - Draft: "{assigned} of {total} assigned" / "No draft yet" / "Assigning…" /
+    "Out of date".
+- **Assign teachers…** (primary) opens the dialog (§6.3). With a draft it
+  reads **Reassign…**.
+- **Overflow `⋯`**: _Open timetable editor_, _Discard draft…_, _Run history_.
 
-### 5.6 Draft grid
+### 6.2 Tab ① Groups (readiness)
 
-Reuses the editor grid exactly (`timetable.md` §5.2–5.3): **By room** (one
-day, rooms as columns) and **Week** (one teacher, room or group), filters,
-geometry, keyboard model, drag & drop with the non-drag alternative, issue
-badges. Differences:
-
-| Element             | In the draft                                                                                                                                                                                                            |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Block outline       | 1 px dashed `slate-400` around every draft block (plus the lesson-type token as usual), so a screenshot of a draft can't be mistaken for the live timetable.                                                            |
-| Locked block        | `lock` icon top-left + accessible name suffix ", locked". Locked blocks are not dimmed; locking is about the generator, not about importance.                                                                           |
-| Preference badge    | `sparkles` in `info` tone top-right when the slot contributes to a preference penalty; tooltip lists them ("Tomas has a 90-min gap before this", "B1 Evening is also on Tuesday"). Lowest priority of the three badges. |
-| Pinned (fixed time) | `pin` icon; cannot be dragged to another time (the sheet explains: "This is a fixed time from weekly needs. Change it there."); teacher and room can still change.                                                      |
-| Imported from term  | (only when existing slots were imported) muted caption "Existing".                                                                                                                                                      |
-| Changed vs current  | in Compare mode only, §5.8.                                                                                                                                                                                             |
-| Week view, teacher  | hatched unavailability as in the editor, plus a caption per day "4 lessons · 1 gap".                                                                                                                                    |
-
-**Editing a draft slot**: the editor's slot sheet (`timetable.md` §5.4)
-with the same live check and per-warning acknowledgement, minus _Effective
-from_ (drafts have no history; the apply-from date is set for the whole
-draft), plus:
-
-- `Switch` **Locked** (`generator.slot.lock`) with help "The generator
-  won't move this slot when you regenerate."
-- Saving a moved or edited slot **locks it automatically** (the admin
-  placed it on purpose), with toast "Moved B1 Evening to Tue 17:00 and
-  locked it." + _Undo_ (rules doc §5.3).
-- _Teacher_ in the sheet offers any teacher, not only the row's "any of"
-  list: the admin decides, as in the editor.
-- _Delete slot_ removes it from the draft; its lesson becomes "not placed"
-  with reason _Removed by you_ until the next run.
-- _New slot_ works as in the editor; new slots are locked.
-
-**Locking in bulk**: block context menu and toolbar _Lock…_ menu: _Lock
-this slot_, _Lock all slots of {group}_, _Lock all slots of {teacher}_,
-_Lock everything shown_ (current filter), _Unlock all_. Keyboard: `L` on a
-focused block toggles its lock (announced "Locked" / "Unlocked").
-
-**Regenerate the rest**: header button **Regenerate…** opens the generate
-dialog in regenerate mode (§5.3), which states how many slots stay and how
-many may move. After the run, a toast "Draft updated: {moved} slots moved,
-{placed} newly placed, score {score} (▲ +{delta})" with _Show changes_
-(highlights moved/new blocks until the next action).
-
-Edits save to the draft one at a time (each is a server action under the
-timetable lock, like `saveSlot`). If the draft changed meanwhile (another
-admin edited it or a run finished), the sheet shows `common.error.staleData`
-
-- _Reload_, as in the editor.
-
-### 5.7 Not-placed panel
-
-Right `Sheet` 480 px, `generator.unplaced.title` "Not placed ({count})".
-One card per group with missing lessons:
+Every active group of the school, with what the generator needs from it.
 
 ```
-┌ C1 Business · 1 of 2 lessons not placed ───────────────────────────┐
-│ ⛔ No time when Peter Varga, a room for 6 and all 6 students are     │
-│    free at once.                                                     │
-│    Closest: Thu 18:00 — 2 students have B2 Conversation then.        │
-│ [Edit weekly needs] [Teacher availability] [Place by hand]           │
-└──────────────────────────────────────────────────────────────────────┘
+┌ Before you assign · 4 things to check ──────────────────────────────────────────────┐
+│ ⛔ 2 groups have no lesson times and will be skipped.                    [Show]      │
+│ ⚠ Nobody teaches C2. 1 group (C2 Proficiency) can't get a teacher.     [Teachers]   │
+│ ⚠ Tue 17:00–18:30: 6 groups at A1–B1, only 4 teachers who teach them are free. [Show]│
+│ ⚠ 2 teachers have no levels yet and won't be assigned.                 [Teachers]   │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+[Search] Level [Any▾] Day [Any▾] Show [All | Needs attention | Skipped]
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│ Group           │ Level │ Lesson times              │ Room    │ Students │ Can teach │ Status        │ ⋯ │
+│ A1 Evening      │ A1    │ Tue, Thu 17:00–18:30      │ Room 3  │ 8        │ 5 teachers│ Ready         │ ⋯ │
+│ A2 Morning      │ A2    │ Mon 08:00–09:30           │ Room 1  │ 6        │ 4 teachers│ Ready         │ ⋯ │
+│ C2 Proficiency  │ C2    │ Wed 18:00–19:30           │ Online 1│ 4        │ 0         │ ⚠ No teacher teaches C2 │ ⋯ │
+│ B2 Exam prep    │ B2    │ —                         │ —       │ 5        │ 3 teachers│ ⛔ No lesson times│ ⋯ │
+│ ○ B1 Summer club│ B1    │ Sat 10:00–12:00           │ Room 2  │ 0        │ 4 teachers│ Skipped this term │ Include │
+└───────────────────────────────────────────────────────────────────────────────────────────┘
+58 groups · 104 lessons a week · 151 teaching hours · 20 teachers can give 168 h
 ```
 
-- Title: group + "{missing} of {total} lessons not placed".
-- **Reason**: message for the rules doc's reason code
-  (`scheduling.generator.reasons.<CODE>`, ICU params; `generator.md` §4.5),
-  same pattern as `scheduling.conflicts.<TYPE>`. Unknown codes fall back to
-  `scheduling.generator.reasons.generic` "The generator couldn't find a
-  time that meets every rule."
-- **Why, in numbers** (search reasons only): the blocker breakdown as one
-  muted line, `generator.unplaced.blockers` "Teacher busy at {teacherBusy}
-  times, unavailable at {teacherUnavailable}, students busy at
-  {studentsBusy} ({students}), no free room at {noRoom}." Zero parts are
-  left out.
-- **Closest option**: the near-miss time with the fewest conflicts and
-  those conflicts, rendered as in the editor. _Show_ jumps to that time in
-  the grid.
-- **Suggestions** (up to 3, from the rules doc): one line each with a link
-  to the data to change, e.g. "Tue 17:00 would work if B2 Evening's lesson
-  moved" → _Show_ (selects that draft slot), "… if Peter Varga were
-  available" → _Teacher availability_, "… with a room for 12" → _Rooms_.
-  They never change anything themselves.
-- **Suggested fixes** (buttons, by reason):
+**Columns:** Group (link → group detail) · Level · Lesson times (compact:
+same time on several days is merged, "Tue, Thu 17:00–18:30") · Room ·
+Students · **Can teach** ("5 teachers"; popover lists them with a ✓/✗ per
+lesson time: "Eva ✗ Thu — unavailable") · Status · row menu (_Edit group_,
+_Skip this term_ / _Include_).
 
-| Reason code              | Copy (English, `scheduling.generator.reasons.*`)                                                                        | Suggested fixes                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `GROUP_ARCHIVED`         | {group} is archived, so it isn't scheduled.                                                                             | _Edit weekly needs_ (turn the row off)                          |
-| `NO_ELIGIBLE_TEACHER`    | No teacher can be used for {group}: the chosen teachers are archived, or none is chosen.                                | _Edit weekly needs_ (choose teachers)                           |
-| `DURATION_TOO_LONG`      | A {duration}-min lesson doesn't fit in the school day ({schoolHours}).                                                  | _Edit weekly needs_ (length), _School hours_                    |
-| `PINNED_TIME_CONFLICT`   | The fixed time {time} has a conflict.                                                                                   | _Edit weekly needs_ (fixed times)                               |
-| `NO_ROOM`                | No {roomKind} room with {seats} seats is free at a time that works.                                                     | _Rooms_, _Edit weekly needs_ (room)                             |
-| `NO_TEACHER_TIME`        | {teacher} has no free time left that fits a {minutes}-min lesson.                                                       | _Teacher availability_, _Edit weekly needs_ (another teacher)   |
-| `STUDENT_CLASH`          | {count, plural, one {# student is} other {# students are}} in other groups at every time that works.                    | _Show students_ (list + their groups), _Place by hand_          |
-| `NO_COMMON_TIME`         | No time when {teacher}, a room for {seats} and all {students} students are free at once.                                | _Edit weekly needs_, _Teacher availability_, _Place by hand_    |
-| `TAKEN_BY_OTHER_LESSONS` | There are free times, but other lessons in this draft take them all.                                                    | _Show_ (per suggestion), _Place by hand_, _Try another variant_ |
-| `TIME_LIMIT`             | The time limit ran out before this lesson was placed.                                                                   | _Regenerate_ with a longer time limit                           |
-| `REMOVED_BY_ADMIN`       | You removed this slot from the draft.                                                                                   | _Place by hand_                                                 |
-| `INTERNAL_CHECK_FAILED`  | Something went wrong while checking this lesson, so it was left out. This is a bug; please report it with the error ID. | _Copy error ID_, _Place by hand_                                |
+**Status** values: _Ready_ (success) · _No lesson times_ (danger: skipped) ·
+_No room_ (danger: skipped) · _No teacher teaches {level}_ (warning: will
+end up without a teacher) · _Times clash_ (danger: room double-booked by
+another group) · _Skipped this term_ (muted).
 
-`GROUP_ARCHIVED`, `NO_ELIGIBLE_TEACHER`, `DURATION_TOO_LONG` and
-`PINNED_TIME_CONFLICT` are found before the run starts; the needs tab's
-pre-check shows the same problems in advance (§5.2), so they should rarely
-reach this panel. `INTERNAL_CHECK_FAILED` is never expected: its card uses
-the `danger` tone and lists the conflicts in a collapsed _Details_ section
-for support.
+**Skip this term** keeps a group out of this term's assignment without
+archiving it (e.g. a summer club in the spring term). Stored per group and
+term.
 
-- **Place by hand** opens the slot sheet prefilled with group, teacher,
-  length and (if any) the closest time; the live check shows exactly which
-  rules break, and overridable ones can be acknowledged like in the editor.
-  Placed by hand = locked.
-- Panel footer: "Fix the data, then regenerate to try again." + _Regenerate…_
-- **Empty**: `generator.unplaced.empty` "Every lesson was placed." (success).
+**Readiness checks** (card above the table, recomputed on load and after
+any change; cheap, no generator run):
 
-### 5.8 Compare to current
+| Check                                                   | Tone    | Copy (key)                                                                                                                  | Action       |
+| ------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| Groups without lesson times or room                     | danger  | `generator.ready.noTimes` "{count} groups have no lesson times and will be skipped."                                        | _Show_       |
+| Room double-booked by two groups                        | danger  | `generator.ready.roomClash` "{room} is used by {groupA} and {groupB} on {weekday} at {time}."                               | _Edit group_ |
+| A level nobody teaches                                  | warning | `generator.ready.levelUncovered` "Nobody teaches {level}. {count} groups can't get a teacher."                              | _Teachers_   |
+| More groups at one time than teachers who can take them | warning | `generator.ready.timeCrunch` "{day} {time}: {groups} groups at {levels}, only {teachers} teachers who teach them are free." | _Show_       |
+| Teachers without levels                                 | warning | `generator.ready.teachersNoLevels` "{count} teachers have no levels yet and won't be assigned."                             | _Teachers_   |
+| Total hours                                             | warning | `generator.ready.hours` "Groups need {need} h a week; teachers can give {can} h."                                           | —            |
+| Student in two groups at the same time                  | warning | `generator.ready.studentClash` "{count} students are in two groups at the same time."                                       | _Show_       |
+| All fine                                                | success | `generator.ready.ok` "Ready to assign teachers."                                                                            | —            |
 
-Only when the term already has live slots (draft term with manual slots, or
-published term). `ToggleGroup` _Draft · Compare_ in the grid toolbar. In
-FILL mode the current slots don't change, so Compare shows them as
-unchanged (dimmed, caption "Current") and only **New** blocks stand out;
-the summary reads "{new} new slots".
+The time-crunch check is the most useful one: it explains in advance why
+some groups will end up without a teacher, before anyone runs anything.
 
-- In **Compare**, each draft block gets a change caption and the removed
-  live slots are drawn as ghost blocks (dashed `slate-400`, `lesson-cancelled`
-  look, 60 % opacity, not interactive except _Show details_):
+Nothing here blocks assigning; groups that aren't ready are simply skipped
+and listed.
 
-| Change    | Caption (key)                                        | Marker                              |
-| --------- | ---------------------------------------------------- | ----------------------------------- |
-| New       | `generator.compare.new` "New"                        | `plus` icon, `success` tone badge   |
-| Moved     | `generator.compare.moved` "Was {weekday} {time}"     | `move` icon, `warning` tone badge   |
-| Changed   | `generator.compare.changed` "Was {teacher} · {room}" | `pencil` icon, `warning` tone badge |
-| Removed   | `generator.compare.removed` "Removed"                | ghost block, `ban` icon             |
-| Unchanged | none                                                 | dimmed to 60 % so changes stand out |
+### 6.3 Assign dialog
 
-- A **Changes** summary above the grid: "{unchanged} unchanged · {moved}
-  moved · {changed} other changes · {new} new · {removed} removed" plus
-  "{teachers} teachers and {students} students have a different week" —
-  that's what the admin will have to communicate. _List changes_ opens a
-  sheet listing every change grouped by group (printable, so it can be
-  sent to teachers before publishing).
+`Dialog` `generator.assign.title` "Assign teachers for {term}".
 
-### 5.9 Draft out of date
+| Section           | Content                                                                                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Included          | "{groups} groups, {teachers} teachers." If groups are skipped: warning line "{count} groups aren't ready and are skipped." + _Review_.                                                                                                                                                     |
+| Existing teachers | Draft term that already has slots: **Keep current teachers** (default: their assignments are copied in as locked) / **Reassign everything**.                                                                                                                                               |
+| From date         | Published term only: date picker, default the next Monday after today, inside the term. Hint "Lessons before this date are not touched." Then radio **Only groups without a teacher** (default — e.g. new groups) / **Reconsider every group** (current teachers are kept where possible). |
+| On reassign       | Draft exists: "Keeps {locked} locked assignments. {unlocked} groups may get a different teacher."                                                                                                                                                                                          |
+| Preference        | Read-only line: "When several teachers fit, workloads are kept as even as possible." (Only preference in v1; owner decision 4. A setting for others, e.g. keep last term's teacher, is a later addition.)                                                                                  |
 
-The draft stores a fingerprint of what it was generated from (needs,
-preference levels, enrolments, availability, rooms, holidays, live slots).
-When any of that changes afterwards, the Draft tab label shows **Out of
-date** and a `warning` `Alert` sits under the draft band:
+Footer: _Cancel_ · **Assign teachers** (primary).
 
-`generator.draft.stale` "Data changed since this draft was generated
-(weekly needs, enrolments, availability, rooms, holidays or the live
-timetable). Regenerate the unlocked rest?" with actions **Check draft**
-(re-runs the conflict check on the draft; new conflicts and warnings appear
-as badges and in the issues panel) and _Regenerate…_. The fingerprint says
-_that_ something changed, not _what_, so the copy lists the kinds of data
-rather than the exact change. Publishing still re-checks everything on the
-server (§6), so stale is a nudge, not a lock.
+### 6.4 Running
 
-## 6. Publish
+Assignment for a school of this size takes seconds (the rules doc sets the
+time budget). The dialog stays open with an inline progress line
+`generator.run.running` "Assigning teachers… {assigned} of {total}
+groups" and a _Cancel_ button; the page doesn't need a "you can leave"
+state. If the run takes longer than 10 s, the dialog closes and the Draft
+tab shows the progress card with _Cancel_; another admin opening the page
+sees "{name} is assigning teachers (started {time})". Needs a
+`role="progressbar"`; only completion is announced.
 
-**Publish…** in the Draft tab opens `Dialog` `generator.publish.title`
-"Publish the draft for {term}?". It builds on the editor's publish dialog
-(`timetable.md` §5.7) and, like it, runs one server action under the
-timetable lock (`applyDraft`): write the draft's slots as live
-`TimetableSlot`s, then the `publishTerm` logic — so every existing publish
-check applies. The impact numbers in the dialog come from `previewApply`
-(a dry run), loaded when the dialog opens (skeleton lines while loading);
-apply recomputes them, so they are information, not a promise.
+Done: the dialog closes, the Draft tab opens, toast `generator.run.done`
+"{assigned} of {total} groups have a teacher." + _Show groups without a
+teacher_ when any.
 
-### 6.1 Draft term (not published yet)
+### 6.5 Tab ② Draft: summary
 
-- Summary:
-  - "{count} slots ({locked} locked, {generated} generated)"
-  - if the term has manual slots: "Replaces the {existing} slots in the
-    timetable editor." (they're in the draft as imported ones, so nothing
-    is lost unless the admin removed them — then "{removed} of them are
-    removed.")
-  - "Lessons will be created from {start} to {end}" (as the editor)
-  - "{count} warnings acknowledged" + _Review_
-  - "{unplaced} lessons are not placed" (warning tone) + _Show_ — publishing
-    with unplaced demand is allowed; those groups get fewer lessons until
-    someone adds slots by hand.
-- Choice: **Publish now** (primary, `generator.publish.confirm` "Publish
-  timetable") — teachers and students see it right away — or **Save to the
-  timetable editor only** (outline, `generator.publish.toEditor`): creates
-  the live slots in the still-unpublished term and opens the editor, so the
-  admin can publish later with the normal Publish button. (Useful when
-  another admin owns the final check.)
+```
+┌ Draft · not visible to teachers or students ──────────── Assigned 14 Oct 10:42 by Anna Novak ┐
+│ ┌ Assigned ──────┐ ┌ No teacher ────────┐ ┌ Workload ──────────────┐ ┌ Issues ──────┐  [Compare to current] │
+│ │ 52 / 58 groups │ │ 6 groups · Show    │ │ 5–9 h a week           │ │ 0 · 2 warnings│  [Publish…]           │
+│ │                │ │                    │ │ average 7.5 h · Details │ │ Show         │                       │
+│ └────────────────┘ └────────────────────┘ └────────────────────────┘ └──────────────┘                       │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+View: [By group | By teacher | Week]
+```
 
-### 6.2 Published term (term already has lessons)
+- **Draft band** (`info` surface, `file-pen-line` icon): "Draft · not
+  visible to teachers or students". Always on this tab.
+- **Assigned**: "{assigned} / {total} groups", success when all.
+- **No teacher**: danger when > 0; _Show_ filters the table to them.
+- **Workload**: the range from the least to the most busy teacher
+  ("5–9 h a week") and the average. This is the score the generator
+  optimises (even workload); _Details_ switches to the By teacher view.
+  Change since the previous run shown as text ("range was 4–10 h").
+- **Issues**: conflicts (should be 0 after a run) and warnings in the draft
+  (e.g. a teacher picked by hand who doesn't teach the level, or a one-off
+  unavailability on some dates). _Show_ opens the issues panel (editor
+  pattern, `timetable.md` §5.6).
 
-The dialog follows the draft's mode (§5.3). Both start with
-`generator.publish.applyFrom` "Changes apply from {date}. Lessons before
-then are not touched." If that date is no longer in the future, the server
-refuses with `EFFECTIVE_DATE_PASSED` (§6.3).
+### 6.6 By group (default view)
 
-**Add missing lessons only (FILL)**
+```
+┌ Group          │ Level │ Lesson times          │ Room    │ Teacher                    │ 🔒 │ Notes                         ┐
+│ ⛔ C2 Proficiency│ C2  │ Wed 18:00–19:30       │ Online 1│ [No teacher — choose ▾]    │    │ Nobody teaches C2 · Why?      │
+│ ⛔ B1 Evening   │ B1    │ Tue, Thu 17:00–18:30 │ Room 3  │ [No teacher — choose ▾]    │    │ All 4 B1 teachers busy or unavailable · Why? │
+│ A1 Evening     │ A1    │ Tue, Thu 17:00–18:30  │ Room 1  │ [Ana Kral ▾]               │ 🔒 │                               │
+│ A2 Morning     │ A2    │ Mon 08:00–09:30       │ Room 1  │ [Eva Simon ▾]              │    │ ⚠ Eva is away on 12 Nov       │
+│ C1 Business    │ C1    │ Wed 18:00–19:30       │ Room 2  │ [Tomas Horvat ▾]           │    │                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[Lock… ▾]  Filters: Level · Teacher · Day · [Only without teacher]
+```
 
-- "{created} new slots start on {date}. No existing slot or lesson
-  changes." (`generator.publish.fillSlots`)
-- "{lessons} lessons are added for {groups} groups." + _List changes_
-- No checkbox: nothing existing changes. Primary **Add to timetable**
-  (`generator.publish.applyFill`).
+- Groups without a teacher are sorted to the top (danger tone, `octagon-x`
+  - text "No teacher"). Everything else by group name; sortable.
+- **Teacher** cell is a `Combobox` (the teacher picker below). Choosing a
+  teacher saves to the draft and **locks** the row (owner-approved
+  default: a hand-made choice is kept on reassign). Toast "Ana Kral now
+  teaches B1 Evening (locked)." + _Undo_.
+- **Lock** column: a toggle button per row (`aria-pressed`, label "Lock
+  teacher for {group}"). _Lock…_ menu: _Lock all assigned_, _Lock all of
+  {teacher}_, _Unlock all_.
+- **Notes**: warnings for the row (one-off unavailability dates, level not
+  taught, room capacity) and, for rows without a teacher, the short reason +
+  _Why?_ (opens §6.7).
+- **Reassign…** (header) reruns for all unlocked rows; toast "{changed}
+  groups changed teacher, {assigned} newly assigned." + _Show changes_.
 
-**Re-plan the whole week (REPLAN_FROM)**
+**Teacher picker** (`Combobox`, 360 px, searchable). Sections, in this order:
 
-- Summary, in this order — impact first:
-  - "{ended} current slots end on {dayBefore}; {created} new slots start on
-    {date}." (unchanged slots are kept as they are, not split)
-  - "Future lessons: {removed} removed, {cancelled} kept as cancelled
-    because they have attendance, absences, homework or a substitute."
-  - "{teachers} teachers and {students} students get a different week." +
-    _List changes_ (§5.8)
-  - When > 0: "{count} replacement bookings are on lessons that will be
-    cancelled. They're released, and the students get their makeup credit
-    back with at least 7 days to use it." + _Show_. This is the existing
-    rule for lessons the school cancels (`replacements.md` §4), not a new
-    one.
-- Checkbox (required) `generator.publish.understand` "I understand this
-  changes the timetable for teachers and students from {date}."
-- Primary **Apply draft** (blue, not `destructive`: red is reserved for
-  deleting; the required checkbox is the friction). Clicking it unticked
-  focuses the checkbox with `validation.required`.
+| Section (key)                                             | Who                                                                | Row shows                                | Selectable?                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------- |
+| **Available** (`generator.picker.available`)              | Teach the level, free at all of the group's times, under max hours | name · "6 h → 7.5 h a week"              | Yes                                                                             |
+| **Unavailable** (`generator.picker.unavailable`)          | Weekly unavailability overlaps one of the times                    | name · "Unavailable Thu 16:00–20:00"     | Yes, with the editor's overridable warning (acknowledge before publishing)      |
+| **Doesn't teach {level}** (`generator.picker.otherLevel`) | Free, but the level isn't in their list                            | name · "Teaches A1–A2"                   | Yes, with a warning (the admin decides)                                         |
+| **Over max hours** (`generator.picker.overMax`)           | Would exceed their max hours a week                                | name · "8 h → 9.5 h (max 8 h)"           | Yes, with a warning                                                             |
+| **Busy** (`generator.picker.busy`)                        | Teaching another group at one of the times                         | name · "Teaching C1 Business, Wed 18:00" | No (blocking double booking). Disabled with the reason as text, not only greyed |
 
-**Preview failed**: the summary lines show `generator.publish.previewFailed`
-"Couldn't work out the impact. Try again." + _Try again_; the primary
-button stays disabled until a preview succeeds (the admin must see the
-impact before a re-plan; FILL doesn't need it and stays enabled).
+Plus a first item **No teacher** to unassign (the row becomes "No teacher",
+reason _Removed by you_).
 
-### 6.3 Running, blocked, failed, done
+### 6.7 Why no teacher? (panel)
 
-- While publishing: "Publishing… creating slots and lessons" (button
-  spinner, dialog not closable), as in the editor.
-- **Blocked** (conflicts in the draft, found up front or by the server
-  re-check): destructive `Alert` `timetable.publish.blocked` "Fix {count}
-  conflicts before publishing." listing the slots; the publish button is
-  replaced by _Show issues_. Warnings never block.
-- **Live timetable changed** since the draft was generated (someone edited
-  the term in the editor meanwhile): the server re-checks against the
-  current live slots; if that yields conflicts → blocked as above, with the
-  `Alert` `generator.publish.liveChanged` "The timetable was changed in the
-  editor after this draft was made. Review the new issues."; if not, it
-  publishes and the success toast mentions it.
-- **Unacknowledged warnings** (`UNACKNOWLEDGED_CONFLICTS`): a new
-  overridable conflict appeared since the admin acknowledged warnings
-  (e.g. someone changed availability). `warning` `Alert`
-  `generator.publish.newWarnings` "{count} new warnings need your OK before
-  publishing." with each warning and its acknowledge checkbox, as in the
-  editor's slot sheet; the primary button retries with them. A clash
-  someone created meanwhile is never overridden without the admin seeing
-  it.
-- **Draft changed** (`DRAFT_CHANGED`, another admin edited the draft while
-  the dialog was open): `common.error.staleData` + _Reload_; the dialog
-  reloads the preview.
-- **Date passed** (`EFFECTIVE_DATE_PASSED`, the dialog was left open past
-  midnight): `generator.publish.datePassed` "{date} is no longer in the
-  future. Pick a new date and regenerate." + _Regenerate…_ (opens the
-  generate dialog with the next default date).
-- **Other failure**: `timetable.publish.failed` "Couldn't publish. Nothing
-  was changed. Try again."
-- **Done**: toast `generator.publish.done` "{term} published from the
-  draft. {count} lessons created." (FILL: `generator.publish.doneFill`
-  "{lessons} lessons added to {term} from {date}."; REPLAN_FROM: plus the
-  removed/cancelled parts from the shared result formatter, `timetable.md`
-  §5.10). The draft is deleted once applied (its runs stay in _Run
-  history_); the page switches to the editor (`/admin/timetable/edit?term=…`)
-  with the usual published banner.
+Right `Sheet` 480 px, `generator.unassigned.title` "Groups without a
+teacher ({count})", one card per group, or opened on a single group from
+_Why?_:
 
-## 7. States
+```
+┌ B1 Evening · Tue, Thu 17:00–18:30 · B1 ───────────────────────────────┐
+│ None of the 4 teachers who teach B1 can take both times:              │
+│  Tomas Horvat   ✗ Tue — teaching A2 Evening                           │
+│  Eva Simon      ✗ Thu — unavailable (weekly, 16:00–20:00)             │
+│  Ana Kral       ✗ Tue, Thu — teaching A1 Evening                      │
+│  Peter Varga    ✗ would be 10.5 h, max 9 h a week                     │
+│ Suggestions:                                                          │
+│  • Ana Kral could take it if A1 Evening goes to Lucia Benova. [Apply] │
+│ [Pick a teacher anyway ▾] [Edit group times] [Teacher levels]         │
+└───────────────────────────────────────────────────────────────────────┘
+```
 
-| Where    | State                                                       | UI (key)                                                                                                                                                                                                                 |
-| -------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Page     | No terms                                                    | Empty card as the editor: `timetable.editor.empty.noTerm.*` + _Go to Terms & holidays_.                                                                                                                                  |
-| Page     | No active groups                                            | Empty card `generator.empty.noGroups` "No groups to schedule" / "Create groups and enrol students first." / _Go to Courses & groups_.                                                                                    |
-| Page     | No teachers                                                 | Info `Alert` `generator.missing.teachers` "Add at least one teacher to fill in weekly needs." + link.                                                                                                                    |
-| Page     | Term in the past                                            | Read-only, `Alert` `generator.termEnded` "This term has ended. Choose a current or future term."                                                                                                                         |
-| Page     | Term published by someone else while a REPLACE draft exists | Publish refuses `TERM_PUBLISHED`: `Alert` `generator.termPublished` "This term was published meanwhile. Regenerate to add missing lessons or re-plan from a date." + _Regenerate…_.                                      |
-| Page     | Loading                                                     | Header + tabs rendered; table skeleton (8 rows) or grid skeleton.                                                                                                                                                        |
-| Page     | Load error                                                  | Destructive `Alert` + _Try again_ (`common.error.*`).                                                                                                                                                                    |
-| Page     | < 1024 px                                                   | Summary card + `layout.desktopRecommended`.                                                                                                                                                                              |
-| Page     | Not an admin                                                | 403 page (`errors.forbidden.*`); nav item not shown.                                                                                                                                                                     |
-| Needs    | No needs yet, previous term exists                          | Empty card `generator.demand.empty.title` "No weekly needs for {term} yet" / "Copy them from {previous} and adjust what changed." / **Copy from {previous}** · _Start from scratch_ (shows all groups with empty cells). |
-| Needs    | No needs yet, no previous term                              | Table with all active groups and empty cells, info line "Fill in each group's lessons a week, length and teacher."                                                                                                       |
-| Needs    | Filter with no result                                       | `common.noResults` + _Clear filters_.                                                                                                                                                                                    |
-| Needs    | Row save failed                                             | Row status icon + _Retry_; value kept.                                                                                                                                                                                   |
-| Needs    | Read-only during a run                                      | Inputs disabled, hint "Locked while generating".                                                                                                                                                                         |
-| Generate | Nothing to generate                                         | Dialog body: `generator.generate.nothing` "No complete weekly needs yet. Fill in at least one group." — **Generate** hidden, _Go to weekly needs_. Also the server's `NO_DEMAND` refusal.                                |
-| Generate | Another run in progress                                     | Server refuses `RUN_IN_PROGRESS`: "{name} is already generating this term (started {time})." Dialog shows the live progress instead.                                                                                     |
-| Generate | Timetable lock busy                                         | `LOCK_BUSY`: "Someone is saving the timetable right now. Try again in a moment." (rare; the lock is per transaction)                                                                                                     |
-| Run      | Running / long run / stopped                                | §5.4.                                                                                                                                                                                                                    |
-| Run      | Failed                                                      | Destructive `Alert` `generator.run.failed` "The run failed. Your weekly needs and the previous draft are unchanged." + _Try again_ + _Copy error ID_ (for support).                                                      |
-| Run      | Interrupted (server restarted, `RUN_INTERRUPTED`)           | Destructive `Alert` `generator.run.interrupted` + _Try again_ (§5.4).                                                                                                                                                    |
-| Run      | Cancelled                                                   | Info toast "Run cancelled. The previous draft is unchanged."                                                                                                                                                             |
-| Draft    | No draft yet                                                | Empty card `generator.draft.empty.title` "No draft yet" / "Fill in weekly needs, then generate a draft." / **Generate draft…** (or _Go to weekly needs_ when nothing is complete).                                       |
-| Draft    | Nothing placed                                              | Summary shows 0 / {total}; danger `Alert` `generator.draft.nothingPlaced` "No lessons could be placed. The most common reason: {reason}." + _Show not placed_. Grid shows only locked/imported slots.                    |
-| Draft    | Some not placed                                             | §5.5, §5.7.                                                                                                                                                                                                              |
-| Draft    | Out of date                                                 | §5.9.                                                                                                                                                                                                                    |
-| Draft    | Edited by another admin                                     | `common.error.staleData` + _Reload_ on save (§5.6).                                                                                                                                                                      |
+- One line per teacher who teaches the level, with **why they can't**:
+  _teaching {group}_ (with the day), _unavailable (weekly)_, _would exceed
+  max hours_, _archived_. If nobody teaches the level: "Nobody teaches {level}."
+  - _Teacher levels_.
+- **Suggestion** (if the rules doc provides it, Q4): a one-swap fix — a
+  teacher who could take this group if one of their groups moves to
+  someone who is free. _Apply_ makes both changes in the draft (locked).
+- Actions: _Pick a teacher anyway_ (the picker, §6.6), _Edit group times_
+  (group form in a new tab; the draft becomes out of date), _Teacher
+  levels_ / _Availability_.
+- Footer: "Fix the data, then reassign to try again." + _Reassign…_.
+- Empty: "Every group has a teacher." (success).
 
-## 8. Copy (i18n keys, English source)
+### 6.8 By teacher view (workload)
 
-New namespace `generator` (`messages/en-GB/generator.json`). Reused, not
-duplicated: `timetable.*` (grid, slot sheet, severities, publish, result
-formatter), `scheduling.conflicts.*`, `scheduling.errors.*`, `common.*`,
-`validation.*`, `errors.forbidden.*`, `layout.desktopRecommended`,
-`nav.autoGenerate`. Reason messages follow the rules doc's codes and live
-in the shared `scheduling` namespace next to `scheduling.conflicts.*`
-(`scheduling.generator.reasons.*`, listed at the end of the last table).
+Table, one row per teacher (archived excluded):
 
-### Page and needs
+| Column  | Content                                                                                                  |
+| ------- | -------------------------------------------------------------------------------------------------------- |
+| Teacher | name, color dot                                                                                          |
+| Levels  | "A1–B2"                                                                                                  |
+| Groups  | count; expand row to list them (group, times, room) with the same picker to move a group to someone else |
+| Hours   | "7.5 h" + a horizontal bar against the average line (text value always shown; the bar is decoration)     |
+| Days    | "Mon, Tue, Thu" (teaching days)                                                                          |
+| Max     | "max 8 h" when set                                                                                       |
 
-| Key                                    | Copy                                                                                                                                                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `generator.title`                      | Auto-generate timetable                                                                                                                                                        |
-| `generator.tabs.demand`                | Weekly needs                                                                                                                                                                   |
-| `generator.tabs.demandStatus`          | {groups, plural, one {# group} other {# groups}} · {incomplete, plural, =0 {complete} other {# incomplete}}                                                                    |
-| `generator.tabs.demandNotStarted`      | Not started                                                                                                                                                                    |
-| `generator.tabs.draft`                 | Draft                                                                                                                                                                          |
-| `generator.tabs.draftStatus`           | Score {score} · {unplaced, plural, =0 {all placed} other {# not placed}}                                                                                                       |
-| `generator.tabs.draftNone`             | No draft yet                                                                                                                                                                   |
-| `generator.tabs.draftRunning`          | Generating… {percent} %                                                                                                                                                        |
-| `generator.tabs.draftStale`            | Out of date                                                                                                                                                                    |
-| `generator.actions.generate`           | Generate draft…                                                                                                                                                                |
-| `generator.actions.regenerate`         | Regenerate…                                                                                                                                                                    |
-| `generator.actions.copyDemand`         | Copy needs from another term…                                                                                                                                                  |
-| `generator.actions.openEditor`         | Open timetable editor                                                                                                                                                          |
-| `generator.actions.discardDraft`       | Discard draft…                                                                                                                                                                 |
-| `generator.actions.runHistory`         | Run history                                                                                                                                                                    |
-| `generator.discard.title`              | Discard the draft for {term}?                                                                                                                                                  |
-| `generator.discard.description`        | The draft and your edits to it are deleted. Weekly needs and the live timetable stay as they are.                                                                              |
-| `generator.discard.confirm`            | Discard draft                                                                                                                                                                  |
-| `generator.demand.title`               | Weekly needs                                                                                                                                                                   |
-| `generator.demand.col.group`           | Group                                                                                                                                                                          |
-| `generator.demand.col.type`            | Type                                                                                                                                                                           |
-| `generator.demand.col.level`           | Level                                                                                                                                                                          |
-| `generator.demand.col.students`        | Students                                                                                                                                                                       |
-| `generator.demand.col.lessonsPerWeek`  | Lessons a week                                                                                                                                                                 |
-| `generator.demand.col.length`          | Length                                                                                                                                                                         |
-| `generator.demand.col.teacher`         | Teacher                                                                                                                                                                        |
-| `generator.demand.col.room`            | Room                                                                                                                                                                           |
-| `generator.demand.col.fixedTimes`      | Fixed times                                                                                                                                                                    |
-| `generator.demand.minutes`             | {minutes} min                                                                                                                                                                  |
-| `generator.demand.otherLength`         | Other…                                                                                                                                                                         |
-| `generator.demand.teacherAnyOf`        | Any of {count}                                                                                                                                                                 |
-| `generator.demand.teacherChoose`       | Choose                                                                                                                                                                         |
-| `generator.demand.room.any`            | Any                                                                                                                                                                            |
-| `generator.demand.room.physical`       | Physical ≥ {seats}                                                                                                                                                             |
-| `generator.demand.room.online`         | Online                                                                                                                                                                         |
-| `generator.demand.room.specific`       | {rooms}                                                                                                                                                                        |
-| `generator.demand.off`                 | Off this term                                                                                                                                                                  |
-| `generator.demand.turnOn`              | Turn on                                                                                                                                                                        |
-| `generator.demand.turnOff`             | Turn off for this term                                                                                                                                                         |
-| `generator.demand.resetToPrevious`     | Reset to previous term                                                                                                                                                         |
-| `generator.demand.editDetails`         | Edit details…                                                                                                                                                                  |
-| `generator.demand.newGroup`            | New                                                                                                                                                                            |
-| `generator.demand.incomplete`          | Incomplete — skipped when generating                                                                                                                                           |
-| `generator.demand.show.all`            | All                                                                                                                                                                            |
-| `generator.demand.show.incomplete`     | Incomplete                                                                                                                                                                     |
-| `generator.demand.show.off`            | Off                                                                                                                                                                            |
-| `generator.demand.addGroups`           | Add groups                                                                                                                                                                     |
-| `generator.demand.summary`             | {groups} groups on · {lessons} lessons a week · {hours} teaching hours · {incomplete} incomplete                                                                               |
-| `generator.demand.lockedWhileRunning`  | Locked while generating                                                                                                                                                        |
-| `generator.demand.fillHint`            | Fill in each group's lessons a week, length and teacher.                                                                                                                       |
-| `generator.demand.empty.title`         | No weekly needs for {term} yet                                                                                                                                                 |
-| `generator.demand.empty.description`   | Copy them from {previous} and adjust what changed.                                                                                                                             |
-| `generator.demand.empty.copy`          | Copy from {previous}                                                                                                                                                           |
-| `generator.demand.empty.scratch`       | Start from scratch                                                                                                                                                             |
-| `generator.demand.sheet.title`         | Weekly needs: {group}                                                                                                                                                          |
-| `generator.demand.sheet.lessons`       | Lessons                                                                                                                                                                        |
-| `generator.demand.sheet.teacherFixed`  | Fixed teacher                                                                                                                                                                  |
-| `generator.demand.sheet.teacherAnyOf`  | Any of these teachers                                                                                                                                                          |
-| `generator.demand.sheet.teacherLoad`   | {teacher} is free for {free} h a week in school hours and has {demand} h of needs this term.                                                                                   |
-| `generator.demand.sheet.roomAny`       | Any suitable room                                                                                                                                                              |
-| `generator.demand.sheet.roomPhysical`  | Physical room                                                                                                                                                                  |
-| `generator.demand.sheet.roomOnline`    | Online                                                                                                                                                                         |
-| `generator.demand.sheet.roomSpecific`  | Specific rooms                                                                                                                                                                 |
-| `generator.demand.sheet.minSeats`      | Minimum seats                                                                                                                                                                  |
-| `generator.demand.sheet.enrolledHint`  | {count, plural, one {# student enrolled} other {# students enrolled}}                                                                                                          |
-| `generator.demand.sheet.fixedTimes`    | Fixed times                                                                                                                                                                    |
-| `generator.demand.sheet.fixedHint`     | Lessons with a fixed time are placed exactly there, or reported as not placed.                                                                                                 |
-| `generator.demand.sheet.addFixed`      | Add fixed time                                                                                                                                                                 |
-| `generator.demand.sheet.preferred`     | Preferred time of day                                                                                                                                                          |
-| `generator.demand.sheet.morning`       | Morning                                                                                                                                                                        |
-| `generator.demand.sheet.afternoon`     | Afternoon                                                                                                                                                                      |
-| `generator.demand.sheet.evening`       | Evening                                                                                                                                                                        |
-| `generator.bulk.selected`              | {count} selected                                                                                                                                                               |
-| `generator.bulk.setLessons`            | Set lessons a week                                                                                                                                                             |
-| `generator.bulk.setLength`             | Set length                                                                                                                                                                     |
-| `generator.bulk.setTeacher`            | Set teacher                                                                                                                                                                    |
-| `generator.bulk.setRoom`               | Set room                                                                                                                                                                       |
-| `generator.bulk.turnOff`               | Turn off                                                                                                                                                                       |
-| `generator.bulk.clear`                 | Clear selection                                                                                                                                                                |
-| `generator.bulk.apply`                 | Apply to {count, plural, one {# group} other {# groups}}                                                                                                                       |
-| `generator.bulk.done`                  | {count, plural, one {# group updated} other {# groups updated}}                                                                                                                |
-| `generator.bulk.skipped`               | {count, plural, one {# group wasn't changed} other {# groups weren't changed}}                                                                                                 |
-| `generator.copy.title`                 | Copy weekly needs                                                                                                                                                              |
-| `generator.copy.source`                | Copy from                                                                                                                                                                      |
-| `generator.copy.fromSlots`             | {term} has no weekly needs; they're worked out from its timetable slots.                                                                                                       |
-| `generator.copy.summary`               | Copy needs for {count} groups. {new, plural, =0 {} other {# groups have no needs in {source} and stay empty.}} {skipped, plural, =0 {} other {# archived groups are skipped.}} |
-| `generator.copy.onlyEmpty`             | Only fill empty rows                                                                                                                                                           |
-| `generator.copy.overwrite`             | Overwrite all rows                                                                                                                                                             |
-| `generator.copy.overwriteWarning`      | Overwrites {count, plural, one {# row} other {# rows}} you've already filled in.                                                                                               |
-| `generator.copy.confirm`               | Copy                                                                                                                                                                           |
-| `generator.copy.done`                  | Copied weekly needs for {count} groups.                                                                                                                                        |
-| `generator.precheck.title`             | Before you generate                                                                                                                                                            |
-| `generator.precheck.ok`                | Ready to generate.                                                                                                                                                             |
-| `generator.precheck.incomplete`        | {count, plural, one {# group is incomplete and will be skipped.} other {# groups are incomplete and will be skipped.}}                                                         |
-| `generator.precheck.teacherOverloaded` | {teacher} needs {demand} h but is free for {free} h.                                                                                                                           |
-| `generator.precheck.noRoom`            | {group} needs {seats} seats; the largest suitable room has {max}.                                                                                                              |
-| `generator.precheck.pinConflict`       | {group}: the fixed time {time} has a conflict.                                                                                                                                 |
-| `generator.precheck.studentPins`       | {count, plural, one {# student is} other {# students are}} in groups with clashing fixed times.                                                                                |
-| `generator.empty.noGroups.title`       | No groups to schedule                                                                                                                                                          |
-| `generator.empty.noGroups.description` | Create groups and enrol students first.                                                                                                                                        |
-| `generator.empty.noGroups.action`      | Go to Courses & groups                                                                                                                                                         |
-| `generator.missing.teachers`           | Add at least one teacher to fill in weekly needs.                                                                                                                              |
-| `generator.termEnded`                  | This term has ended. Choose a current or future term.                                                                                                                          |
-| `generator.termPublished`              | This term was published meanwhile. Regenerate to add missing lessons or re-plan from a date.                                                                                   |
+Sorted by hours, busiest first. Teachers with 0 h are listed (they may be
+the fix for a group without a teacher). Selecting a teacher opens the
+**Week** view filtered to them (editor grid, read-only blocks, draft
+dashed outline, their weekly unavailability hatched).
 
-### Generate and run
+### 6.9 Week view
 
-| Key                                   | Copy                                                                                                                                             |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `generator.generate.title`            | Generate a draft for {term}                                                                                                                      |
-| `generator.generate.titleRerun`       | Regenerate the draft for {term}                                                                                                                  |
-| `generator.generate.included`         | {groups, plural, one {# group} other {# groups}}, {lessons, plural, one {# lesson} other {# lessons}} a week.                                    |
-| `generator.generate.skipped`          | {count, plural, one {# incomplete group is skipped.} other {# incomplete groups are skipped.}}                                                   |
-| `generator.generate.review`           | Review                                                                                                                                           |
-| `generator.generate.existing`         | This term already has {count, plural, one {# slot} other {# slots}}.                                                                             |
-| `generator.generate.keepExisting`     | Keep them as they are                                                                                                                            |
-| `generator.generate.moveExisting`     | Let the generator rearrange them                                                                                                                 |
-| `generator.generate.applyFrom`        | Apply from                                                                                                                                       |
-| `generator.generate.applyFromHint`    | Lessons before this date are not touched.                                                                                                        |
-| `generator.generate.applyFromInvalid` | Pick a date after today, inside the term.                                                                                                        |
-| `generator.generate.sameSeed`         | Same as the draft ({seed})                                                                                                                       |
-| `generator.generate.anotherVariant`   | Try another variant                                                                                                                              |
-| `generator.mode.label`                | What should the generator do?                                                                                                                    |
-| `generator.mode.fill`                 | Add missing lessons only                                                                                                                         |
-| `generator.mode.fillHelp`             | Current slots stay exactly as they are. Only lessons that aren't in the timetable yet are placed, from {date}. No existing lesson changes.       |
-| `generator.mode.replan`               | Re-plan the whole week                                                                                                                           |
-| `generator.mode.replanHelp`           | The generator may move current slots from {date}, keeping as many where they are as it can. You see every change before anything is applied.     |
-| `generator.prefGroup.teachers`        | Teachers                                                                                                                                         |
-| `generator.prefGroup.groups`          | Groups & students                                                                                                                                |
-| `generator.prefGroup.rooms`           | Rooms                                                                                                                                            |
-| `generator.generate.keepsLocked`      | Keeps {locked, plural, one {# locked slot} other {# locked slots}}. {unlocked, plural, one {# unlocked slot} other {# unlocked slots}} may move. |
-| `generator.generate.unlockManual`     | Also unlock slots I moved by hand                                                                                                                |
-| `generator.generate.preferences`      | Preferences                                                                                                                                      |
-| `generator.generate.prefLevel.off`    | Off                                                                                                                                              |
-| `generator.generate.prefLevel.low`    | Low                                                                                                                                              |
-| `generator.generate.prefLevel.normal` | Normal                                                                                                                                           |
-| `generator.generate.prefLevel.high`   | High                                                                                                                                             |
-| `generator.generate.resetPrefs`       | Reset all to Normal                                                                                                                              |
-| `generator.generate.advanced`         | Advanced                                                                                                                                         |
-| `generator.generate.timeLimit`        | Time limit                                                                                                                                       |
-| `generator.generate.limit.quick`      | Quick (up to 10 s)                                                                                                                               |
-| `generator.generate.limit.standard`   | Standard (up to 30 s)                                                                                                                            |
-| `generator.generate.limit.thorough`   | Thorough (up to 2 min)                                                                                                                           |
-| `generator.generate.seed`             | Seed                                                                                                                                             |
-| `generator.generate.seedNew`          | New random seed                                                                                                                                  |
-| `generator.generate.useSeed`          | Use seed…                                                                                                                                        |
-| `generator.generate.nothing`          | No complete weekly needs yet. Fill in at least one group.                                                                                        |
-| `generator.generate.confirm`          | Generate                                                                                                                                         |
-| `generator.run.title`                 | Generating a draft for {term}                                                                                                                    |
-| `generator.run.phase.placing`         | Placing lessons                                                                                                                                  |
-| `generator.run.phase.placingCount`    | {placed} of {total}                                                                                                                              |
-| `generator.run.phase.improving`       | Improving the timetable                                                                                                                          |
-| `generator.run.phase.improvingScore`  | score {from} → {to}                                                                                                                              |
-| `generator.run.elapsed`               | {elapsed} · up to {limit}                                                                                                                        |
-| `generator.run.canLeave`              | You can leave this page; the run continues.                                                                                                      |
-| `generator.run.startedBy`             | Started by {name} at {time}                                                                                                                      |
-| `generator.run.slow`                  | Taking longer than expected…                                                                                                                     |
-| `generator.run.stopKeepBest`          | Stop and keep best                                                                                                                               |
-| `generator.run.cancel`                | Cancel run                                                                                                                                       |
-| `generator.run.cancelConfirm`         | Cancel this run? Nothing is kept; the previous draft stays as it was.                                                                            |
-| `generator.run.cancelled`             | Run cancelled. The previous draft is unchanged.                                                                                                  |
-| `generator.run.done`                  | Draft ready: {placed} of {total} lessons placed, score {score}.                                                                                  |
-| `generator.run.stoppedByLimit`        | Stopped at the time limit; this is the best draft found.                                                                                         |
-| `generator.run.failed`                | The run failed. Your weekly needs and the previous draft are unchanged.                                                                          |
-| `generator.run.interrupted`           | The run stopped unexpectedly (the server restarted). Your weekly needs and the previous draft are unchanged.                                     |
-| `generator.run.copyErrorId`           | Copy error ID                                                                                                                                    |
-| `generator.run.inProgress`            | {name} is already generating this term (started {time}).                                                                                         |
-| `generator.run.lockBusy`              | Someone is saving the timetable right now. Try again in a moment.                                                                                |
-| `generator.history.title`             | Run history                                                                                                                                      |
-| `generator.history.row`               | {date} · {name} · seed {seed} · score {score} · {placed}/{total} placed · {duration}                                                             |
+The editor grid (`timetable.md` §5.2–5.3) in _Week_ mode for one teacher,
+room or group, showing the draft's lessons (group times + assigned
+teacher). Blocks have the dashed draft outline and a lock icon when locked.
+Times can't be dragged here (times belong to the group); clicking a block
+opens a small sheet with the group, its times and the teacher picker.
 
-### Draft, not placed, compare, publish
+### 6.10 Compare to current
 
-| Key                                                   | Copy                                                                                                                                                                   |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generator.draft.band`                                | Draft · not visible to teachers or students                                                                                                                            |
-| `generator.draft.generatedBy`                         | Generated {date} by {name} · seed {seed}                                                                                                                               |
-| `generator.draft.placed`                              | Placed                                                                                                                                                                 |
-| `generator.draft.placedValue`                         | {placed} / {total} lessons                                                                                                                                             |
-| `generator.draft.unplaced`                            | Not placed                                                                                                                                                             |
-| `generator.draft.unplacedValue`                       | {count, plural, =0 {None} one {# lesson} other {# lessons}}                                                                                                            |
-| `generator.draft.unplacedGroups`                      | {count, plural, one {# group} other {# groups}}                                                                                                                        |
-| `generator.draft.issues`                              | Issues                                                                                                                                                                 |
-| `generator.draft.empty.title`                         | No draft yet                                                                                                                                                           |
-| `generator.draft.empty.description`                   | Fill in weekly needs, then generate a draft.                                                                                                                           |
-| `generator.draft.nothingPlaced`                       | No lessons could be placed. The most common reason: {reason}.                                                                                                          |
-| `generator.draft.stale`                               | Data changed since this draft was generated (weekly needs, enrolments, availability, rooms, holidays or the live timetable). Regenerate the unlocked rest?             |
-| `generator.draft.check`                               | Check draft                                                                                                                                                            |
-| `generator.draft.updated`                             | Draft updated: {moved} slots moved, {placed} newly placed, score {score} ({delta}).                                                                                    |
-| `generator.draft.showChanges`                         | Show changes                                                                                                                                                           |
-| `generator.score.title`                               | Quality score                                                                                                                                                          |
-| `generator.score.value`                               | {score} / 100                                                                                                                                                          |
-| `generator.score.up`                                  | up {delta} from the previous run                                                                                                                                       |
-| `generator.score.down`                                | down {delta} from the previous run                                                                                                                                     |
-| `generator.score.help`                                | 100 means every preference is met. Use it to compare drafts of this term.                                                                                              |
-| `generator.score.details`                             | Details                                                                                                                                                                |
-| `generator.score.row`                                 | {preference}: {count}                                                                                                                                                  |
-| `generator.preference.badge`                          | Preference                                                                                                                                                             |
-| `generator.preference.TEACHER_DAILY_MAX`              | {count, plural, one {# day over a teacher's maximum} other {# days over a teacher's maximum}}                                                                          |
-| `generator.preference.TEACHER_CHANGED`                | {count, plural, one {# group with a new teacher} other {# groups with a new teacher}}                                                                                  |
-| `generator.preference.TEACHER_PREFERS_NOT`            | {count, plural, one {# lesson at a time a teacher would rather avoid} other {# lessons at times teachers would rather avoid}}                                          |
-| `generator.preference.TEACHER_DATE_UNAVAILABLE`       | {count, plural, one {# date a teacher is away} other {# dates a teacher is away}}                                                                                      |
-| `generator.preference.TEACHER_GAP`                    | {count, plural, one {# teacher gap} other {# teacher gaps}}                                                                                                            |
-| `generator.preference.SAME_DAY_REPEAT`                | {count, plural, one {# group twice on one day} other {# groups twice on one day}}                                                                                      |
-| `generator.preference.OUTSIDE_PREFERRED_TIME`         | {count, plural, one {# lesson outside preferred days or hours} other {# lessons outside preferred days or hours}}                                                      |
-| `generator.preference.CONSECUTIVE_DAYS`               | {count, plural, one {# pair of lessons on back-to-back days} other {# pairs of lessons on back-to-back days}}                                                          |
-| `generator.preference.UNSTABLE_TIME`                  | {count, plural, one {# extra start time} other {# extra start times}}                                                                                                  |
-| `generator.preference.TIME_CHANGED`                   | {count, plural, one {# lesson at a new time} other {# lessons at a new time}}                                                                                          |
-| `generator.preference.STUDENT_GAP`                    | {count, plural, one {# student gap} other {# student gaps}}                                                                                                            |
-| `generator.preference.NOT_PREFERRED_ROOM`             | {count, plural, one {# lesson not in the preferred room} other {# lessons not in the preferred room}}                                                                  |
-| `generator.preference.fullyMet`                       | {count, plural, one {# preference fully met} other {# preferences fully met}}                                                                                          |
-| `generator.pref.<CODE>.label` / `.help`               | The 12 labels and help texts in the §5.3 preferences table                                                                                                             |
-| `generator.slot.lock`                                 | Locked                                                                                                                                                                 |
-| `generator.slot.lockHelp`                             | The generator won't move this slot when you regenerate.                                                                                                                |
-| `generator.slot.locked`                               | locked                                                                                                                                                                 |
-| `generator.slot.pinned`                               | This is a fixed time from weekly needs. Change it there.                                                                                                               |
-| `generator.slot.existing`                             | Existing                                                                                                                                                               |
-| `generator.slot.movedAndLocked`                       | Moved {group} to {weekday} {time} and locked it.                                                                                                                       |
-| `generator.lock.menu`                                 | Lock…                                                                                                                                                                  |
-| `generator.lock.slot`                                 | Lock this slot                                                                                                                                                         |
-| `generator.lock.group`                                | Lock all slots of {group}                                                                                                                                              |
-| `generator.lock.teacher`                              | Lock all slots of {teacher}                                                                                                                                            |
-| `generator.lock.shown`                                | Lock everything shown                                                                                                                                                  |
-| `generator.lock.unlockAll`                            | Unlock all                                                                                                                                                             |
-| `generator.lock.announceLocked`                       | Locked                                                                                                                                                                 |
-| `generator.lock.announceUnlocked`                     | Unlocked                                                                                                                                                               |
-| `generator.unplaced.title`                            | Not placed ({count})                                                                                                                                                   |
-| `generator.unplaced.groupTitle`                       | {group} · {missing} of {total} lessons not placed                                                                                                                      |
-| `generator.unplaced.closest`                          | Closest: {weekday} {time} — {problem}                                                                                                                                  |
-| `generator.unplaced.footer`                           | Fix the data, then regenerate to try again.                                                                                                                            |
-| `generator.unplaced.empty`                            | Every lesson was placed.                                                                                                                                               |
-| `generator.unplaced.fix.editDemand`                   | Edit weekly needs                                                                                                                                                      |
-| `generator.unplaced.fix.availability`                 | Teacher availability                                                                                                                                                   |
-| `generator.unplaced.fix.rooms`                        | Rooms                                                                                                                                                                  |
-| `generator.unplaced.fix.showStudents`                 | Show students                                                                                                                                                          |
-| `generator.unplaced.fix.placeByHand`                  | Place by hand                                                                                                                                                          |
-| `generator.unplaced.fix.regenerate`                   | Regenerate with more time                                                                                                                                              |
-| `scheduling.generator.reasons.generic`                | The generator couldn't find a time that meets every rule.                                                                                                              |
-| `scheduling.generator.reasons.GROUP_ARCHIVED`         | {group} is archived, so it isn't scheduled.                                                                                                                            |
-| `scheduling.generator.reasons.NO_ELIGIBLE_TEACHER`    | No teacher can be used for {group}: the chosen teachers are archived, or none is chosen.                                                                               |
-| `scheduling.generator.reasons.DURATION_TOO_LONG`      | A {duration}-min lesson doesn't fit in the school day ({schoolHours}).                                                                                                 |
-| `scheduling.generator.reasons.PINNED_TIME_CONFLICT`   | The fixed time {time} has a conflict.                                                                                                                                  |
-| `scheduling.generator.reasons.NO_ROOM`                | No {roomKind} room with {seats} seats is free at a time that works.                                                                                                    |
-| `scheduling.generator.reasons.NO_TEACHER_TIME`        | {teacher} has no free time left that fits a {minutes}-min lesson.                                                                                                      |
-| `scheduling.generator.reasons.STUDENT_CLASH`          | {count, plural, one {# student is} other {# students are}} in other groups at every time that works.                                                                   |
-| `scheduling.generator.reasons.NO_COMMON_TIME`         | No time when {teacher}, a room for {seats} and all {students} students are free at once.                                                                               |
-| `scheduling.generator.reasons.TAKEN_BY_OTHER_LESSONS` | There are free times, but other lessons in this draft take them all.                                                                                                   |
-| `scheduling.generator.reasons.TIME_LIMIT`             | The time limit ran out before this lesson was placed.                                                                                                                  |
-| `scheduling.generator.reasons.REMOVED_BY_ADMIN`       | You removed this slot from the draft.                                                                                                                                  |
-| `scheduling.generator.reasons.INTERNAL_CHECK_FAILED`  | Something went wrong while checking this lesson, so it was left out. This is a bug; please report it with the error ID.                                                |
-| `generator.unplaced.blockers`                         | Teacher busy at {teacherBusy} times, unavailable at {teacherUnavailable}, students busy at {studentsBusy} ({students}), no free room at {noRoom}.                      |
-| `generator.unplaced.suggestion`                       | {time} would work {fix}.                                                                                                                                               |
-| `generator.unplaced.fix.durationSchoolHours`          | School hours                                                                                                                                                           |
-| `generator.unplaced.fix.tryVariant`                   | Try another variant                                                                                                                                                    |
-| `generator.compare.toggleDraft`                       | Draft                                                                                                                                                                  |
-| `generator.compare.toggleCompare`                     | Compare                                                                                                                                                                |
-| `generator.compare.action`                            | Compare to current                                                                                                                                                     |
-| `generator.compare.new`                               | New                                                                                                                                                                    |
-| `generator.compare.moved`                             | Was {weekday} {time}                                                                                                                                                   |
-| `generator.compare.changed`                           | Was {teacher} · {room}                                                                                                                                                 |
-| `generator.compare.removed`                           | Removed                                                                                                                                                                |
-| `generator.compare.summary`                           | {unchanged} unchanged · {moved} moved · {changed} other changes · {new} new · {removed} removed                                                                        |
-| `generator.compare.people`                            | {teachers, plural, one {# teacher} other {# teachers}} and {students, plural, one {# student} other {# students}} get a different week.                                |
-| `generator.compare.list`                              | List changes                                                                                                                                                           |
-| `generator.publish.action`                            | Publish…                                                                                                                                                               |
-| `generator.publish.title`                             | Publish the draft for {term}?                                                                                                                                          |
-| `generator.publish.slots`                             | {count, plural, one {# slot} other {# slots}} ({locked} locked, {generated} generated)                                                                                 |
-| `generator.publish.replaces`                          | Replaces the {count, plural, one {# slot} other {# slots}} in the timetable editor.                                                                                    |
-| `generator.publish.removedExisting`                   | {count, plural, one {# of them is removed.} other {# of them are removed.}}                                                                                            |
-| `generator.publish.unplaced`                          | {count, plural, one {# lesson is not placed.} other {# lessons are not placed.}}                                                                                       |
-| `generator.publish.confirm`                           | Publish timetable                                                                                                                                                      |
-| `generator.publish.toEditor`                          | Save to the timetable editor only                                                                                                                                      |
-| `generator.publish.applyFrom`                         | Changes apply from {date}. Lessons before then are not touched.                                                                                                        |
-| `generator.publish.slotChanges`                       | {ended, plural, one {# current slot ends} other {# current slots end}} on {dayBefore}; {created, plural, one {# new slot starts} other {# new slots start}} on {date}. |
-| `generator.publish.lessonChanges`                     | Future lessons: {removed} removed, {cancelled} kept as cancelled because they have attendance, absences, homework or a substitute.                                     |
-| `generator.publish.bookings`                          | {count, plural, one {# replacement booking is} other {# replacement bookings are}} on lessons that will be cancelled.                                                  |
-| `generator.publish.fillSlots`                         | {created, plural, one {# new slot starts} other {# new slots start}} on {date}. No existing slot or lesson changes.                                                    |
-| `generator.publish.fillLessons`                       | {lessons, plural, one {# lesson is} other {# lessons are}} added for {groups, plural, one {# group} other {# groups}}.                                                 |
-| `generator.publish.applyFill`                         | Add to timetable                                                                                                                                                       |
-| `generator.publish.bookingsReleased`                  | They're released, and the students get their makeup credit back with at least 7 days to use it.                                                                        |
-| `generator.publish.previewFailed`                     | Couldn't work out the impact. Try again.                                                                                                                               |
-| `generator.publish.newWarnings`                       | {count, plural, one {# new warning needs} other {# new warnings need}} your OK before publishing.                                                                      |
-| `generator.publish.datePassed`                        | {date} is no longer in the future. Pick a new date and regenerate.                                                                                                     |
-| `generator.publish.understand`                        | I understand this changes the timetable for teachers and students from {date}.                                                                                         |
-| `generator.publish.apply`                             | Apply draft                                                                                                                                                            |
-| `generator.publish.running`                           | Publishing… creating slots and lessons                                                                                                                                 |
-| `generator.publish.liveChanged`                       | The timetable was changed in the editor after this draft was made. Review the new issues.                                                                              |
-| `generator.publish.doneFill`                          | {lessons, plural, one {# lesson} other {# lessons}} added to {term} from {date}.                                                                                       |
-| `generator.publish.done`                              | {term} published from the draft. {count, plural, one {# lesson} other {# lessons}} created.                                                                            |
+Only when the term already has teachers on its slots. `ToggleGroup`
+_Draft · Compare_ in the toolbar. In By group view, a column **Was**
+shows the current teacher when it differs (badge "Changed", warning tone);
+unchanged rows are dimmed. Summary line: "{changed} groups change teacher ·
+{teachers} teachers and {students} students affected" + _List changes_
+(printable list per teacher, so they can be told before publishing).
 
-## 9. Alignment with the rules doc (CARM-53)
+### 6.11 Out of date
 
-`docs/architecture/generator.md` is the source of truth for behaviour; its
-§9 compares the two documents topic by topic. This table maps the screens
-to its sections, so the build (CARM-55/56) can find both sides.
+When group times, rooms, members, teacher levels, availability or max
+hours change after the run, the Draft tab shows **Out of date** and a
+warning `Alert` "Things changed since teachers were assigned: {changes}."
+with _Check draft_ (re-runs the check: new conflicts and warnings appear on
+the rows) and _Reassign…_. Publishing re-checks on the server anyway.
 
-| Screen / element                  | Rules doc                                                                                                                                                                       |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Weekly needs row and row sheet    | §2.1 `TimetableDemand` (one row per group in the UI), §2.2 "any of" candidates, pins, preferred days/hours                                                                      |
-| Bulk edit, copy, pre-check        | §2.1 `bulkUpdateDemand` (all or nothing), `copyDemand` / `demandFromSlots`, `precheckDemand`                                                                                    |
-| Generate dialog: preferences      | §3.3 12 codes, levels Off/Low/Normal/High = 0, ⌈w/2⌉, w, 2w                                                                                                                     |
-| Generate dialog: time limit, seed | §4.4 iteration presets with caps 10 s / 30 s / 2 min; seed reused on regenerate                                                                                                 |
-| Generate dialog: published term   | §5.2 FILL (default) / REPLAN_FROM, from _D_ ≥ tomorrow, default next Monday on or after tomorrow                                                                                |
-| Run progress, stop, cancel        | §4.6 `GeneratorRun`, polled `getRun`, `stopRun` keep / cancel, heartbeat → `RUN_INTERRUPTED`                                                                                    |
-| Quality score and breakdown       | §3.3 quality = ⌊100·10U / (10U + penalty)⌋, per-code count, points and slot ids                                                                                                 |
-| Not-placed panel                  | §4.5 12 reason codes, blocker breakdown, closest, suggestions                                                                                                                   |
-| Draft grid, locks                 | §5.3 `locked`, `origin`, auto-lock on edit, `REMOVED_BY_ADMIN`; §5.4 regenerate the rest                                                                                        |
-| Out of date                       | §5.5 fingerprint                                                                                                                                                                |
-| Publish dialog                    | §5.6 `applyDraft`, `previewApply`; REPLACE with or without publish, FILL, REPLAN_FROM                                                                                           |
-| Error states                      | §9 error codes: `RUN_IN_PROGRESS`, `RUN_INTERRUPTED`, `DRAFT_CHANGED`, `BLOCKING_CONFLICTS`, `UNACKNOWLEDGED_CONFLICTS`, `EFFECTIVE_DATE_PASSED`, `TERM_PUBLISHED`, `NO_DEMAND` |
+## 7. Publish
 
-"Source" in earlier drafts of this spec is the rules doc's `origin`.
+**Publish…** opens `Dialog` "Publish teacher assignments for {term}?".
+Publishing creates one live `TimetableSlot` per group lesson time (day,
+start, end, room from the group; teacher from the draft) and then runs the
+existing `publishTerm` checks, in one server action under the timetable
+lock (rules doc `applyDraft`).
 
-## 10. Accessibility
+### 7.1 Draft term (not published yet)
 
-- Needs table: a real `<table>` with `<th scope>`; inline inputs have
-  accessible names that include the group ("Lessons a week, B1 Evening").
-  Incomplete rows: the icon has `sr-only` text "Incomplete", not color only.
-  Row save errors are linked with `aria-describedby`.
-- Bulk action bar is a `role="toolbar"` with a label; focus moves to it when
-  the first row is selected, and back to the table when cleared.
-- Run progress: `role="progressbar"` with `aria-valuetext` "Placing lessons,
-  132 of 148"; `aria-live="polite"` only for phase changes and completion.
-- Draft vs live is never conveyed by the dashed outline alone: the band, the
-  tab name and the page title ("Draft · Spring 2027") say it in text.
-- Lock state, preference hits and compare changes are part of each block's
-  accessible name ("B1 Evening, Monday 17:00 to 18:30, Tomas Horvat, Room 3,
-  locked, moved from Tuesday 17:00, 1 preference not met").
-- The not-placed panel and the issues panel are the list equivalents of the
-  grid badges; the Changes sheet is the list equivalent of Compare mode.
-- Keyboard: everything in the editor (`timetable.md` §9) plus `L` to lock.
-  Drag has the sheet alternative (WCAG 2.5.7).
+- "{count} groups, {slots} weekly lessons."
+- If the term has slots from the editor: "Replaces the {count} slots in
+  the timetable editor."
+- "Lessons will be created from {start} to {end}" (as the editor).
+- "{count} warnings acknowledged" + _Review_ (overridable warnings must be
+  ticked, as in the editor).
+- "{count} groups have no teacher and won't get lessons." (warning) +
+  _Show_. Allowed: those groups can be added in the editor later.
+- Buttons: **Publish timetable** (primary) or **Save to the timetable
+  editor only** (outline: creates the slots, term stays a draft).
 
-## 11. Edge cases
+### 7.2 Published term (from a date)
 
-- **Group with no students** (new group): demand allowed; min seats default
-  1; the editor's `ONE_ON_ONE_STUDENT_COUNT` / capacity warnings appear in
-  the draft as usual.
-- **Student joins a group after the run**: draft out of date (§5.9); a new
-  `STUDENT_DOUBLE_BOOKED` warning may appear on Check.
-- **Teacher removed or deactivated** after demand was entered: the row
-  becomes incomplete ("Teacher no longer active"); draft slots with them
-  get a blocking conflict on Check; publish is blocked until fixed.
-- **Room archived after the run**: draft slots in it get `ROOM_ARCHIVED`
-  (blocking for new slots) on Check — regenerate or move them.
-- **Holiday added after the run**: no conflict for slots (they skip
-  holidays); lesson counts in the publish summary change.
-- **1-on-1 groups**: same rows; type icon `user`; "Any of" teacher is
-  common (whoever is free).
-- **Two lessons a week, one pinned**: one placed at the pin, the other free;
-  not placed is per lesson, so "1 of 2 lessons not placed" is possible.
-- **Lessons a week > teaching days**: allowed (up to 14); the group then
-  meets twice on some days, and _One lesson a day per group_ isn't counted
-  for it (rules doc §3.3).
-- **Very long run in the dev environment** (no deployment target, slow
-  laptop): the budget is iterations, with a wall-clock cap per preset; at
-  the cap the draft is the best found, and the result says it stopped at
-  the limit. The same seed and the iterations actually done reproduce it.
-- **Two admins**: one run per term; draft edits are per slot with stale
-  checks; demand rows are per row with last-write-wins and a "Changed by
-  {name} just now" hint on refresh; demand edits are refused while a run is
-  running (`RUN_IN_PROGRESS`, "Locked while generating").
-- **Term dates changed after generating**: out of date; slots outside the
-  new dates get `OUTSIDE_TERM` on Check.
-- **Previous term had slots split mid-term** (published edits): "derived
-  from slots" uses the slots valid on the previous term's last teaching
-  week.
+- "Changes apply from {date}. Lessons before then are not touched."
+- "{changed} groups get a different teacher; {new} groups start."
+- Lesson impact from the rules doc's preview: "{moved} future lessons get
+  the new teacher; {cancelled} kept as cancelled because they have
+  attendance, absences, homework or a substitute." (Q5)
+- "{teachers} teachers and {students} students are affected." + _List
+  changes_.
+- Required checkbox "I understand this changes the timetable for teachers
+  and students from {date}." Primary **Apply changes** (blue; red is only
+  for deleting).
 
-## 12. Open questions for the owner
+### 7.3 Running, blocked, failed, done
 
-Resolved with the rules doc (CARM-53): terms with lessons (FILL /
-REPLAN_FROM from a date, §5.3, §6.2), one length per group (one demand row
-per group in the UI; the schema allows more later), the 0–100 score,
-auto-lock on manual move, concurrent demand edits (last write wins, locked
-during a run), and replacement bookings on lessons cancelled by a re-plan
-(released with the existing 7-day grace, §6.2).
+As the editor's publish dialog (`timetable.md` §5.7): non-closable while
+running ("Publishing… creating lessons"); **blocked** by conflicts with
+the slots listed and _Show issues_; `generator.publish.liveChanged` when
+the editor changed the term meanwhile and that created conflicts; failure
+"Couldn't publish. Nothing was changed. Try again."; success toast
+"{term} published. {count} lessons created." and the page switches to the
+editor with the published banner.
 
-Still open, shared with the rules doc's §10 (one answer covers both):
+## 8. States
 
-1. **REPLAN_FROM in v1?** (rules Q1) If not, the Generate dialog hides the
-   mode choice and published terms only get "Add missing lessons only".
-2. **Preference levels as school defaults?** (rules Q4) Recommended: yes,
-   changeable per run; then _Reset all to Normal_ becomes _Reset to school
-   defaults_ and a changed level asks "Save as the school's default?".
-3. **Preferred time of day** (rules Q6): the row sheet has preferred days
-   and From/To hours. Recommended as enough for v1; named periods (morning,
-   afternoon, evening) would be quick-fill buttons for From/To, not a new
-   rule.
+| Where  | State                          | UI (key)                                                                                                                            |
+| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Page   | No terms                       | Editor's empty card `timetable.editor.empty.noTerm.*`.                                                                              |
+| Page   | No groups                      | Empty card `generator.empty.noGroups` "No groups yet" / "Create groups with their lesson times first." / _Go to Courses & groups_.  |
+| Page   | No teachers / none with levels | Info `Alert` `generator.empty.noTeachers` "Add teachers and set the levels they teach." + _Go to Teachers_.                         |
+| Page   | Term has ended                 | Read-only, `generator.termEnded` "This term has ended. Choose a current or future term."                                            |
+| Page   | Loading / load error           | Skeleton table / destructive `Alert` + _Try again_.                                                                                 |
+| Page   | < 1024 px                      | Summary card + `layout.desktopRecommended`.                                                                                         |
+| Page   | Not an admin                   | 403 page; nav item hidden.                                                                                                          |
+| Groups | Nothing ready                  | Assign dialog body `generator.assign.nothing` "No group is ready yet. Add lesson times and a room to your groups." + _Show groups_. |
+| Groups | Filter with no result          | `common.noResults` + _Clear filters_.                                                                                               |
+| Run    | Another run in progress        | `generator.run.inProgress` "{name} is assigning teachers for this term (started {time})." with its progress.                        |
+| Run    | Failed                         | `generator.run.failed` "Assigning failed. The previous draft is unchanged." + _Try again_ + _Copy error ID_.                        |
+| Draft  | No draft yet                   | Empty card "No draft yet" / "Check the groups, then assign teachers." / **Assign teachers…**.                                       |
+| Draft  | Nobody assigned                | Danger `Alert` "No group could get a teacher. Most common reason: {reason}." + _Show_.                                              |
+| Draft  | Out of date                    | §6.11.                                                                                                                              |
+| Draft  | Edited by someone else         | `common.error.staleData` + _Reload_ on save.                                                                                        |
 
-Rules Q2 (teacher levels list), Q3 (daily maximum hard or soft, weekly
-maximum) and Q5 (sharing online rooms) need no screen change beyond a
-setting on the teacher or room form if the owner says yes.
+## 9. Copy (i18n keys, English source)
+
+Namespace `generator` (`messages/en-GB/generator.json`), plus additions to
+`groups`, `teachers` and `nav`. Reused, not duplicated: `timetable.*`,
+`scheduling.conflicts.*`, `scheduling.errors.*`, `common.*`,
+`validation.*`, `errors.forbidden.*`, `layout.desktopRecommended`.
+
+### Setup
+
+| Key                                | Copy                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `nav.autoGenerate`                 | Assign teachers (was "Auto-generate")                                                                              |
+| `groups.lessonTimes.title`         | Lesson times                                                                                                       |
+| `groups.lessonTimes.day`           | Day                                                                                                                |
+| `groups.lessonTimes.start`         | Start                                                                                                              |
+| `groups.lessonTimes.end`           | End                                                                                                                |
+| `groups.lessonTimes.room`          | Room                                                                                                               |
+| `groups.lessonTimes.add`           | Add lesson time                                                                                                    |
+| `groups.lessonTimes.remove`        | Remove lesson time                                                                                                 |
+| `groups.lessonTimes.summary`       | Every week, in every term this group runs. {count, plural, one {# lesson} other {# lessons}} · {hours} h a week.   |
+| `groups.lessonTimes.ok`            | No clashes.                                                                                                        |
+| `groups.lessonTimes.column`        | Lesson times                                                                                                       |
+| `groups.lessonTimes.none`          | No lesson times                                                                                                    |
+| `groups.lessonTimes.changedNote`   | These times are used the next time teachers are assigned. The current timetable of {term} still has the old times. |
+| `groups.lessonTimes.changeCurrent` | Change the current timetable too…                                                                                  |
+| `validation.lessonTimesOverlap`    | Two lesson times of this group overlap.                                                                            |
+| `validation.lessonTimesRequired`   | Add at least one lesson time.                                                                                      |
+| `teachers.levels.title`            | Levels they teach                                                                                                  |
+| `teachers.levels.upTo`             | Up to…                                                                                                             |
+| `teachers.levels.all`              | All                                                                                                                |
+| `teachers.levels.none`             | None                                                                                                               |
+| `teachers.levels.help`             | The generator only gives {name} groups of these levels. You can still pick {name} for any group by hand.           |
+| `teachers.levels.column`           | Levels                                                                                                             |
+| `teachers.levels.empty`            | No levels set                                                                                                      |
+| `teachers.maxHours.label`          | Max hours a week                                                                                                   |
+| `teachers.maxHours.help`           | Leave empty for no limit. The generator never assigns more.                                                        |
+
+### Assign teachers
+
+| Key                                         | Copy                                                                                                                                                            |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generator.title`                           | Assign teachers                                                                                                                                                 |
+| `generator.tabs.groups`                     | Groups                                                                                                                                                          |
+| `generator.tabs.groupsStatus`               | {ready} ready · {attention, plural, =0 {all set} other {# need attention}}                                                                                      |
+| `generator.tabs.draft`                      | Draft                                                                                                                                                           |
+| `generator.tabs.draftStatus`                | {assigned} of {total} assigned                                                                                                                                  |
+| `generator.tabs.draftNone`                  | No draft yet                                                                                                                                                    |
+| `generator.tabs.draftRunning`               | Assigning…                                                                                                                                                      |
+| `generator.tabs.draftStale`                 | Out of date                                                                                                                                                     |
+| `generator.actions.assign`                  | Assign teachers…                                                                                                                                                |
+| `generator.actions.reassign`                | Reassign…                                                                                                                                                       |
+| `generator.actions.openEditor`              | Open timetable editor                                                                                                                                           |
+| `generator.actions.discardDraft`            | Discard draft…                                                                                                                                                  |
+| `generator.actions.runHistory`              | Run history                                                                                                                                                     |
+| `generator.groups.col.group`                | Group                                                                                                                                                           |
+| `generator.groups.col.level`                | Level                                                                                                                                                           |
+| `generator.groups.col.times`                | Lesson times                                                                                                                                                    |
+| `generator.groups.col.room`                 | Room                                                                                                                                                            |
+| `generator.groups.col.students`             | Students                                                                                                                                                        |
+| `generator.groups.col.canTeach`             | Can teach                                                                                                                                                       |
+| `generator.groups.col.status`               | Status                                                                                                                                                          |
+| `generator.groups.canTeachCount`            | {count, plural, =0 {Nobody} one {# teacher} other {# teachers}}                                                                                                 |
+| `generator.groups.status.ready`             | Ready                                                                                                                                                           |
+| `generator.groups.status.noTimes`           | No lesson times                                                                                                                                                 |
+| `generator.groups.status.noRoom`            | No room                                                                                                                                                         |
+| `generator.groups.status.noTeacherForLevel` | Nobody teaches {level}                                                                                                                                          |
+| `generator.groups.status.timesClash`        | Times clash                                                                                                                                                     |
+| `generator.groups.status.skipped`           | Skipped this term                                                                                                                                               |
+| `generator.groups.skip`                     | Skip this term                                                                                                                                                  |
+| `generator.groups.include`                  | Include                                                                                                                                                         |
+| `generator.groups.editGroup`                | Edit group                                                                                                                                                      |
+| `generator.groups.summary`                  | {groups} groups · {lessons} lessons a week · {need} teaching hours · {teachers} teachers can give {can} h                                                       |
+| `generator.ready.title`                     | Before you assign                                                                                                                                               |
+| `generator.ready.ok`                        | Ready to assign teachers.                                                                                                                                       |
+| `generator.ready.noTimes`                   | {count, plural, one {# group has} other {# groups have}} no lesson times or room and will be skipped.                                                           |
+| `generator.ready.roomClash`                 | {room} is used by {groupA} and {groupB} on {weekday} at {time}.                                                                                                 |
+| `generator.ready.levelUncovered`            | Nobody teaches {level}. {count, plural, one {# group} other {# groups}} can't get a teacher.                                                                    |
+| `generator.ready.timeCrunch`                | {day} {time}: {groups} groups at {levels}, only {teachers} teachers who teach them are free.                                                                    |
+| `generator.ready.teachersNoLevels`          | {count, plural, one {# teacher has} other {# teachers have}} no levels yet and won't be assigned.                                                               |
+| `generator.ready.hours`                     | Groups need {need} h a week; teachers can give {can} h.                                                                                                         |
+| `generator.ready.studentClash`              | {count, plural, one {# student is} other {# students are}} in two groups at the same time.                                                                      |
+| `generator.assign.title`                    | Assign teachers for {term}                                                                                                                                      |
+| `generator.assign.included`                 | {groups, plural, one {# group} other {# groups}}, {teachers, plural, one {# teacher} other {# teachers}}.                                                       |
+| `generator.assign.skipped`                  | {count, plural, one {# group isn't ready and is skipped.} other {# groups aren't ready and are skipped.}}                                                       |
+| `generator.assign.keepCurrent`              | Keep current teachers                                                                                                                                           |
+| `generator.assign.reassignAll`              | Reassign everything                                                                                                                                             |
+| `generator.assign.fromDate`                 | From                                                                                                                                                            |
+| `generator.assign.fromDateHint`             | Lessons before this date are not touched.                                                                                                                       |
+| `generator.assign.onlyUnassigned`           | Only groups without a teacher                                                                                                                                   |
+| `generator.assign.reconsiderAll`            | Reconsider every group                                                                                                                                          |
+| `generator.assign.keepsLocked`              | Keeps {locked, plural, one {# locked assignment} other {# locked assignments}}. {unlocked, plural, one {# group} other {# groups}} may get a different teacher. |
+| `generator.assign.preference`               | When several teachers fit, workloads are kept as even as possible.                                                                                              |
+| `generator.assign.nothing`                  | No group is ready yet. Add lesson times and a room to your groups.                                                                                              |
+| `generator.assign.confirm`                  | Assign teachers                                                                                                                                                 |
+| `generator.run.running`                     | Assigning teachers… {assigned} of {total} groups                                                                                                                |
+| `generator.run.inProgress`                  | {name} is assigning teachers for this term (started {time}).                                                                                                    |
+| `generator.run.done`                        | {assigned} of {total} groups have a teacher.                                                                                                                    |
+| `generator.run.showUnassigned`              | Show groups without a teacher                                                                                                                                   |
+| `generator.run.failed`                      | Assigning failed. The previous draft is unchanged.                                                                                                              |
+| `generator.run.copyErrorId`                 | Copy error ID                                                                                                                                                   |
+| `generator.draft.band`                      | Draft · not visible to teachers or students                                                                                                                     |
+| `generator.draft.assignedBy`                | Assigned {date} by {name}                                                                                                                                       |
+| `generator.draft.assigned`                  | Assigned                                                                                                                                                        |
+| `generator.draft.assignedValue`             | {assigned} / {total} groups                                                                                                                                     |
+| `generator.draft.noTeacher`                 | No teacher                                                                                                                                                      |
+| `generator.draft.noTeacherValue`            | {count, plural, =0 {None} one {# group} other {# groups}}                                                                                                       |
+| `generator.draft.issues`                    | Issues                                                                                                                                                          |
+| `generator.draft.view.byGroup`              | By group                                                                                                                                                        |
+| `generator.draft.view.byTeacher`            | By teacher                                                                                                                                                      |
+| `generator.draft.view.week`                 | Week                                                                                                                                                            |
+| `generator.draft.onlyUnassigned`            | Only without teacher                                                                                                                                            |
+| `generator.draft.empty.title`               | No draft yet                                                                                                                                                    |
+| `generator.draft.empty.description`         | Check the groups, then assign teachers.                                                                                                                         |
+| `generator.draft.nobodyAssigned`            | No group could get a teacher. Most common reason: {reason}.                                                                                                     |
+| `generator.draft.stale`                     | Things changed since teachers were assigned: {changes}.                                                                                                         |
+| `generator.draft.check`                     | Check draft                                                                                                                                                     |
+| `generator.draft.reassigned`                | {changed, plural, one {# group changed teacher} other {# groups changed teacher}}, {assigned} newly assigned.                                                   |
+| `generator.draft.showChanges`               | Show changes                                                                                                                                                    |
+| `generator.draft.teacherSet`                | {teacher} now teaches {group} (locked).                                                                                                                         |
+| `generator.workload.title`                  | Workload                                                                                                                                                        |
+| `generator.workload.range`                  | {min}–{max} h a week                                                                                                                                            |
+| `generator.workload.average`                | average {average} h                                                                                                                                             |
+| `generator.workload.previous`               | range was {min}–{max} h                                                                                                                                         |
+| `generator.workload.details`                | Details                                                                                                                                                         |
+| `generator.workload.hours`                  | {hours} h                                                                                                                                                       |
+| `generator.workload.max`                    | max {hours} h                                                                                                                                                   |
+| `generator.lock.menu`                       | Lock…                                                                                                                                                           |
+| `generator.lock.toggle`                     | Lock teacher for {group}                                                                                                                                        |
+| `generator.lock.allAssigned`                | Lock all assigned                                                                                                                                               |
+| `generator.lock.teacher`                    | Lock all of {teacher}                                                                                                                                           |
+| `generator.lock.unlockAll`                  | Unlock all                                                                                                                                                      |
+| `generator.picker.noTeacher`                | No teacher                                                                                                                                                      |
+| `generator.picker.available`                | Available                                                                                                                                                       |
+| `generator.picker.unavailable`              | Unavailable                                                                                                                                                     |
+| `generator.picker.otherLevel`               | Doesn't teach {level}                                                                                                                                           |
+| `generator.picker.overMax`                  | Over max hours                                                                                                                                                  |
+| `generator.picker.busy`                     | Busy                                                                                                                                                            |
+| `generator.picker.load`                     | {from} h → {to} h a week                                                                                                                                        |
+| `generator.picker.unavailableAt`            | Unavailable {weekday} {time}                                                                                                                                    |
+| `generator.picker.teaches`                  | Teaches {levels}                                                                                                                                                |
+| `generator.picker.overMaxLoad`              | {from} h → {to} h (max {max} h)                                                                                                                                 |
+| `generator.picker.teachingOther`            | Teaching {group}, {weekday} {time}                                                                                                                              |
+| `generator.unassigned.title`                | Groups without a teacher ({count})                                                                                                                              |
+| `generator.unassigned.why`                  | Why?                                                                                                                                                            |
+| `generator.unassigned.intro`                | None of the {count} teachers who teach {level} can take all of these times:                                                                                     |
+| `generator.unassigned.nobodyTeaches`        | Nobody teaches {level}.                                                                                                                                         |
+| `generator.unassigned.reason.busy`          | {weekday} — teaching {group}                                                                                                                                    |
+| `generator.unassigned.reason.unavailable`   | {weekday} — unavailable (weekly, {time})                                                                                                                        |
+| `generator.unassigned.reason.maxHours`      | would be {hours} h, max {max} h a week                                                                                                                          |
+| `generator.unassigned.reason.removed`       | You removed the teacher.                                                                                                                                        |
+| `generator.unassigned.suggestion`           | {teacher} could take it if {otherGroup} goes to {otherTeacher}.                                                                                                 |
+| `generator.unassigned.apply`                | Apply                                                                                                                                                           |
+| `generator.unassigned.pickAnyway`           | Pick a teacher anyway                                                                                                                                           |
+| `generator.unassigned.editTimes`            | Edit group times                                                                                                                                                |
+| `generator.unassigned.teacherLevels`        | Teacher levels                                                                                                                                                  |
+| `generator.unassigned.footer`               | Fix the data, then reassign to try again.                                                                                                                       |
+| `generator.unassigned.empty`                | Every group has a teacher.                                                                                                                                      |
+| `generator.compare.toggleDraft`             | Draft                                                                                                                                                           |
+| `generator.compare.toggleCompare`           | Compare                                                                                                                                                         |
+| `generator.compare.was`                     | Was                                                                                                                                                             |
+| `generator.compare.changed`                 | Changed                                                                                                                                                         |
+| `generator.compare.summary`                 | {changed, plural, one {# group changes} other {# groups change}} teacher · {teachers} teachers and {students} students affected                                 |
+| `generator.compare.list`                    | List changes                                                                                                                                                    |
+| `generator.publish.action`                  | Publish…                                                                                                                                                        |
+| `generator.publish.title`                   | Publish teacher assignments for {term}?                                                                                                                         |
+| `generator.publish.groups`                  | {groups, plural, one {# group} other {# groups}}, {slots, plural, one {# weekly lesson} other {# weekly lessons}}.                                              |
+| `generator.publish.replaces`                | Replaces the {count, plural, one {# slot} other {# slots}} in the timetable editor.                                                                             |
+| `generator.publish.unassigned`              | {count, plural, one {# group has no teacher and won't get lessons.} other {# groups have no teacher and won't get lessons.}}                                    |
+| `generator.publish.confirm`                 | Publish timetable                                                                                                                                               |
+| `generator.publish.toEditor`                | Save to the timetable editor only                                                                                                                               |
+| `generator.publish.fromDate`                | Changes apply from {date}. Lessons before then are not touched.                                                                                                 |
+| `generator.publish.changes`                 | {changed, plural, one {# group gets} other {# groups get}} a different teacher; {new, plural, =0 {no new groups} one {# group starts} other {# groups start}}.  |
+| `generator.publish.lessons`                 | {moved} future lessons get the new teacher; {cancelled} kept as cancelled because they have attendance, absences, homework or a substitute.                     |
+| `generator.publish.people`                  | {teachers} teachers and {students} students are affected.                                                                                                       |
+| `generator.publish.understand`              | I understand this changes the timetable for teachers and students from {date}.                                                                                  |
+| `generator.publish.apply`                   | Apply changes                                                                                                                                                   |
+| `generator.publish.running`                 | Publishing… creating lessons                                                                                                                                    |
+| `generator.publish.liveChanged`             | The timetable was changed in the editor after this draft was made. Review the new issues.                                                                       |
+| `generator.publish.done`                    | {term} published. {count, plural, one {# lesson} other {# lessons}} created.                                                                                    |
+| `generator.empty.noGroups.title`            | No groups yet                                                                                                                                                   |
+| `generator.empty.noGroups.description`      | Create groups with their lesson times first.                                                                                                                    |
+| `generator.empty.noGroups.action`           | Go to Courses & groups                                                                                                                                          |
+| `generator.empty.noTeachers`                | Add teachers and set the levels they teach.                                                                                                                     |
+| `generator.termEnded`                       | This term has ended. Choose a current or future term.                                                                                                           |
+
+## 10. What changes in the rules doc (`generator.md`, CARM-53)
+
+For the Scheduling Engineer's revision; the UI above assumes these.
+
+| Area              | Was (merged)                                                                                                                                                      | Now                                                                                                                                                                                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Input             | `TimetableDemand` per group and term (lessons a week, duration, teacher, pins)                                                                                    | **Group lesson times** on the group (weekday, start, end, room), kept across terms; a per-term "skip" flag. No demand table.                                                                                                                       |
+| Teachers          | Fixed teacher or "any of" list per demand row; no levels table                                                                                                    | **`TeacherLevel`** (teacher × level) decides eligibility; optional `TeacherProfile.maxMinutesPerWeek`.                                                                                                                                             |
+| Decision variable | Weekday, start, room and teacher per lesson                                                                                                                       | **Teacher per group** (one for all its lesson times in the term).                                                                                                                                                                                  |
+| Hard rules        | Everything `checkLesson` blocks, weekly unavailability, student clashes                                                                                           | Teacher teaches the level; free at **all** the group's times (no teacher double booking, weekly unavailability hard); max hours. Room/group/student clashes are properties of the group times, reported by readiness, not solved by the generator. |
+| Soft              | Gaps, spread, stable time, daily max, preferred rooms, one-off unavailability                                                                                     | **Even workload** (v1). One-off unavailability: warning only. Later, as a school setting: keep last term's teacher, or rotate.                                                                                                                     |
+| Not placed        | Reason codes per demand unit                                                                                                                                      | Per group without a teacher: the reason **per eligible teacher** (busy with {group}, unavailable, max hours) or "nobody teaches {level}"; optional one-swap suggestion.                                                                            |
+| Draft             | `TimetableDraftSlot` with time, room, teacher                                                                                                                     | Assignment per group (teacher, locked, origin). Lessons in the draft are group times × assignment.                                                                                                                                                 |
+| Unchanged         | Draft lifecycle, lock/regenerate, staleness, `applyDraft` / `previewApply`, publish via `publishTerm`, FILL / REPLAN_FROM for published terms, concurrency, audit | Same, with "assignment" instead of "slot". FILL = only groups without a teacher; REPLAN_FROM = reconsider every group from _D_.                                                                                                                    |
+
+Also proposed for the scheduling module: a new overridable conflict
+`TEACHER_LEVEL_NOT_TAUGHT` so the editor warns too when a slot's teacher
+doesn't teach the group's level.
+
+## 11. Accessibility
+
+- Readiness and draft tables are real `<table>`s; the teacher picker cell's
+  accessible name includes the group ("Teacher for B1 Evening").
+- Picker sections are `group`s with labels; disabled "Busy" options keep
+  their reason in the accessible name ("Tomas Horvat, busy: teaching C1
+  Business, Wednesday 18:00").
+- "No teacher" rows: icon + text, not color alone. Lock toggles use
+  `aria-pressed`.
+- Workload bars are decorative; the hours are text.
+- The draft is identified by the band, the tab label and the page title,
+  not only by the dashed outline in the Week view.
+- Group form lesson-time rows: each control is labelled with its row
+  ("Day, lesson time 2"); _Remove_ buttons say which row; the live check
+  is `aria-live="polite"` announcing only the summary.
+
+## 12. Edge cases
+
+- **Group with lesson times on different rooms** per day: allowed (room per
+  row).
+- **Teacher's levels change after the run**: draft out of date; assignments
+  to a level they no longer teach show the level warning on Check.
+- **Teacher archived**: their assignments become "No teacher" on Check;
+  publishing is blocked until the rows are fixed (the slot would have an
+  archived teacher).
+- **New group added after the run**: appears in the Groups tab; the draft
+  is out of date; _Reassign…_ (or pick by hand) assigns it.
+- **Group times changed after the run**: out of date; the assigned teacher
+  may now be busy or unavailable at the new time — Check shows it.
+- **1-on-1 groups**: same rules; level from the group (the student's
+  level).
+- **Two published terms overlap**: teachers busy in the other term at the
+  same time count as busy (live data of every overlapping term is the
+  fixed context, as today).
+- **A teacher with lots of levels and no limit**: even workload keeps them
+  from getting everything; with max hours empty, the spread is the only
+  limit.
+- **Editor edits after publishing**: the editor still works slot by slot
+  (time, room, teacher from a date). If a slot's time no longer matches
+  its group's lesson times, the slot sheet shows "Different from the
+  group's lesson times (Tue 17:00)" with a link to the group (Q2).
+
+## 13. Decisions and open questions
+
+Owner decisions (2026-10-14, CARM-54): fixed times per group, kept across
+terms; room fixed per group; one teacher per group per term; even workload
+as the only preference in v1, with a school setting for other preferences
+(e.g. rotate vs keep teachers) as a later addition.
+
+Open:
+
+1. **Q1 — How to record which levels a teacher teaches.** Either a single
+   "teaches up to level X" (everything at and below X), or a tick box per
+   level, so a teacher can teach e.g. only A1–A2, or only C1–C2.
+   Recommended: tick boxes with an "Up to…" shortcut (§5.2) — as fast as
+   "up to X" in the common case, and it also covers the exceptions.
+2. **Q2 — Changing a group's times mid-term.** Recommended: saving the
+   group never changes the live timetable; an alert offers to change the
+   current term's slots from a date (existing editor flow).
+3. **Q3 — Part-time teachers.** "Even workload" between a full-time and a
+   part-time teacher isn't fair without a limit. Recommended: an optional
+   **max hours a week** per teacher (§5.2).
+4. **Q4 — Swap suggestions** ("Ana could take it if A1 Evening goes to
+   Lucia"). Nice to have; depends on the rules doc.
+5. **Q5 — Teacher change in a published term**: future lessons with
+   attendance, absences or homework — keep them with the new teacher, or
+   cancel and re-create (the merged rules doc cancels changed slots'
+   lessons with history)? Recommended: a teacher-only change updates the
+   teacher on future lessons in place and cancels nothing; needs a rules
+   doc decision.
