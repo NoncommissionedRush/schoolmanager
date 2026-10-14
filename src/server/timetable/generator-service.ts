@@ -288,6 +288,23 @@ export async function startRun(
   request: StartRunRequest,
   now = new Date(),
 ): Promise<{ runId: string; draftId: string }> {
+  try {
+    return await startRunIn(db, actor, request, now);
+  } catch (error) {
+    // Two first runs at once: the second draft or run hits a unique key.
+    if ((error as { code?: string }).code === "P2002") {
+      throw new GeneratorError("RUN_IN_PROGRESS", "A run is in progress");
+    }
+    throw error;
+  }
+}
+
+async function startRunIn(
+  db: SchoolDb,
+  actor: Actor,
+  request: StartRunRequest,
+  now: Date,
+): Promise<{ runId: string; draftId: string }> {
   return db.$transaction(async (tx) => {
     const school = await tx.school.findFirstOrThrow({ select: { id: true } });
     const term = await tx.term.findUnique({ where: { id: request.termId } });
@@ -395,34 +412,26 @@ export async function startRun(
 
     const maxIterations = request.maxIterations ?? DEFAULT_MAX_ITERATIONS;
     const timeLimitMs = request.timeLimitMs ?? DEFAULT_TIME_LIMIT_MS;
-    let run;
-    try {
-      run = await tx.generatorRun.create({
-        data: {
-          schoolId: school.id,
-          termId: request.termId,
-          draftId: draft!.id,
-          maxIterations,
-          timeLimitMs,
-          startedById: actor.userId,
-          heartbeatAt: now,
-          startedAt: now,
-          // The draft as the run found it: saving requires it unchanged.
-          progress: {
-            phase: "checking",
-            assigned: 0,
-            total: included.length,
-            draftVersion: draft!.version,
-          },
+    const run = await tx.generatorRun.create({
+      data: {
+        schoolId: school.id,
+        termId: request.termId,
+        draftId: draft!.id,
+        maxIterations,
+        timeLimitMs,
+        startedById: actor.userId,
+        heartbeatAt: now,
+        startedAt: now,
+        // The draft as the run found it: saving requires it unchanged.
+        progress: {
+          phase: "checking",
+          assigned: 0,
+          total: included.length,
+          draftVersion: draft!.version,
         },
-        select: { id: true },
-      });
-    } catch (error) {
-      if ((error as { code?: string }).code === "P2002") {
-        throw new GeneratorError("RUN_IN_PROGRESS", "A run is in progress");
-      }
-      throw error;
-    }
+      },
+      select: { id: true },
+    });
     await audit(
       tx,
       school.id,
@@ -557,6 +566,9 @@ export async function executeRun(
     const durationMs = Math.round(clock() - startedAt);
 
     return await db.$transaction(async (tx) => {
+      // Lock the run row so a cancel or a stale-run FAILED can't race the
+      // save: they wait for this transaction, or it sees them.
+      await tx.$queryRaw`SELECT id FROM generator_runs WHERE id = ${runId}::uuid AND school_id = ${run.schoolId}::uuid FOR UPDATE`;
       const current = await tx.generatorRun.findUnique({
         where: { id: runId },
         select: { status: true, cancelRequested: true },
@@ -1169,7 +1181,11 @@ export async function checkDraft(
   now = new Date(),
 ): Promise<DraftView> {
   return db.$transaction(async (tx) => {
-    const draft = await findDraft(tx, request.draftId);
+    // Under the draft lock, so a concurrent edit can't be overwritten with
+    // results for its old assignments.
+    const school = await tx.school.findFirstOrThrow({ select: { id: true } });
+    const draft = await lockDraft(tx, school.id, request.draftId, null);
+    await assertNoRun(tx, draft.termId, now);
     const { input } = await loadSnapshot(
       tx,
       draft.termId,
@@ -1178,7 +1194,6 @@ export async function checkDraft(
       effectiveOf(draft),
       await draftAssignments(tx, draft.id),
     );
-    const school = await tx.school.findFirstOrThrow({ select: { id: true } });
     await saveResult(tx, school.id, draft.id, evaluateDraft(input), {
       replaceAssignments: false,
     });
@@ -1450,7 +1465,12 @@ async function applyIn(
       termId,
       OR: [
         { timetableSlotId: { in: groupSlots.map((s) => s.id) } },
-        { timetableSlotId: null, startsAt: { gte: fromIsoDate(D!) } },
+        // A day early: D's local midnight is before its UTC midnight; the
+        // plan keeps only those on or after D in the school's time zone.
+        {
+          timetableSlotId: null,
+          startsAt: { gte: fromIsoDate(addDays(D!, -1)) },
+        },
       ],
     });
     const plan = planGroupTeacherChange({
@@ -1610,7 +1630,8 @@ async function applyIn(
       if (plan.kind === "new")
         for (const slot of plan.slots) await createSlot(slot);
     }
-    if (request.publish) {
+    // A preview with blocking conflicts shows them; publishing would refuse.
+    if (request.publish && !(preview && blocking.length > 0)) {
       const result = await publishTermIn(tx, schoolId, actor, termId, now);
       if (!result.ok) {
         throw new Error("Publishing a checked draft found blocking conflicts");

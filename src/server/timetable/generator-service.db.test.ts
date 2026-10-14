@@ -534,6 +534,35 @@ describe.skipIf(!url)("generator service (database)", () => {
       ).toEqual(["ROOM_CAPACITY_EXCEEDED"]);
     });
 
+    it("previews blocking conflicts with publish without failing", async () => {
+      const rows = await assignmentsOf(
+        (await getDraft(db, ids.draftTerm, NOW))!.id,
+      );
+      const g2 = rows[ids.g2];
+      // G1 and G2 run at the same time: one teacher for both is a clash.
+      await client.timetableDraftAssignment.update({
+        where: { id: g2.id },
+        data: { teacherId: rows[ids.g1].teacherId },
+      });
+      const preview = await previewApply(
+        db,
+        actor,
+        { draftId: g2.draftId, publish: true },
+        NOW,
+      );
+      expect(
+        preview.blocking.map((i) => i.kind === "slot" && i.conflict.type),
+      ).toContain("TEACHER_DOUBLE_BOOKED");
+      const term = await client.term.findUniqueOrThrow({
+        where: { id: ids.draftTerm },
+      });
+      expect(term.timetablePublishedAt).toBeNull();
+      await client.timetableDraftAssignment.update({
+        where: { id: g2.id },
+        data: { teacherId: g2.teacherId },
+      });
+    });
+
     it("previews and applies with publishing", async () => {
       const view = (await getDraft(db, ids.draftTerm, NOW))!;
       const preview = await previewApply(
@@ -642,6 +671,25 @@ describe.skipIf(!url)("generator service (database)", () => {
         errorCode: "DRAFT_CHANGED",
       });
       await discardDraft(db, actor, third.draftId, NOW);
+
+      // Two first runs at once: one starts, the other is refused cleanly.
+      const both = await Promise.allSettled([
+        startRun(db, actor, { termId: ids.published, mode: "FILL" }, NOW),
+        startRun(db, actor, { termId: ids.published, mode: "FILL" }, NOW),
+      ]);
+      const started = both.filter((r) => r.status === "fulfilled");
+      const refused = both.filter((r) => r.status === "rejected");
+      expect(started).toHaveLength(1);
+      expect(refused).toHaveLength(1);
+      expect((refused[0] as PromiseRejectedResult).reason).toMatchObject({
+        code: "RUN_IN_PROGRESS",
+      });
+      const { runId, draftId } = (
+        started[0] as PromiseFulfilledResult<{ runId: string; draftId: string }>
+      ).value;
+      await cancelRun(db, runId);
+      expect(await executeRun(db, runId, { now: () => NOW })).toBe("CANCELLED");
+      await discardDraft(db, actor, draftId, NOW);
       expect(await getDraft(db, ids.published, NOW)).toBeNull();
     });
 
@@ -964,6 +1012,64 @@ describe.skipIf(!url)("generator service (database)", () => {
           },
         }),
       ).toBe(1);
+    });
+
+    it("REPLAN_FROM leaves a group included after the run as it is", async () => {
+      // G2 is skipped during the run, so the draft has no row for it.
+      await setGroupSkipped(db, actor, {
+        termId: ids.published,
+        groupId: ids.g2,
+        skipped: true,
+      });
+      const { draftId } = await runToEnd({
+        termId: ids.published,
+        mode: "REPLAN_FROM",
+      });
+      expect((await assignmentsOf(draftId))[ids.g2]).toBeUndefined();
+      await setGroupSkipped(db, actor, {
+        termId: ids.published,
+        groupId: ids.g2,
+        skipped: false,
+      });
+      const lessonsBefore = await client.lesson.count({
+        where: { groupId: ids.g2, status: "SCHEDULED" },
+      });
+      const view = (await getDraft(db, ids.published, NOW))!;
+      expect(view.outOfDate).toBe(true);
+      const preview = await previewApply(
+        db,
+        actor,
+        { draftId, publish: false },
+        NOW,
+      );
+      const applied = await applyDraft(
+        db,
+        actor,
+        {
+          draftId,
+          version: view.version,
+          acknowledgedConflictKeys: keys(preview.issues),
+          publish: false,
+        },
+        NOW,
+      );
+      expect(applied).toMatchObject({
+        ok: true,
+        counts: {
+          slots: { created: 0, ended: 0, deleted: 0 },
+          lessons: { removed: 0, cancelled: 0 },
+        },
+      });
+      expect(
+        await client.timetableSlot.count({
+          where: { groupId: ids.g2, termId: ids.published, validUntil: null },
+        }),
+      ).toBe(1);
+      expect(
+        await client.lesson.count({
+          where: { groupId: ids.g2, status: "SCHEDULED" },
+        }),
+      ).toBe(lessonsBefore);
     });
 
     it("REPLAN_FROM ends a group's lessons only when the admin sets no teacher", async () => {
