@@ -8,3 +8,4 @@ export * from "./generate-lessons";
 export * from "./lesson-sync";
 export * from "./time";
 export * from "./types";
+export * from "./replacements";

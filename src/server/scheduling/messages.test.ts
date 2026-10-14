@@ -4,6 +4,7 @@ import scheduling from "../../../messages/en-GB/scheduling.json";
 import type { SchedulingErrorCode } from "../timetable/service";
 import { CONFLICT_TYPES } from "./conflict-types";
 import type { CancelReason } from "./lesson-sync";
+import type { STUDENT_CANCELLED } from "./replacements";
 
 // The UI translates conflicts, cancel reasons and service errors by code;
 // every code needs a message. (ICU syntax is checked in src/i18n.)
@@ -16,9 +17,10 @@ describe("scheduling messages", () => {
   });
 
   it("has a message for every cancel reason and service error", () => {
-    const reasons: Record<CancelReason, true> = {
+    const reasons: Record<CancelReason | typeof STUDENT_CANCELLED, true> = {
       HOLIDAY: true,
       TIMETABLE_CHANGED: true,
+      STUDENT_CANCELLED: true,
     };
     const errors: Record<SchedulingErrorCode, true> = {
       NOT_FOUND: true,

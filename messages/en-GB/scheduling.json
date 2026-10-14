@@ -25,7 +25,8 @@
   },
   "cancelReasons": {
     "HOLIDAY": "Holiday",
-    "TIMETABLE_CHANGED": "Timetable changed"
+    "TIMETABLE_CHANGED": "Timetable changed",
+    "STUDENT_CANCELLED": "Cancelled by student"
   },
   "errors": {
     "NOT_FOUND": "This item no longer exists. Reload the page and try again.",
