@@ -50,6 +50,9 @@ const ADMIN_PAGES = [
   "/admin/students?status=archived",
   "/admin/groups",
   "/admin/groups?tab=courses",
+  "/admin/lessons",
+  "/admin/lessons?filter=past",
+  "/admin/lessons?filter=upcoming",
   "/admin/levels",
   "/admin/settings/admins",
   "/admin/settings/rooms",
@@ -110,6 +113,7 @@ test.describe("cross-school › pages", () => {
         `/admin/students/${b.student}`,
         `/admin/students/${b.studentUser}`,
         `/admin/groups/${b.group}`,
+        `/admin/lessons/${b.lesson}`,
       ],
       Object.values(SECOND_NAMES),
     );
@@ -140,6 +144,7 @@ test.describe("cross-school › pages", () => {
         `/admin/students/${a.student}`,
         `/admin/students/${a.studentUser}`,
         `/admin/groups/${a.group}`,
+        `/admin/lessons/${a.lesson}`,
       ],
       SCHOOL_A_NAMES,
     );

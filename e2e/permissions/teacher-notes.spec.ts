@@ -16,7 +16,10 @@ import {
 // inlined in those pages, not from an API route. Reads go through
 // src/server/notes/teacher-notes.ts, whose unit test also fails if code
 // elsewhere reads the table. The teacher lesson page (CARM-35) shows notes;
-// students get the forbidden page there. Add new note screens here.
+// students get the forbidden page there, as on the admin lesson pages
+// (CARM-36). The student lesson pages, Homework tab and home card (CARM-36)
+// are checked here too; lesson-records.spec.ts adds notes on lessons the
+// student can open. Add new note screens here.
 
 /** Every note body in the database, both schools. */
 async function noteBodies() {
@@ -35,7 +38,7 @@ async function noteWeeks(schoolId: string) {
   return [...new Set(["2026-10-12", ...rows.map((r) => r.week)])];
 }
 
-/** Lessons with notes on them (their teacher lesson pages show the notes). */
+/** Lessons with notes on them (their teacher and admin pages show them). */
 async function notedLessons(schoolId: string) {
   const rows = await sql<{ id: string }>(
     `SELECT DISTINCT lesson_id AS id FROM teacher_notes
@@ -45,8 +48,11 @@ async function notedLessons(schoolId: string) {
   return rows.map((r) => r.id);
 }
 
-const studentPaths = (weeks: string[]) => [
+const studentPaths = (weeks: string[], lessons: string[]) => [
   "/student",
+  "/student/homework",
+  "/student/homework?shown=1000",
+  ...lessons.map((id) => `/student/lessons/${id}`),
   "/student/timetable",
   ...weeks.flatMap((week) => [
     `/student/timetable?week=${week}`,
@@ -79,7 +85,11 @@ test.describe("teacher notes › never shown to students", () => {
       const bodies = await noteBodies();
       const ids = await schoolIds(slug);
       const page = await signedIn(browser, LOGINS[school].student, "student");
-      for (const path of studentPaths(await noteWeeks(ids.school))) {
+      const lessons = await notedLessons(ids.school);
+      for (const path of studentPaths(await noteWeeks(ids.school), [
+        ids.lesson,
+        ...lessons,
+      ])) {
         const { body } = await serverResponse(page, path);
         expectNoneOf(body, bodies, path);
       }
@@ -91,9 +101,11 @@ test.describe("teacher notes › never shown to students", () => {
         "/teacher",
         "/teacher/timetable",
         "/teacher/lessons",
-        ...(await notedLessons(ids.school)).map(
-          (id) => `/teacher/lessons/${id}`,
-        ),
+        "/admin/lessons",
+        ...lessons.flatMap((id) => [
+          `/teacher/lessons/${id}`,
+          `/admin/lessons/${id}`,
+        ]),
       ]) {
         const { body } = await serverResponse(page, path);
         expect(body, path).toContain("have access to this page");

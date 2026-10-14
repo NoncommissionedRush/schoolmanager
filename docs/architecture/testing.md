@@ -26,12 +26,33 @@ The project's access rules are enforced by tests, not only by review:
   own groups' lessons and no classmates' names; teachers see only the
   lessons they teach or substitute.
 - **Teacher notes** (`teacher-notes.spec.ts`): no note body reaches a
-  student through any page they can open, the RSC payload inlined in it, or
-  an API route.
+  student through any page they can open (dashboard, timetable, Homework
+  tab, lesson pages), the RSC payload inlined in it, or an API route; the
+  teacher and admin lesson pages that show notes are forbidden to them.
 - **Teacher lessons** (`teacher-lessons.spec.ts`): a teacher opens only the
   lessons they teach or substitute — anything else, also another school's,
   renders "not found" — and the lesson page actions refuse those lessons
-  without changing anything; students and admins get the forbidden page.
+  without changing anything; students and admins get the forbidden page
+  and can't run any teacher lesson action.
+- **Lesson records** (`lesson-records.spec.ts`, Phase 2): on its own
+  lessons, groups and a student who joined one group ten days ago and left
+  another:
+  - students open only lessons of their groups from joining until leaving,
+    once started, in published terms — anything else (other groups, before
+    joining, after leaving, future, unpublished) is 404 — and no list,
+    home card or timetable shows those lessons' log or homework;
+  - teachers write only on lessons they teach or substitute (the substitute
+    control is accepted), not before the start or on cancelled lessons, and
+    can't edit or delete a colleague's notes;
+  - admins read every lesson of their school, notes included, and can't run
+    any teacher lesson action; students can't either, and no action
+    response carries a note body to them;
+  - none of it crosses schools: pages, list filters with the other school's
+    ids, and every teacher or admin lesson action with its lesson and note
+    ids.
+
+  Every log, homework and note there carries a unique marker, so finding
+  one in a response that shouldn't have it is the leak check.
 
 Leak checks read the raw server response (`serverResponse` in
 `fixtures.ts`), which includes the RSC payload, so data the client receives
@@ -70,9 +91,16 @@ helper. It returns the HTTP status and the action's
   `roles.spec.ts` fails until every action under `src/app/admin/` is listed.
 - **New admin page**: add it to `ADMIN_PAGES` in `cross-school.spec.ts` and
   `adminPages` in `roles.spec.ts`; detail pages take an id from `SchoolIds`.
+- **New teacher server action**: add it to `teacherLessonCases` in
+  `action-cases.ts`, aimed at the target's lesson, note or student. The
+  coverage test in `lesson-records.spec.ts` fails until every action under
+  `src/app/teacher/` is listed; it also fails if `src/app/student/` gets a
+  server action (students write nothing yet), which then needs its own
+  cases.
 - **New teacher or student page**: add it to the role's page lists
   (`cross-school.spec.ts`, and `studentPaths` in `teacher-notes.spec.ts` for
-  students).
+  students). Student pages that show lessons also go into the list checks
+  of `lesson-records.spec.ts`.
 - **New tenant-owned table**: the school fingerprint picks it up
   automatically (every table with `school_id`). Seed a row for it in
   `second-school.ts` so the cross-school checks have something to find, and

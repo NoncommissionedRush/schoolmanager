@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { callAction } from "../server-actions";
+import { teacherLessonCases } from "./action-cases";
 import { sql } from "../helpers";
 import {
   expectNoneOf,
@@ -16,8 +17,9 @@ import {
 // The teacher lesson page and its actions (CARM-35, lessons.md §2): a
 // teacher only opens lessons they teach or substitute — anything else is
 // 404, also across schools — and the actions refuse those lessons without
-// changing anything. Students can't reach any of it. The full Phase 2
-// permission suite is CARM-37.
+// changing anything. Students can't reach any of it. The rest of the Phase
+// 2 suite (substitutes, students, admins, across schools; CARM-37) is
+// lesson-records.spec.ts.
 
 const ACTIONS = "src/app/teacher/lessons/actions.ts";
 
@@ -142,12 +144,10 @@ test.describe("teacher lessons › access", () => {
         expect(status, `${role} ${path}`).toBe(403);
         expect(body).toContain("have access to this page");
       }
-      const { result } = await callAction(
-        page,
-        [ACTIONS, "createNoteAction"],
-        [{ lessonId: a.lesson, about: "lesson", body: "Leak" }],
-      );
-      expect(result, role).toBeNull();
+      for (const c of teacherLessonCases(a)) {
+        const { result } = await callAction(page, c.action, c.args);
+        expect(result, `${role}: ${c.name}`).toBeNull();
+      }
     }
     expect(await logAndNotes(a.lesson)).toEqual(before);
   });

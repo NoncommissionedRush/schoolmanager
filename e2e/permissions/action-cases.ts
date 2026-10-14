@@ -416,3 +416,63 @@ export function crossSchoolCases(
     },
   ];
 }
+
+const TEACHER_LESSONS = "src/app/teacher/lessons/actions.ts";
+
+/**
+ * Every teacher lesson action (CARM-35), aimed at `target`'s lesson, note
+ * and student. Inputs are valid, so a refusal can only come from who is
+ * asking or what they aim at. The coverage test in lesson-records.spec.ts
+ * fails until every action under src/app/teacher/ is listed.
+ */
+export function teacherLessonCases(target: {
+  lesson: string;
+  teacherNote: string;
+  student: string;
+}): ActionCase[] {
+  return [
+    {
+      name: "save the lesson log and homework",
+      action: [TEACHER_LESSONS, "saveLessonLogAction"],
+      args: [
+        {
+          lessonId: target.lesson,
+          content: "Leaked lesson log",
+          homework: "Leaked homework",
+          expectedUpdatedAt: null,
+        },
+      ],
+    },
+    {
+      name: "add a note about the lesson",
+      action: [TEACHER_LESSONS, "createNoteAction"],
+      args: [{ lessonId: target.lesson, about: "lesson", body: "Leak" }],
+    },
+    {
+      name: "add a note about a student",
+      action: [TEACHER_LESSONS, "createNoteAction"],
+      args: [
+        {
+          lessonId: target.lesson,
+          about: `student:${target.student}`,
+          body: "Leak",
+        },
+      ],
+    },
+    {
+      name: "edit a note",
+      action: [TEACHER_LESSONS, "updateNoteAction"],
+      args: [{ noteId: target.teacherNote, body: "Leak" }],
+    },
+    {
+      name: "delete a note",
+      action: [TEACHER_LESSONS, "deleteNoteAction"],
+      args: [target.teacherNote],
+    },
+    {
+      name: "load earlier notes",
+      action: [TEACHER_LESSONS, "loadEarlierNotesAction"],
+      args: [target.lesson, 0],
+    },
+  ];
+}
