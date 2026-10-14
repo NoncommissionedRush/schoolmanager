@@ -390,8 +390,11 @@
                 <div class="flex gap-2 items-end">${sel("Day", "Saturday")}${sel("Start", "09:00")}<button aria-label="Remove fixed time" class="h-9 w-9 rounded-md hover:bg-muted">✕</button></div>
                 ${alert("danger", "Conflict", "Room 3 is already used by A1 Weekend on Saturdays 09:00–10:30 (14 dates). Choose another time or allow Room 4.")}
                 <button class="text-primary underline">+ Add fixed time</button>
-                <h3 class="font-semibold pt-2">Preferred time of day <span class="text-xs text-muted-foreground font-normal">(Q3)</span></h3>
-                <div role="group" class="inline-flex rounded-md border border-input overflow-hidden"><button class="px-3 h-9 bg-muted font-medium">Morning</button><button class="px-3 h-9 border-l border-input">Afternoon</button><button class="px-3 h-9 border-l border-input">Evening</button></div>`,
+                <h3 class="font-semibold pt-2">Preferred time <span class="text-xs text-muted-foreground font-normal">(optional)</span></h3>
+                <p class="text-xs text-muted-foreground">The generator tries to stay inside these, but may not.</p>
+                <div class="space-y-1"><span class="font-medium block">Preferred days</span><div role="group" aria-label="Preferred days" class="inline-flex rounded-md border border-input overflow-hidden">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => `<button aria-pressed="${i === 5}" class="px-3 h-9 ${i ? "border-l border-input" : ""} ${i === 5 ? "bg-muted font-medium" : ""}">${d}</button>`).join("")}</div></div>
+                <div class="flex gap-2 items-end">${sel("From", "09:00")}${sel("To", "12:00")}</div>
+                ${sel("Preferred room", "Room 3")}`,
                 btn("Cancel", "outline") + btn("Save"),
               )
             : state === 3
@@ -400,10 +403,7 @@
                   `${sel("Copy from", "Autumn 2026")}
                   <p class="text-muted-foreground">Autumn 2026 has no weekly needs; they're worked out from its timetable slots.</p>
                   <p>Copy needs for <strong>58 groups</strong>. 4 groups have no needs in Autumn 2026 and stay empty. 2 archived groups are skipped.</p>
-                  <fieldset class="space-y-2"><legend class="sr-only">Rows</legend>
-                    <label class="flex gap-2"><input type="radio" name="c" checked/> Only fill empty rows</label>
-                    <label class="flex gap-2"><input type="radio" name="c"/> Overwrite all rows</label>
-                  </fieldset>`,
+                  <p class="text-muted-foreground">Only groups without weekly needs in Spring 2027 are filled. Rows you've already filled in stay as they are.</p>`,
                   btn("Cancel", "outline") + btn("Copy"),
                 )
               : "";
@@ -430,18 +430,11 @@
                 <label class="flex gap-2"><input type="radio" name="e"/> Let the generator rearrange them</label>
               </fieldset>
               <details class="border border-border rounded-md p-3"><summary class="font-medium cursor-pointer">Preferences</summary>
-                <div class="grid grid-cols-[1fr_auto] gap-2 mt-3 items-center">
-                  <span>No gaps for teachers</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">High ▾</button>
-                  <span>No gaps for students</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button>
-                  <span>Spread a group's lessons over the week</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button>
-                  <span>Same time each lesson day</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button>
-                  <span>Teacher's daily maximum</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button>
-                  <span>Preferred rooms</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Low ▾</button>
-                </div>
-                <button class="text-primary underline text-xs mt-2">Reset to school defaults</button>
+                <div class="grid grid-cols-[1fr_auto] gap-2 mt-3 items-center"><div class="col-span-2 text-xs font-semibold uppercase text-muted-foreground pt-2">Teachers</div><span>Teacher's daily maximum</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>Same teacher as last term</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>Times teachers would rather avoid</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>Teachers' days off</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>No gaps for teachers</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">High ▾</button><div class="col-span-2 text-xs font-semibold uppercase text-muted-foreground pt-2">Groups &amp; students</div><span>One lesson a day per group</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>Preferred days and hours</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>Spread over the week</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>Same start time each lesson</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>Keep lessons at their current times</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><span>No gaps for students</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button><div class="col-span-2 text-xs font-semibold uppercase text-muted-foreground pt-2">Rooms</div><span>Preferred room</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Low ▾</button></div>
+                <button class="text-primary underline text-xs mt-2">Reset all to Normal</button>
               </details>
               <details class="border border-border rounded-md p-3"><summary class="font-medium cursor-pointer">Advanced</summary>
-                <div class="grid grid-cols-2 gap-3 mt-3">${sel("Time limit", "Standard (2 min)")}<div class="space-y-1"><label class="font-medium block">Seed</label><div class="h-9 flex items-center text-muted-foreground">New random seed · <button class="text-primary underline ml-1">Use seed…</button></div></div></div>
+                <div class="grid grid-cols-2 gap-3 mt-3">${sel("Time limit", "Standard (up to 30 s)")}<div class="space-y-1"><label class="font-medium block">Seed</label><div class="h-9 flex items-center text-muted-foreground">New random seed · <button class="text-primary underline ml-1">Use seed…</button></div></div></div>
               </details>`,
               btn("Cancel", "outline") + btn("Generate"),
             ),
@@ -454,10 +447,16 @@
               `
               <p><strong>61 groups, 148 lessons a week.</strong></p>
               <div class="space-y-1"><label class="font-medium block">Apply from</label><button class="h-9 w-48 rounded-md border border-input bg-white px-3 text-left">Mon 3 Nov 2026 📅</button><p class="text-xs text-muted-foreground">Lessons before this date are not touched.</p></div>
+              <fieldset class="space-y-2 border border-border rounded-md p-3"><legend class="px-1 font-medium">What should the generator do?</legend>
+                <label class="flex gap-2 items-start"><input type="radio" name="m" checked class="mt-1"/> <span><strong>Add missing lessons only</strong><br/><span class="text-xs text-muted-foreground">Current slots stay exactly as they are. Only lessons that aren't in the timetable yet are placed, from 3 Nov. No existing lesson changes.</span></span></label>
+                <label class="flex gap-2 items-start"><input type="radio" name="m" class="mt-1"/> <span><strong>Re-plan the whole week</strong><br/><span class="text-xs text-muted-foreground">The generator may move current slots from 3 Nov, keeping as many where they are as it can. You see every change before anything is applied.</span></span></label>
+              </fieldset>
               <div class="rounded-md bg-muted p-3">Keeps <strong>23 locked slots</strong>. 121 unlocked slots may move.
                 <label class="flex gap-2 mt-2"><input type="checkbox"/> Also unlock slots I moved by hand</label></div>
               <details class="border border-border rounded-md p-3"><summary class="font-medium cursor-pointer">Preferences</summary></details>
-              <details class="border border-border rounded-md p-3"><summary class="font-medium cursor-pointer">Advanced</summary></details>`,
+              <details class="border border-border rounded-md p-3" open><summary class="font-medium cursor-pointer">Advanced</summary>
+                <div class="grid grid-cols-2 gap-3 mt-3">${sel("Time limit", "Standard (up to 30 s)")}<div class="space-y-1"><label class="font-medium block">Seed</label><div class="h-9 flex items-center text-muted-foreground">Same as the draft (51823) · <button class="text-primary underline ml-1">Try another variant</button></div></div></div>
+              </details>`,
               btn("Cancel", "outline") + btn("Generate"),
             ),
           );
@@ -492,7 +491,7 @@
             <li class="flex gap-3 items-center ${phase === 0 ? "text-muted-foreground" : ""}"><span aria-hidden="true">${phase === 0 ? "○" : "●"}</span><span class="font-medium w-56">Improving the timetable</span><span class="tnum text-muted-foreground">${phase === 0 ? "" : "score 74 → 81"}</span></li>
           </ol>
           <div role="progressbar" aria-valuenow="${slow ? 100 : phase === 0 ? 20 : 60}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${phase === 0 ? "Placing lessons, 132 of 148" : "Improving the timetable, score 81"}" class="h-2 rounded-full bg-muted overflow-hidden"><div class="h-full bg-primary" style="width:${slow ? 100 : phase === 0 ? 20 : 60}%"></div></div>
-          <div class="flex items-center gap-3"><span class="tnum">${slow ? "2:34 of about 2:00" : phase === 0 ? "0:24 of about 2:00" : "1:12 of about 2:00"}</span>${slow ? `<span class="text-amber-700 font-medium">Taking longer than expected…</span>` : ""}</div>
+          <div class="flex items-center gap-3"><span class="tnum">${slow ? "0:30 · up to 0:30" : phase === 0 ? "0:01 · up to 0:30" : "0:02 · up to 0:30"}</span>${slow ? `<span class="text-amber-700 font-medium">Stopped at the time limit; this is the best draft found.</span>` : ""}</div>
           <div class="flex items-center gap-3 border-t border-border pt-4">
             <span class="flex-1 text-muted-foreground">You can leave this page; the run continues.</span>
             ${phase === 0 ? btn("Cancel run", "outline") : btn("Stop and keep best", "outline")}
@@ -509,7 +508,7 @@
               alert(
                 "danger",
                 "The run failed. Your weekly needs and the previous draft are unchanged.",
-                "",
+                "If the server restarted mid-run: “The run stopped unexpectedly (the server restarted). Your weekly needs and the previous draft are unchanged.”",
                 btn("Try again", "outline") + btn("Copy error ID", "ghost"),
               ),
           );
@@ -530,7 +529,7 @@
           <span aria-hidden="true">📝</span><strong>Draft · not visible to teachers or students</strong>
           <span class="flex-1"></span><span class="text-xs">Generated 14 Oct 10:42 by Anna Novak · seed 51823</span>
         </div>
-        ${o.stale ? alert("warning", "Things changed since this draft was generated:", "weekly needs of 3 groups · Tomas Horvat's availability · 2 new students in A2 Kids", btn("Check draft", "outline") + btn("Regenerate…", "ghost")) : ""}
+        ${o.stale ? alert("warning", "Data changed since this draft was generated (weekly needs, enrolments, availability, rooms, holidays or the live timetable). Regenerate the unlocked rest?", "", btn("Check draft", "outline") + btn("Regenerate…", "ghost")) : ""}
         ${o.nothing ? alert("danger", "No lessons could be placed. The most common reason: no teacher has free time that fits.", "", btn("Show not placed", "outline")) : ""}
         <div class="flex gap-3 items-stretch">
           <div class="bg-white rounded-lg border border-border p-3 w-44"><div class="text-xs text-muted-foreground">Placed</div><div class="text-xl font-semibold tnum">${o.nothing ? "0" : "144"} / 148</div><div class="text-xs">lessons</div></div>
@@ -540,23 +539,23 @@
                 ? `<div class="absolute left-0 top-full mt-2 z-20 w-96 bg-white border border-border rounded-lg shadow-lg p-4 space-y-2">
                   <div class="font-medium">What lowers the score</div>
                   ${[
-                    ["Teacher gaps", "High", "12 teacher gaps", 45],
+                    ["No gaps for teachers", "High", "12 teacher gaps", 45],
                     [
-                      "Same time each lesson day",
+                      "Same start time each lesson",
                       "Normal",
-                      "6 groups at different times",
+                      "6 extra start times",
                       25,
                     ],
                     [
-                      "Spread over the week",
+                      "One lesson a day per group",
                       "Normal",
                       "3 groups twice on one day",
                       18,
                     ],
                     [
-                      "Preferred rooms",
+                      "Preferred room",
                       "Low",
-                      "9 lessons not in a preferred room",
+                      "9 lessons not in the preferred room",
                       12,
                     ],
                   ]
@@ -565,6 +564,7 @@
                         `<div class="grid grid-cols-[1fr_auto] gap-x-2 items-center"><div><div>${c}</div><div class="text-xs text-muted-foreground">${p} · ${l}</div></div><button class="text-xs text-primary underline">Show</button><div class="col-span-2 h-1.5 bg-muted rounded-full"><div class="h-full bg-blue-600 rounded-full" style="width:${w}%"></div></div></div>`,
                     )
                     .join("")}
+                  <p class="text-xs text-muted-foreground border-t border-border pt-2">8 preferences fully met · 100 means every preference is met. Use it to compare drafts of this term.</p>
                 </div>`
                 : ""
             }
@@ -721,7 +721,7 @@
             return shell(
               h + summary() + grid({}),
               sheet(
-                "Not placed (4)",
+                "Not placed (5)",
                 [
                   [
                     "C1 Business · 1 of 2 lessons not placed",
@@ -732,10 +732,19 @@
                       "Teacher availability",
                       "Place by hand",
                     ],
+                    "Teacher busy at 38 times, unavailable at 22, students busy at 10 (Ana K., Petr S.).",
+                  ],
+                  [
+                    "B2 Evening · 1 of 2 lessons not placed",
+                    "There are free times, but other lessons in this draft take them all.",
+                    "",
+                    ["Place by hand", "Try another variant"],
+                    "",
+                    "Tue 17:00 would work if A2 Evening's lesson moved.",
                   ],
                   [
                     "A2 Kids · 1 of 2 lessons not placed",
-                    "The fixed time Sat 09:00 has a conflict: Room 3 is used by A1 Weekend.",
+                    "The fixed time Sat 09:00 has a conflict.",
                     "",
                     ["Edit weekly needs"],
                   ],
@@ -756,9 +765,13 @@
                       r,
                       c,
                       a,
+                      b = "",
+                      sg = "",
                     ]) => `<article class="rounded-lg border border-border p-3 space-y-2">
                       <h3 class="font-semibold">${t}</h3>
                       <p class="flex gap-2"><span class="text-red-700" aria-hidden="true">⛔</span>${r}</p>
+                      ${b ? `<p class="text-muted-foreground text-xs">${b}</p>` : ""}
+                      ${sg ? `<p class="text-xs">${sg} <button class="text-primary underline">Show</button></p>` : ""}
                       ${c ? `<p class="text-muted-foreground text-xs">${c} <button class="text-primary underline">Show</button></p>` : ""}
                       <div class="flex flex-wrap gap-2">${a.map((x) => btn(x, "outline", "h-8 text-xs")).join("")}</div>
                     </article>`,
@@ -842,12 +855,13 @@
             h({ published: true, term: "Autumn 2026" }),
             dialog(
               "Publish the draft for Autumn 2026?",
-              `${alert("info", "Changes apply from Mon 3 Nov 2026. Lessons before then are not touched.")}
+              `<p class="text-xs text-muted-foreground">Mode: Re-plan the whole week</p>
+              ${alert("info", "Changes apply from Mon 3 Nov 2026. Lessons before then are not touched.")}
               <ul class="space-y-1 list-disc pl-5">
                 <li>21 current slots end on Sun 2 Nov; 21 new slots start on Mon 3 Nov. 118 slots stay as they are.</li>
                 <li>Future lessons: 147 removed, 6 kept as cancelled because they have attendance, absences, homework or a substitute.</li>
                 <li>11 teachers and 94 students get a different week. · <button class="text-primary underline">List changes</button></li>
-                <li class="text-amber-800">3 replacement bookings are on lessons that will be cancelled. · <button class="text-primary underline">Show</button></li>
+                <li class="text-amber-800">3 replacement bookings are on lessons that will be cancelled. They're released, and the students get their makeup credit back with at least 7 days to use it. · <button class="text-primary underline">Show</button></li>
               </ul>
               <label class="flex gap-2 items-start rounded-md border border-border p-3"><input type="checkbox" class="mt-1"/> <span>I understand this changes the timetable for teachers and students from 3 Nov 2026.</span></label>`,
               btn("Cancel", "outline") + btn("Apply draft"),
@@ -883,6 +897,21 @@
               "Spring 2027 published from the draft. 2,712 lessons created.",
             ),
           );
+        if (state === 5)
+          return shell(
+            h({ published: true, term: "Autumn 2026" }),
+            dialog(
+              "Publish the draft for Autumn 2026?",
+              `<p class="text-xs text-muted-foreground">Mode: Add missing lessons only</p>
+              ${alert("info", "Changes apply from Mon 3 Nov 2026. Lessons before then are not touched.")}
+              <ul class="space-y-1 list-disc pl-5">
+                <li>4 new slots start on Mon 3 Nov 2026. No existing slot or lesson changes.</li>
+                <li>36 lessons are added for 3 groups. · <button class="text-primary underline">List changes</button></li>
+              </ul>`,
+              btn("Cancel", "outline") + btn("Add to timetable"),
+              "max-w-xl",
+            ),
+          );
         return "";
       }
 
@@ -903,7 +932,7 @@
             </div></div>`;
         if (state === 2)
           return shell(`${header({ published: true, term: "Autumn 2026", noPrimary: true })}${tabs("draft", { draft: "—" })}
-            ${alert("info", "This term is already published. Generate the next term, or change slots in the timetable editor.", "(Shown only if CARM-53 decides to refuse published terms — Q1.)", btn("Open editor", "outline"))}`);
+            ${alert("warning", "This term was published meanwhile. Regenerate to add missing lessons or re-plan from a date.", "(TERM_PUBLISHED: a draft made before the term was published can't replace it.)", btn("Regenerate…", "outline"))}`);
         if (state === 3)
           return shell(`${header({ noPrimary: true })}${tabs("demand")}
             <div class="space-y-3"><div class="skeleton h-10 w-full"></div>${Array.from({ length: 8 }, () => `<div class="skeleton h-8 w-full"></div>`).join("")}</div>`);
@@ -947,8 +976,8 @@
           states: [
             "placing",
             "improving",
-            "long run",
-            "failed",
+            "time limit reached",
+            "failed / interrupted",
             "done (toast)",
           ],
           fn: run,
@@ -975,10 +1004,11 @@
           label: "Publish",
           states: [
             "draft term",
-            "published term · apply from",
+            "published term · re-plan",
             "blocked · live changed",
             "publishing",
             "done → editor",
+            "published term · add missing",
           ],
           fn: publish,
         },
@@ -988,7 +1018,7 @@
           states: [
             "403 teacher/student",
             "< 1024 px",
-            "term published (if refused)",
+            "term published meanwhile",
             "loading",
             "load error",
           ],
