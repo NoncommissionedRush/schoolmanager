@@ -40,7 +40,7 @@ and admins only, enforced server-side. All UI strings go through next-intl.
 | Teacher            | Lesson page `/teacher/lessons/[id]` · lesson list `/teacher/lessons` (nav _Lesson log_) | Lessons where they are `teacherId` **or** `substituteTeacherId`, including all notes on them | Lesson log, homework and their own TeacherNotes on them |
 | Substitute teacher | The same, for the substituted lesson                                                    | The same as the regular teacher **for that lesson**, including earlier notes about the group | The same as the regular teacher for that lesson         |
 | Student            | Homework tab `/student/homework` · lesson page `/student/lessons/[id]` · home card      | Lessons of groups they were a member of on the lesson date: the log and the homework         | Nothing                                                 |
-| Admin              | Lesson page `/admin/lessons/[id]` (read-only) · lesson list `/admin/lessons`            | Every lesson of the school, including all TeacherNotes                                       | Nothing in P2 (Q1)                                      |
+| Admin              | Lesson page `/admin/lessons/[id]` (read-only) · lesson list `/admin/lessons`            | Every lesson of the school, including all TeacherNotes                                       | Nothing (§12)                                           |
 
 The regular teacher and the substitute both keep full rights on a
 substituted lesson.
@@ -177,7 +177,7 @@ and mobile it is one column: log, then internal notes.
   "Remove the lesson log and homework?".
 - **When it's editable:** from the lesson's start time onwards, with no end
   date. Before the start, the card says "You can fill this in once the
-  lesson has started." (Q2: should homework be allowed before the lesson?)
+  lesson has started." (§12)
   The card is hidden for cancelled lessons. If a log was written before the
   lesson was cancelled, it is kept and shown read-only.
 - **Unsaved changes:** leaving the page or moving to the previous/next
@@ -459,7 +459,7 @@ no attendance.
 
 - **Student joins a group mid-term:** sees lessons from their `joinedAt`
   date onwards. The home card still shows the latest homework of the
-  group, so they know what to prepare for their first lesson. (Q3)
+  group, so they know what to prepare for their first lesson. (§12)
 - **Student leaves a group:** keeps the lessons from their membership in
   the Homework tab. New lessons don't appear.
 - **Lesson moved:** the log stays attached to the lesson. Pages show the
@@ -494,13 +494,13 @@ no attendance.
 - `LessonStatus.COMPLETED` is not used by P2. Lessons stay `SCHEDULED` or
   `CANCELLED`.
 
-## 12. Open questions for the owner
+## 12. Decisions (owner, 2026-10-14)
 
-- **Q1 — Admin edits.** Admins are read-only on lesson logs in P2. Should
-  an admin be able to fix a log or homework text? I recommend no.
-- **Q2 — Homework before the lesson.** The log and homework can only be
-  written once the lesson has started. Should teachers be able to prepare
-  the homework text ahead of time? I recommend no, to keep it simple.
-- **Q3 — New students.** A student who joins a group sees only lessons from
-  their join date, plus the group's latest homework on the home card. Is
-  that enough?
+1. **Admin edits:** admins can't edit a lesson log or its homework. They
+   are read-only.
+2. **Homework before the lesson:** not allowed. The log and homework can
+   only be written once the lesson has started.
+3. **New students:** they see lessons only from their join date, plus the
+   group's latest homework on the home card.
+
+No open questions remain for this spec.
