@@ -90,10 +90,24 @@ test.describe("admin › students", () => {
     ).toBeVisible();
   });
 
-  test("teachers get 403", async ({ page }) => {
-    await signIn(page, DEMO_LOGINS.teacher);
-    await page.waitForURL("/teacher");
-    const response = await page.goto("/admin/students");
-    expect(response?.status()).toBe(403);
-  });
+  for (const [role, home] of [
+    ["teacher", "/teacher"],
+    ["student", "/student"],
+  ] as const) {
+    // The status isn't asserted: the shell streams before the role check,
+    // so production answers 200 with the forbidden page (as in auth.spec).
+    test(`a ${role} gets the forbidden page`, async ({ page }) => {
+      await signIn(page, DEMO_LOGINS[role]);
+      await page.waitForURL(home);
+      await page.goto("/admin/students");
+      await expect(
+        page.getByRole("heading", {
+          name: "You don't have access to this page",
+        }),
+      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Students" })).toHaveCount(
+        0,
+      );
+    });
+  }
 });

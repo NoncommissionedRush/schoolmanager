@@ -239,21 +239,30 @@ export async function archivePerson(
     }
   }
 
+  let membershipIds: string[] = [];
   if (member.role === "STUDENT") {
     const memberships = await db.groupMembership.findMany({
       where: { student: { userId }, leftAt: null },
       select: { id: true, group: { select: { name: true } } },
     });
     leftGroups = memberships.map((m) => m.group.name);
-    await db.groupMembership.updateMany({
-      where: { id: { in: memberships.map((m) => m.id) } },
-      data: { leftAt: today },
-    });
+    membershipIds = memberships.map((m) => m.id);
   }
 
-  await users.user.update({
-    where: { id: userId },
-    data: { deletedAt: new Date() },
+  // Leaving the groups and disabling the account succeed or fail together.
+  // `tx` is the global client (User is global), so the membership update
+  // pins the school explicitly.
+  await users.$transaction(async (tx) => {
+    if (membershipIds.length > 0) {
+      await tx.groupMembership.updateMany({
+        where: { schoolId, id: { in: membershipIds } },
+        data: { leftAt: today },
+      });
+    }
+    await tx.user.update({
+      where: { id: userId },
+      data: { deletedAt: new Date() },
+    });
   });
   await audit(scope, "user.archived", "User", userId, { schoolId, leftGroups });
   return { user: member.user, leftGroups };
