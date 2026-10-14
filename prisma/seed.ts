@@ -288,11 +288,12 @@ async function main() {
   type SeededLesson = (typeof occurrences)[number] & { id: string };
   const lessons: SeededLesson[] = [];
   for (const o of occurrences) {
-    const lessonId = id("lesson", o.timetableSlotId, o.startsAt.toISOString());
+    const lessonId = id("lesson", o.timetableSlotId, o.date);
     const data = {
       groupId: o.groupId,
       teacherId: o.teacherId,
       roomId: o.roomId,
+      startsAt: o.startsAt,
       endsAt: o.endsAt,
       status:
         o.date < DEMO_TODAY ? ("COMPLETED" as const) : ("SCHEDULED" as const),
@@ -307,7 +308,7 @@ async function main() {
         schoolId,
         termId: term.id,
         timetableSlotId: o.timetableSlotId,
-        startsAt: o.startsAt,
+        occurrenceDate: fromIsoDate(o.date),
         ...data,
       },
     });

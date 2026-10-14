@@ -37,8 +37,11 @@ x(school_id, id)`. A `Lesson` of school A cannot point at a `Group` of
 
 `TimetableSlot` is a weekly template (group, teacher, room, weekday, start/end)
 within a `Term`. Lessons are generated per term from the slots, skipping
-`Holiday` days. `Lesson` is unique per `(timetable_slot_id, starts_at)`, so
-regenerating is idempotent. Ad-hoc lessons have no slot. `Term.timetablePublishedAt`
+`Holiday` days. Generated lessons store the slot's local date in
+`occurrence_date` and are unique per `(timetable_slot_id, occurrence_date)`,
+so regenerating is idempotent even after a slot or a single lesson has been
+moved to another time (CHECK: generated lessons must have an
+`occurrence_date`). Ad-hoc lessons have neither. `Term.timetablePublishedAt`
 null means the timetable is a draft (not shown to students).
 
 A lesson keeps its regular `teacher`; `substituteTeacher` is set when someone
@@ -84,7 +87,8 @@ Prisma does not model CHECK constraints, so these live in
 - term / holiday `start_date ≤ end_date`
 - slot weekday 1–7, `0 ≤ start_minute < end_minute ≤ 1440`
 - availability shape matches its `kind` (see table above)
-- lesson `starts_at < ends_at`; substitute ≠ regular teacher
+- lesson `starts_at < ends_at`; substitute ≠ regular teacher; lessons with a
+  slot have an `occurrence_date`
 - assignment has a due lesson or a due date
 - teacher note is about a student, group or lesson
 - replacement target ≠ original lesson

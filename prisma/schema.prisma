@@ -438,6 +438,9 @@ model Lesson {
   teacherId           String       @map("teacher_id") @db.Uuid
   substituteTeacherId String?      @map("substitute_teacher_id") @db.Uuid
   roomId              String?      @map("room_id") @db.Uuid
+  /// Local date of the slot occurrence (school timezone); set for generated
+  /// lessons, null for ad-hoc ones. Stays put when the lesson time is edited.
+  occurrenceDate      DateTime?    @map("occurrence_date") @db.Date
   startsAt            DateTime     @map("starts_at") @db.Timestamptz(3)
   endsAt              DateTime     @map("ends_at") @db.Timestamptz(3)
   status              LessonStatus @default(SCHEDULED)
@@ -463,8 +466,9 @@ model Lesson {
   replacementsTo   ReplacementRequest[] @relation("ReplacementTarget")
   makeupCredits    MakeupCredit[]
 
-  /// Makes lesson generation idempotent: one lesson per slot occurrence.
-  @@unique([timetableSlotId, startsAt])
+  /// Makes lesson generation idempotent: one lesson per slot per date, even
+  /// after the slot or the lesson has been moved to another time.
+  @@unique([timetableSlotId, occurrenceDate])
   @@unique([schoolId, id])
   @@index([schoolId, startsAt])
   @@index([schoolId, groupId, startsAt])

@@ -65,6 +65,36 @@ describe("generateLessonOccurrences", () => {
     expect(after.startsAt.toISOString()).toBe("2026-10-26T08:00:00.000Z");
   });
 
+  it("keeps the slot duration for a slot inside the spring-forward gap", () => {
+    // 2027-03-28 is a Sunday; 02:00–03:00 local does not exist that night.
+    const [lesson] = generateLessonOccurrences({
+      slots: [
+        { ...monday, weekday: 7, startMinute: 2 * 60, endMinute: 3 * 60 },
+      ],
+      term: { startDate: "2027-03-28", endDate: "2027-03-28" },
+      holidays: [],
+      timeZone,
+    });
+    expect(lesson.date).toBe("2027-03-28");
+    expect(lesson.startsAt.toISOString()).toBe("2027-03-28T01:00:00.000Z");
+    expect(lesson.endsAt.toISOString()).toBe("2027-03-28T02:00:00.000Z");
+  });
+
+  it("keeps the slot duration across the fall-back overlap", () => {
+    // 2026-10-25 is a Sunday; 02:00–03:00 CEST/CET overlap that night.
+    const [lesson] = generateLessonOccurrences({
+      slots: [
+        { ...monday, weekday: 7, startMinute: 2 * 60, endMinute: 3 * 60 },
+      ],
+      term: { startDate: "2026-10-25", endDate: "2026-10-25" },
+      holidays: [],
+      timeZone,
+    });
+    expect(lesson.endsAt.getTime() - lesson.startsAt.getTime()).toBe(
+      60 * 60_000,
+    );
+  });
+
   it("clips an explicit range to the term", () => {
     const lessons = generateLessonOccurrences({
       slots: [monday],

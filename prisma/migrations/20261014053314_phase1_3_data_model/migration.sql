@@ -217,6 +217,7 @@ CREATE TABLE "lessons" (
     "teacher_id" UUID NOT NULL,
     "substitute_teacher_id" UUID,
     "room_id" UUID,
+    "occurrence_date" DATE,
     "starts_at" TIMESTAMPTZ(3) NOT NULL,
     "ends_at" TIMESTAMPTZ(3) NOT NULL,
     "status" "LessonStatus" NOT NULL DEFAULT 'SCHEDULED',
@@ -455,7 +456,7 @@ CREATE INDEX "lessons_school_id_group_id_starts_at_idx" ON "lessons"("school_id"
 CREATE INDEX "lessons_school_id_teacher_id_starts_at_idx" ON "lessons"("school_id", "teacher_id", "starts_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "lessons_timetable_slot_id_starts_at_key" ON "lessons"("timetable_slot_id", "starts_at");
+CREATE UNIQUE INDEX "lessons_timetable_slot_id_occurrence_date_key" ON "lessons"("timetable_slot_id", "occurrence_date");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "lessons_school_id_id_key" ON "lessons"("school_id", "id");
@@ -759,6 +760,7 @@ ALTER TABLE "teacher_availability"
 
 ALTER TABLE "lessons"
   ADD CONSTRAINT "lessons_time_check" CHECK ("starts_at" < "ends_at"),
+  ADD CONSTRAINT "lessons_occurrence_date_check" CHECK ("timetable_slot_id" IS NULL OR "occurrence_date" IS NOT NULL),
   ADD CONSTRAINT "lessons_substitute_check" CHECK ("substitute_teacher_id" IS NULL OR "substitute_teacher_id" <> "teacher_id");
 
 ALTER TABLE "assignments"

@@ -18,6 +18,7 @@ export type LessonOccurrence = {
   groupId: string;
   teacherId: string;
   roomId: string | null;
+  /** Local date of the occurrence; persist as `Lesson.occurrenceDate`. */
   date: IsoDate;
   startsAt: Date;
   endsAt: Date;
@@ -42,8 +43,12 @@ function isHoliday(date: IsoDate, holidays: DateRange[]): boolean {
 /**
  * Expands recurring timetable slots into concrete dated lesson occurrences for
  * every day of the term that is not a holiday. Pure: persisting is the
- * caller's job (lessons are unique per `[timetableSlotId, startsAt]`, so
- * re-running is idempotent).
+ * caller's job: store `date` as `Lesson.occurrenceDate`; lessons are unique
+ * per `[timetableSlotId, occurrenceDate]`, so re-running is idempotent even
+ * after a slot or lesson time has been edited.
+ *
+ * `endsAt` is `startsAt` plus the slot's duration, so a lesson keeps its
+ * length on DST switch days (see `zonedTimeToUtc` for the gap behaviour).
  */
 export function generateLessonOccurrences({
   slots,
@@ -67,14 +72,16 @@ export function generateLessonOccurrences({
     const weekday = isoWeekday(date);
     for (const slot of slots) {
       if (slot.weekday !== weekday) continue;
+      const startsAt = zonedTimeToUtc(date, slot.startMinute, timeZone);
+      const durationMs = (slot.endMinute - slot.startMinute) * 60_000;
       occurrences.push({
         timetableSlotId: slot.id,
         groupId: slot.groupId,
         teacherId: slot.teacherId,
         roomId: slot.roomId,
         date,
-        startsAt: zonedTimeToUtc(date, slot.startMinute, timeZone),
-        endsAt: zonedTimeToUtc(date, slot.endMinute, timeZone),
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + durationMs),
       });
     }
   }
