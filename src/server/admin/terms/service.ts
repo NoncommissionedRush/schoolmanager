@@ -126,7 +126,9 @@ async function overlapError(db: SchoolDb, input: TermInput, exceptId?: string) {
     select: { name: true },
   });
   return new AdminError(
-    msg("terms.error.overlap", { term: clash?.name ?? "" }),
+    clash
+      ? msg("terms.error.overlap", { term: clash.name })
+      : msg("terms.error.overlapAny"),
     "startDate",
   );
 }

@@ -52,6 +52,10 @@ describe.skipIf(!url)("terms don't overlap (database)", () => {
           .replace(/\s/g, "-"),
       },
     });
+    // A member: other tests' cleanup removes test users without one.
+    await client.membership.create({
+      data: { schoolId: school.id, userId: admin.id, role: "ADMIN" },
+    });
     return {
       db: scopeToSchool(client, school.id),
       schoolId: school.id,

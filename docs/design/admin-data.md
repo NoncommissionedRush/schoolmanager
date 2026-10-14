@@ -756,6 +756,7 @@ Namespaces map to files under `messages/en-GB/` (new: `people`, `teachers`,
 | `terms.error.endBeforeStart`     | The last day must be on or after the first day.                                                                                                                    |
 | `terms.error.cannotRemovePast`   | A published term can't start or end before today.                                                                                                                  |
 | `terms.error.overlap`            | These dates overlap {term}. Terms can't share a day.                                                                                                               |
+| `terms.error.overlapAny`         | These dates overlap another term. Terms can't share a day.                                                                                                         |
 | `terms.impact.datesChanged`      | Lessons outside the new dates are removed (or cancelled if they have history); new dates get lessons.                                                              |
 | `terms.delete.cascade`           | Its {slots, plural, one {# slot} other {# slots}} and {holidays, plural, one {# term holiday} other {# term holidays}} are deleted too. School-wide holidays stay. |
 | `terms.empty.title`              | No terms yet                                                                                                                                                       |

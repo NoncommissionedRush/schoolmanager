@@ -7,13 +7,14 @@ import {
   toZonedDateTime,
   zonedTimeToUtc,
 } from "../src/server/scheduling/time";
-import { DEMO_LOGINS, signIn, sql } from "./helpers";
+import { currentTermId, DEMO_LOGINS, signIn, sql } from "./helpers";
 
 // Happy path of CARM-47: an admin spends a student's makeup credits for
 // them — a group credit on a replacement, a 1-on-1 credit on a new lesson —
 // and the teacher dashboard's Today list shows "−n · +r" for a lesson with
-// a cancellation (absences.md §6.3). Runs on its own term, groups, rooms,
-// teacher, student and lessons, so it doesn't depend on the seeded data.
+// a cancellation (absences.md §6.3). Runs on its own groups, rooms,
+// teacher, student and lessons (in the term running today), so it doesn't
+// depend on the seeded data.
 test.describe("admin spends a student's credits; teacher Today counts", () => {
   test.describe.configure({ mode: "serial" });
   const TZ = "Europe/Bratislava";
@@ -23,7 +24,7 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
   const oneOnOne = `E2E Credit 1-on-1 ${suffix}`;
   const STUDENT = `Cleo Credit ${suffix}`;
   const ids = {
-    term: randomUUID(),
+    term: "", // the current term (beforeAll)
     own: randomUUID(),
     other: randomUUID(),
     oneOnOne: randomUUID(),
@@ -62,11 +63,8 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
       [DEMO_LOGINS.teacher, DEMO_LOGINS.student],
     );
     school = row.school;
-    await sql(
-      `INSERT INTO terms (id, school_id, name, start_date, end_date, timetable_published_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, now(), now())`,
-      [ids.term, school, own, addDays(today, -7), addDays(today, 30)],
-    );
+    // Terms never overlap: the lessons go into the term running today.
+    ids.term = await currentTermId(school, today, addDays(today, 30));
     await sql(
       `INSERT INTO rooms (id, school_id, name, kind, capacity, updated_at)
        VALUES ($1, $3, $4, 'PHYSICAL', 5, now()), ($2, $3, $5, 'PHYSICAL', 1, now())`,
@@ -226,7 +224,10 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
       "DELETE FROM lessons WHERE group_id = $1 AND rescheduled_from_id IS NOT NULL",
       [ids.oneOnOne],
     );
-    await sql("DELETE FROM lessons WHERE term_id = $1", [ids.term]);
+    // By group: the term is shared with the seed and other specs.
+    await sql("DELETE FROM lessons WHERE group_id = ANY($1)", [
+      [ids.own, ids.other, ids.oneOnOne],
+    ]);
     await sql("DELETE FROM group_memberships WHERE student_id = $1", [
       ids.student,
     ]);
@@ -242,7 +243,6 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
       [ids.user, ids.teacherUser],
     ]);
     await sql("DELETE FROM rooms WHERE id = ANY($1)", [[ids.room, ids.booth]]);
-    await sql("DELETE FROM terms WHERE id = $1", [ids.term]);
   });
 
   /** The admin's Absences tab, filtered to the student. */
