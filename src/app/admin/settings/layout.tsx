@@ -13,6 +13,7 @@ export default async function SettingsLayout({
         <SettingsNav
           items={[
             { href: "/admin/settings/school", label: t("nav.school") },
+            { href: "/admin/settings/absences", label: t("nav.absences") },
             { href: "/admin/settings/terms", label: t("nav.terms") },
             { href: "/admin/settings/rooms", label: t("nav.rooms") },
             { href: "/admin/settings/admins", label: t("nav.admins") },
