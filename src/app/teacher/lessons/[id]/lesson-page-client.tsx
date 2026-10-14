@@ -4,6 +4,7 @@ import { ClipboardList } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
+import { StudentsCard } from "@/components/absences/students-card";
 import { useDateFormat } from "@/components/timetable/format";
 import {
   InternalNotesCard,
@@ -19,6 +20,7 @@ import { UnsavedChangesGuard } from "@/components/lessons/unsaved-guard";
 import { Card, CardContent } from "@/components/ui/card";
 import type { TeacherLessonPage } from "@/server/lessons/teacher";
 import type { LessonNotes } from "@/server/notes/teacher-notes";
+import type { LessonRosterView } from "@/server/replacements/views";
 
 import {
   createNoteAction,
@@ -38,11 +40,14 @@ const noteActions: NoteActions = {
 export function TeacherLessonClient({
   lesson,
   internalNotes,
+  roster,
   back,
   query,
 }: {
   lesson: TeacherLessonPage;
   internalNotes: LessonNotes;
+  /** Students card (absences.md §6.1). */
+  roster: LessonRosterView | null;
   back: { href: string; label: string };
   /** Kept on previous/next links (e.g. `?from=list`). */
   query: string;
@@ -76,6 +81,7 @@ export function TeacherLessonClient({
       />
       <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
         <div className="flex flex-col gap-6 lg:col-span-8">
+          {roster && <StudentsCard roster={roster} />}
           {/* Remount when moving to another lesson so the form starts fresh. */}
           <LessonLogCard
             key={lesson.id}
