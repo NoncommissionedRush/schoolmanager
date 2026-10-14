@@ -23,6 +23,11 @@ import {
   removalError,
   timeClash,
 } from "./rules";
+import {
+  type LessonTimesInput,
+  type RoomInfo,
+  roomClashes,
+} from "./lesson-times";
 import type { GroupInput } from "./schema";
 
 type Tx = Parameters<Parameters<SchoolDb["$transaction"]>[0]>[0];
@@ -80,6 +85,9 @@ export async function listGroups(
       updatedAt: true,
       level: { select: { code: true, archivedAt: true } },
       course: { select: { name: true } },
+      lessonTimes: {
+        select: { weekday: true, startMinute: true, endMinute: true },
+      },
       timetableSlots: {
         where: activeSlotWhere(today),
         select: { teacher: { select: { user: { select: { name: true } } } } },
@@ -186,6 +194,16 @@ export async function getGroup(db: SchoolDb, id: string, today: Date) {
       level: { select: { code: true, name: true, archivedAt: true } },
       course: { select: { name: true } },
       _count: { select: { lessons: true } },
+      lessonTimes: {
+        orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
+        select: {
+          id: true,
+          weekday: true,
+          startMinute: true,
+          endMinute: true,
+          roomId: true,
+        },
+      },
       memberships: {
         orderBy: { joinedAt: "asc" },
         select: {
@@ -276,6 +294,7 @@ export async function getGroup(db: SchoolDb, id: string, today: Date) {
     level: group.level,
     course: group.course,
     lessons: group._count.lessons,
+    lessonTimes: group.lessonTimes,
     current: members.filter((member) => member.leftAt === null),
     past: members
       .filter((member) => member.leftAt !== null)
@@ -663,4 +682,139 @@ export async function removeMember(
     group: membership.group.name,
     student: membership.student.user.name,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Lesson times (timetable-generator.md §5.1, generator.md §2.1)
+// ---------------------------------------------------------------------------
+
+/** Rooms for the lesson-time rows: physical first, then online; by name. */
+export async function lessonTimeRooms(db: SchoolDb): Promise<RoomInfo[]> {
+  const rooms = await db.room.findMany({
+    select: {
+      id: true,
+      name: true,
+      kind: true,
+      capacity: true,
+      archivedAt: true,
+    },
+  });
+  return rooms
+    .map((room) => ({
+      id: room.id,
+      name: room.name,
+      online: room.kind === "ONLINE",
+      capacity: room.capacity,
+      archived: room.archivedAt !== null,
+    }))
+    .sort(
+      (a, b) =>
+        Number(a.online) - Number(b.online) || a.name.localeCompare(b.name),
+    );
+}
+
+/**
+ * Replaces a group's lesson times. Never touches live slots (Q2): the
+ * generator reads them the next time teachers are assigned. A physical room
+ * used by another active group at an overlapping time refuses the save.
+ */
+export async function saveLessonTimes(
+  scope: Scope,
+  groupId: string,
+  input: LessonTimesInput,
+) {
+  const { db, schoolId } = scope;
+  return db.$transaction(async (tx) => {
+    // Serialised per school, so two groups can't take the same room at once.
+    const key = `group-lesson-times:${schoolId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+    const group = await tx.group.findUnique({
+      where: { id: groupId },
+      select: { id: true, name: true, deletedAt: true },
+    });
+    if (!group) throw notFound();
+    if (group.deletedAt) {
+      throw new AdminError(msg("groups.lessonTimes.archived"));
+    }
+    const roomIds = [...new Set(input.times.map((t) => t.roomId))];
+    const rooms = await tx.room.findMany({
+      where: { id: { in: roomIds } },
+      select: { id: true, name: true, kind: true, archivedAt: true },
+    });
+    const roomById = new Map(
+      rooms.map((room) => [
+        room.id,
+        {
+          id: room.id,
+          name: room.name,
+          online: room.kind === "ONLINE",
+          capacity: null,
+          archived: room.archivedAt !== null,
+        },
+      ]),
+    );
+    for (const [index, time] of input.times.entries()) {
+      const room = roomById.get(time.roomId);
+      if (!room || room.archived) {
+        throw new AdminError(
+          msg("validation.select", {
+            field: msg("groups.lessonTimes.room"),
+          }),
+          `times.${index}.roomId`,
+        );
+      }
+    }
+    const others = await tx.groupLessonTime.findMany({
+      where: {
+        roomId: { in: roomIds },
+        groupId: { not: groupId },
+        group: { deletedAt: null },
+      },
+      select: {
+        groupId: true,
+        weekday: true,
+        startMinute: true,
+        endMinute: true,
+        roomId: true,
+        group: { select: { name: true } },
+      },
+    });
+    const clash = roomClashes(
+      input.times,
+      others.map(({ group: other, ...time }) => ({
+        ...time,
+        groupName: other.name,
+      })),
+      roomById,
+    )[0];
+    if (clash) {
+      throw new AdminError(
+        msg("groups.lessonTimes.roomClash", {
+          room: roomById.get(clash.roomId)!.name,
+          group: clash.otherGroupName,
+          weekday: msg(`common.weekday.${clash.weekday}`),
+          from: formatMinutes(clash.startMinute),
+          to: formatMinutes(clash.endMinute),
+        }),
+        `times.${clash.index}.roomId`,
+      );
+    }
+    await tx.groupLessonTime.deleteMany({ where: { groupId } });
+    if (input.times.length > 0) {
+      await tx.groupLessonTime.createMany({
+        data: input.times.map((time) => ({ schoolId, groupId, ...time })),
+      });
+    }
+    await tx.auditLog.create({
+      data: {
+        schoolId,
+        actorId: scope.actor.userId,
+        action: "group.lesson_times_updated",
+        entityType: "Group",
+        entityId: groupId,
+        data: { times: input.times },
+      },
+    });
+    return { name: group.name };
+  });
 }

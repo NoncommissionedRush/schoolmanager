@@ -23,6 +23,7 @@ import { isFull, placesLeft } from "@/server/admin/groups/rules";
 import {
   getGroup,
   groupFormOptions,
+  lessonTimeRooms,
   memberCandidates,
 } from "@/server/admin/groups/service";
 import { param } from "@/server/admin/list";
@@ -36,6 +37,7 @@ import {
   GroupHeaderActions,
   RemoveMemberButton,
 } from "./group-detail-client";
+import { LessonTimesEditor } from "./lesson-times-client";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
 
 const DATE = {
@@ -63,9 +65,17 @@ async function GroupPage({
   const tabParam = param(await searchParams, "tab");
   const tab = TABS.find((name) => name === tabParam) ?? "members";
   const today = toIsoDate(todayDate);
-  const [options, candidates] = await Promise.all([
+  const [options, candidates, rooms, school] = await Promise.all([
     groupFormOptions(db),
     memberCandidates(db, id, todayDate),
+    lessonTimeRooms(db),
+    db.school.findFirstOrThrow({
+      select: {
+        teachingWeekdays: true,
+        dayStartMinute: true,
+        dayEndMinute: true,
+      },
+    }),
   ]);
   const date = (value: Date) => format.dateTime(value, DATE);
   const levelLabel = (l: {
@@ -256,9 +266,34 @@ async function GroupPage({
           </details>
         </TabsContent>
 
-        <TabsContent value="details" className="pt-4">
+        <TabsContent value="details" className="flex flex-col gap-6 pt-4">
           <Card className="max-w-2xl p-6">
             <GroupDetailsForm group={groupData} options={formOptions} />
+          </Card>
+          <Card className="max-w-3xl p-6">
+            <LessonTimesEditor
+              key={group.id}
+              data={{
+                groupId: group.id,
+                groupName: group.name,
+                archived: !!group.deletedAt,
+                members,
+                times: group.lessonTimes.map((time) => ({
+                  weekday: time.weekday,
+                  startMinute: time.startMinute,
+                  endMinute: time.endMinute,
+                  roomId: time.roomId,
+                })),
+                rooms,
+                school,
+                currentTerm: group.terms.at(-1)
+                  ? {
+                      id: group.terms.at(-1)!.id,
+                      name: group.terms.at(-1)!.name,
+                    }
+                  : null,
+              }}
+            />
           </Card>
         </TabsContent>
 
