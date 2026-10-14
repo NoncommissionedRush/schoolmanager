@@ -30,6 +30,15 @@
     "empty": {
       "title": "No lessons yet",
       "description": "When the school publishes the timetable, your lessons for today and the week will appear here."
+    },
+    "today": {
+      "title": "Today",
+      "empty": "No lessons today.",
+      "time": "{start}–{end}",
+      "cancelled": "Cancelled",
+      "noRoom": "No room",
+      "counts": "−{notComing} · +{replacements}",
+      "countsLabel": "{notComing} not coming, {replacements, plural, one {# replacement} other {# replacements}}"
     }
   },
   "student": {

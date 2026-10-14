@@ -118,3 +118,21 @@ export const EARLIER_NOTES_PAGE = 10;
 /** The teacher dashboard To do card (§5.1): ≤ 5 lessons of the last 14 days. */
 export const TODO_LIMIT = 5;
 export const TODO_DAYS = 14;
+
+/**
+ * The teacher dashboard's "−{n} · +{r}" for a lesson (absences.md §6.3),
+ * counted from the same roster as the lesson page's Students card (§6.1):
+ * `notComing` is everyone listed under _Not coming_ (absent members and
+ * replacement students who cancelled late), `replacements` the replacement
+ * students under _Coming_.
+ */
+export function rosterCounts(roster: {
+  coming: readonly { replacementFrom: string | null }[];
+  notComing: readonly unknown[];
+}): { notComing: number; replacements: number } {
+  return {
+    notComing: roster.notComing.length,
+    replacements: roster.coming.filter((s) => s.replacementFrom !== null)
+      .length,
+  };
+}
