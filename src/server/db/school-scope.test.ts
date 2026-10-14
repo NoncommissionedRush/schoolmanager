@@ -294,9 +294,9 @@ describe("scopeArgs — User relations span schools", () => {
         "findMany",
         {
           where: {
-            attendance: {
+            absenceReports: {
               some: {
-                recordedBy: { memberships: { some: { schoolId: OTHER } } },
+                reportedBy: { memberships: { some: { schoolId: OTHER } } },
               },
             },
           },
@@ -339,8 +339,8 @@ describe("scopeArgs — User relations span schools", () => {
               select: {
                 lessons: {
                   where: {
-                    attendance: {
-                      some: { recordedBy: { memberships: { some: {} } } },
+                    absenceReports: {
+                      some: { reportedBy: { memberships: { some: {} } } },
                     },
                   },
                 },
@@ -424,9 +424,9 @@ describe("scopeArgs — User relations span schools", () => {
         { orderBy: { user: { memberships: { _count: "desc" } } } },
       ],
       [
-        "Attendance",
+        "AbsenceReport",
         "findMany",
-        { orderBy: { recordedBy: { studentProfiles: { _count: "asc" } } } },
+        { orderBy: { reportedBy: { studentProfiles: { _count: "asc" } } } },
       ],
       [
         "Group",
@@ -543,7 +543,7 @@ describe("scopeArgs — User relations span schools", () => {
       scopeArgs(
         "Lesson",
         "findMany",
-        { include: { attendance: { include: { recordedBy: true } } } },
+        { include: { absenceReports: { include: { reportedBy: true } } } },
         SCHOOL,
       ),
     ).not.toThrow();

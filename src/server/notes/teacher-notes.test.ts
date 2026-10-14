@@ -7,14 +7,39 @@ import type { SchoolDb } from "@/server/timetable/service";
 
 import {
   canReadTeacherNotes,
+  createLessonNote,
+  deleteLessonNote,
   findTeacherNotes,
+  loadEarlierNotes,
+  loadLessonNotes,
   TeacherNoteAccessError,
+  updateLessonNote,
 } from "./teacher-notes";
 
 function fakeDb() {
   const findMany = vi.fn(async () => []);
   return { db: { teacherNote: { findMany } } as unknown as SchoolDb, findMany };
 }
+
+/** A client where every query is recorded and returns nothing. */
+function recordingDb() {
+  const calls: string[] = [];
+  const model = (name: string) =>
+    new Proxy(
+      {},
+      {
+        get: (_, operation) => async () => {
+          calls.push(`${name}.${String(operation)}`);
+          return operation === "findMany" ? [] : null;
+        },
+      },
+    );
+  const db = new Proxy({}, { get: (_, name) => model(String(name)) });
+  return { db: db as unknown as SchoolDb, calls };
+}
+
+const LESSON = "4b7f1f9e-3c1a-4a59-9d55-0b7c6f2f7a10";
+const NOW = new Date("2026-10-20T18:00:00Z");
 
 describe("canReadTeacherNotes", () => {
   it.each([
@@ -54,6 +79,82 @@ describe("findTeacherNotes", () => {
   });
 });
 
+describe("lesson page notes: student refusal", () => {
+  const student = { role: "STUDENT" as const, teacherId: null };
+  const entryPoints: [string, (db: SchoolDb) => Promise<unknown>][] = [
+    ["loadLessonNotes", (db) => loadLessonNotes(db, student, LESSON, NOW)],
+    ["loadEarlierNotes", (db) => loadEarlierNotes(db, student, LESSON, 0, NOW)],
+    [
+      "createLessonNote",
+      (db) =>
+        createLessonNote(
+          db,
+          "school",
+          student,
+          { lessonId: LESSON, about: "lesson", body: "x" },
+          NOW,
+        ),
+    ],
+    [
+      "updateLessonNote",
+      (db) => updateLessonNote(db, student, { noteId: LESSON, body: "x" }),
+    ],
+    ["deleteLessonNote", (db) => deleteLessonNote(db, student, LESSON)],
+  ];
+
+  it.each(entryPoints)(
+    "%s refuses a student before any query",
+    async (_, run) => {
+      const { db, calls } = recordingDb();
+      await expect(run(db)).rejects.toBeInstanceOf(TeacherNoteAccessError);
+      expect(calls).toEqual([]);
+    },
+  );
+});
+
+describe("lesson page notes: teachers and admins", () => {
+  it("is not found for a teacher without a lesson of theirs", async () => {
+    const { db, calls } = recordingDb();
+    await expect(
+      loadLessonNotes(db, { role: "TEACHER", teacherId: null }, LESSON, NOW),
+    ).rejects.toMatchObject({ error: { key: "common.error.notFound" } });
+    expect(calls).toEqual([]);
+  });
+
+  it("is not found when the teacher doesn't teach the lesson", async () => {
+    const { db, calls } = recordingDb();
+    await expect(
+      loadLessonNotes(db, { role: "TEACHER", teacherId: "t1" }, LESSON, NOW),
+    ).rejects.toMatchObject({ error: { key: "common.error.notFound" } });
+    expect(calls).toEqual(["lesson.findFirst"]);
+  });
+
+  it("treats malformed lesson ids as not found", async () => {
+    const { db, calls } = recordingDb();
+    await expect(
+      loadLessonNotes(db, { role: "ADMIN" }, "not-a-uuid", NOW),
+    ).rejects.toMatchObject({ error: { key: "common.error.notFound" } });
+    expect(calls).toEqual([]);
+  });
+
+  it("never lets an admin write notes", async () => {
+    const { db, calls } = recordingDb();
+    await expect(
+      createLessonNote(
+        db,
+        "school",
+        { role: "ADMIN" },
+        { lessonId: LESSON, about: "lesson", body: "x" },
+        NOW,
+      ),
+    ).rejects.toMatchObject({ error: { key: "common.error.notFound" } });
+    await expect(
+      deleteLessonNote(db, { role: "ADMIN" }, LESSON),
+    ).rejects.toMatchObject({ error: { key: "common.error.notFound" } });
+    expect(calls).toEqual([]);
+  });
+});
+
 // Static guard: TeacherNote rows may only be read through findTeacherNotes.
 // A direct `db.teacherNote…` call, a relation read (`teacherNotes`,
 // `notesAbout`, a teacher's `notes`) or raw SQL on `teacher_notes` anywhere
@@ -66,6 +167,12 @@ const ALLOWED: Record<string, RegExp> = {
 
 const NOTE_ACCESS =
   /\bteacherNotes?\b|\bnotesAbout\b|\bteacher_notes\b|\bnotes\s*:\s*(true|\{)/;
+
+// The `teacherNotes` i18n namespace ("teacherNotes.title") names copy, not
+// data: string literals of it are ignored.
+const I18N_KEY = /(["'`])teacherNotes(\.[\w.]+)?\1/g;
+const readsNotes = (line: string) =>
+  NOTE_ACCESS.test(line.replace(I18N_KEY, '""'));
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -87,7 +194,7 @@ describe("TeacherNote read paths", () => {
         readFileSync(file, "utf8")
           .split("\n")
           .map((line, i) => ({ file, line, at: `${file}:${i + 1}` }))
-          .filter(({ line }) => NOTE_ACCESS.test(line))
+          .filter(({ line }) => readsNotes(line))
           .filter(({ file, line }) => !ALLOWED[file]?.test(line)),
       )
       .map(({ at, line }) => `${at}: ${line.trim()}`);
@@ -102,7 +209,19 @@ describe("TeacherNote read paths", () => {
       "notes: { select: { body: true } },",
       "await db.$queryRaw`SELECT body FROM teacher_notes`;",
     ]) {
-      expect(NOTE_ACCESS.test(line), line).toBe(true);
+      expect(readsNotes(line), line).toBe(true);
     }
+  });
+
+  it("ignores the teacherNotes i18n namespace", () => {
+    for (const line of [
+      'const t = useTranslations("teacherNotes");',
+      'return ok(note, msg("teacherNotes.added"));',
+    ]) {
+      expect(readsNotes(line), line).toBe(false);
+    }
+    expect(
+      readsNotes('t("teacherNotes.title"); db.teacherNote.findMany()'),
+    ).toBe(true);
   });
 });

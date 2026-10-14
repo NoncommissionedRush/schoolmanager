@@ -58,13 +58,6 @@ enum LessonStatus {
   COMPLETED
 }
 
-enum AttendanceStatus {
-  PRESENT
-  LATE
-  ABSENT
-  EXCUSED
-}
-
 enum ReplacementStatus {
   AUTO_APPROVED
   APPROVED
@@ -110,9 +103,7 @@ model School {
   teacherAvailability TeacherAvailability[]
   timetableSlots      TimetableSlot[]
   lessons             Lesson[]
-  attendance          Attendance[]
   lessonLogs          LessonLog[]
-  assignments         Assignment[]
   teacherNotes        TeacherNote[]
   absenceReports      AbsenceReport[]
   replacementRequests ReplacementRequest[]
@@ -144,7 +135,6 @@ model User {
   memberships          Membership[]
   teacherProfiles      TeacherProfile[]
   studentProfiles      StudentProfile[]
-  recordedAttendance   Attendance[]
   reportedAbsences     AbsenceReport[]
   reviewedReplacements ReplacementRequest[]
   auditLogs            AuditLog[]
@@ -226,8 +216,8 @@ model TeacherProfile {
   timetableSlots    TimetableSlot[]
   lessons           Lesson[]              @relation("LessonTeacher")
   substituteLessons Lesson[]              @relation("LessonSubstitute")
-  lessonLogs        LessonLog[]
-  assignments       Assignment[]
+  lessonLogs        LessonLog[]           @relation("LessonLogAuthor")
+  editedLessonLogs  LessonLog[]           @relation("LessonLogEditor")
   notes             TeacherNote[]
 
   @@unique([schoolId, userId])
@@ -251,7 +241,6 @@ model StudentProfile {
   level  Level? @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
 
   groupMemberships    GroupMembership[]
-  attendance          Attendance[]
   notesAbout          TeacherNote[]
   absenceReports      AbsenceReport[]
   replacementRequests ReplacementRequest[]
@@ -328,7 +317,6 @@ model Group {
   memberships    GroupMembership[]
   timetableSlots TimetableSlot[]
   lessons        Lesson[]
-  assignments    Assignment[]
   teacherNotes   TeacherNote[]
 
   @@unique([schoolId, name])
@@ -491,7 +479,7 @@ model TimetableSlot {
   @@map("timetable_slots")
 }
 
-/// A concrete dated lesson. Attendance, logs, homework, absences and
+/// A concrete dated lesson. The lesson log (with homework), notes, absences and
 /// replacements attach here. `teacherId` is the regular teacher;
 /// `substituteTeacherId` is set when someone else teaches this instance.
 model Lesson {
@@ -515,7 +503,7 @@ model Lesson {
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
   school            School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  /// Restrict: lessons carry history (attendance, logs); a term with lessons
+  /// Restrict: lessons carry history (logs, notes); a term with lessons
   /// cannot be deleted.
   term              Term            @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Restrict)
   timetableSlot     TimetableSlot?  @relation(fields: [schoolId, timetableSlotId], references: [schoolId, id], onDelete: Restrict)
@@ -524,10 +512,7 @@ model Lesson {
   substituteTeacher TeacherProfile? @relation("LessonSubstitute", fields: [schoolId, substituteTeacherId], references: [schoolId, id], onDelete: Restrict)
   room              Room?           @relation(fields: [schoolId, roomId], references: [schoolId, id], onDelete: Restrict)
 
-  attendance       Attendance[]
   log              LessonLog?
-  assignmentsSet   Assignment[]         @relation("AssignmentSetIn")
-  assignmentsDue   Assignment[]         @relation("AssignmentDueIn")
   teacherNotes     TeacherNote[]
   absenceReports   AbsenceReport[]
   replacementsFrom ReplacementRequest[] @relation("ReplacementOriginal")
@@ -544,70 +529,32 @@ model Lesson {
   @@map("lessons")
 }
 
-model Attendance {
-  id           String           @id @default(uuid()) @db.Uuid
-  schoolId     String           @map("school_id") @db.Uuid
-  lessonId     String           @map("lesson_id") @db.Uuid
-  studentId    String           @map("student_id") @db.Uuid
-  status       AttendanceStatus
-  note         String?
-  recordedById String?          @map("recorded_by_id") @db.Uuid
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
-
-  school     School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  lesson     Lesson         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Cascade)
-  student    StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
-  recordedBy User?          @relation(fields: [recordedById], references: [id], onDelete: SetNull)
-
-  @@unique([lessonId, studentId])
-  @@unique([schoolId, id])
-  @@index([schoolId, studentId])
-  @@map("attendance")
-}
-
-/// What was covered in a lesson (one per lesson). Visible to students.
+/// The lesson log (one per lesson): what was covered and the homework for
+/// the next lesson. Visible to the group's students. Either text may be
+/// empty, never both — a log with both empty is deleted (CHECK constraint).
 model LessonLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  schoolId  String   @map("school_id") @db.Uuid
-  lessonId  String   @map("lesson_id") @db.Uuid
-  authorId  String   @map("author_id") @db.Uuid
-  content   String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  lessonId    String   @map("lesson_id") @db.Uuid
+  /// Who wrote the log first.
+  authorId    String   @map("author_id") @db.Uuid
+  /// Who saved it last ("Last saved by"); `updatedAt` is the conflict check.
+  updatedById String   @map("updated_by_id") @db.Uuid
+  /// "What we covered", ≤ 5,000 characters.
+  content     String?
+  /// Homework for the next lesson, ≤ 2,000 characters.
+  homework    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  school School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  lesson Lesson         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Cascade)
-  author TeacherProfile @relation(fields: [schoolId, authorId], references: [schoolId, id], onDelete: Restrict)
+  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  lesson    Lesson         @relation(fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Cascade)
+  author    TeacherProfile @relation("LessonLogAuthor", fields: [schoolId, authorId], references: [schoolId, id], onDelete: Restrict)
+  updatedBy TeacherProfile @relation("LessonLogEditor", fields: [schoolId, updatedById], references: [schoolId, id], onDelete: Restrict)
 
   @@unique([schoolId, lessonId])
   @@unique([schoolId, id])
   @@map("lesson_logs")
-}
-
-/// Homework for a group, set in one lesson and due by a lesson or a date.
-model Assignment {
-  id          String    @id @default(uuid()) @db.Uuid
-  schoolId    String    @map("school_id") @db.Uuid
-  groupId     String    @map("group_id") @db.Uuid
-  lessonId    String?   @map("lesson_id") @db.Uuid
-  dueLessonId String?   @map("due_lesson_id") @db.Uuid
-  dueDate     DateTime? @map("due_date") @db.Date
-  authorId    String    @map("author_id") @db.Uuid
-  title       String
-  description String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  group     Group          @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Cascade)
-  lesson    Lesson?        @relation("AssignmentSetIn", fields: [schoolId, lessonId], references: [schoolId, id], onDelete: Restrict)
-  dueLesson Lesson?        @relation("AssignmentDueIn", fields: [schoolId, dueLessonId], references: [schoolId, id], onDelete: Restrict)
-  author    TeacherProfile @relation(fields: [schoolId, authorId], references: [schoolId, id], onDelete: Restrict)
-
-  @@unique([schoolId, id])
-  @@index([schoolId, groupId])
-  @@map("assignments")
 }
 
 /// INTERNAL note by a teacher about a student, group or lesson. Readable by
@@ -632,6 +579,8 @@ model TeacherNote {
 
   @@unique([schoolId, id])
   @@index([schoolId, studentId])
+  @@index([schoolId, groupId])
+  @@index([schoolId, lessonId])
   @@map("teacher_notes")
 }
 

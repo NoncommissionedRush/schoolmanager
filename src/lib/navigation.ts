@@ -26,8 +26,7 @@ export type NavIcon =
   | "chart-column"
   | "settings"
   | "notebook-pen"
-  | "clipboard-list"
-  | "list-checks";
+  | "clipboard-list";
 
 export type NavLabel = Exclude<keyof Messages["nav"], "section">;
 export type NavSection = keyof Messages["nav"]["section"];
@@ -171,18 +170,13 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       phase: 1,
       section: "teaching",
     },
+    // Homework lives in the lesson log (lessons.md §5.4): no separate item.
     {
       label: "lessonLog",
       href: "/teacher/lessons",
       icon: "notebook-pen",
       phase: 2,
-      section: "teaching",
-    },
-    {
-      label: "homework",
-      href: "/teacher/homework",
-      icon: "clipboard-list",
-      phase: 2,
+      enabled: true,
       section: "teaching",
     },
     {
@@ -231,12 +225,6 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       icon: "calendar-x",
       phase: 3,
       tab: true,
-    },
-    {
-      label: "attendance",
-      href: "/student/attendance",
-      icon: "list-checks",
-      phase: 2,
     },
     { label: "payments", href: "/student/payments", icon: "wallet", phase: 6 },
   ],

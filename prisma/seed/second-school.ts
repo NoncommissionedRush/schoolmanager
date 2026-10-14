@@ -2,7 +2,7 @@ import type { PrismaClient } from "../../src/generated/prisma/client";
 import { toSchoolSlug } from "../../src/server/schools";
 import { generateLessonOccurrences } from "../../src/server/scheduling/generate-lessons";
 import { fromIsoDate } from "../../src/server/scheduling/time";
-import { DEMO_TODAY, LESSON_GENERATION_END } from "./data";
+import { LESSON_GENERATION_END } from "./data";
 import { seedId } from "./ids";
 
 // A second, deliberately small school. Nothing in the demo UI needs it: it
@@ -37,6 +37,8 @@ export const SECOND_NAMES = {
   term: "Northbridge Fall Term",
   holiday: "Northbridge Founders Day",
   teacherNote: "NORTHBRIDGE-INTERNAL-NOTE: Bianca needs a level check.",
+  lessonLog: "Northbridge lesson log: Dativ und Akkusativ",
+  homework: "Northbridge homework: Arbeitsbuch S. 12",
   availabilityNote: "Northbridge staff meeting",
 } as const;
 
@@ -256,8 +258,7 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
       roomId: o.roomId,
       startsAt: o.startsAt,
       endsAt: o.endsAt,
-      status:
-        o.date < DEMO_TODAY ? ("COMPLETED" as const) : ("SCHEDULED" as const),
+      status: "SCHEDULED" as const,
     };
     await db.lesson.upsert({
       where: { id: lessonId },
@@ -286,6 +287,23 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
     where: { id: noteId },
     update: note,
     create: { id: noteId, ...note },
+  });
+
+  const log = {
+    authorId: teacher.id,
+    updatedById: teacher.id,
+    content: SECOND_NAMES.lessonLog,
+    homework: SECOND_NAMES.homework,
+  };
+  await db.lessonLog.upsert({
+    where: { schoolId_lessonId: { schoolId, lessonId: lessonIds[0] } },
+    update: log,
+    create: {
+      id: id("lesson-log", lessonIds[0]),
+      schoolId,
+      lessonId: lessonIds[0],
+      ...log,
+    },
   });
 
   console.log(

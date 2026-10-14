@@ -28,6 +28,10 @@ The project's access rules are enforced by tests, not only by review:
 - **Teacher notes** (`teacher-notes.spec.ts`): no note body reaches a
   student through any page they can open, the RSC payload inlined in it, or
   an API route.
+- **Teacher lessons** (`teacher-lessons.spec.ts`): a teacher opens only the
+  lessons they teach or substitute — anything else, also another school's,
+  renders "not found" — and the lesson page actions refuse those lessons
+  without changing anything; students and admins get the forbidden page.
 
 Leak checks read the raw server response (`serverResponse` in
 `fixtures.ts`), which includes the RSC payload, so data the client receives

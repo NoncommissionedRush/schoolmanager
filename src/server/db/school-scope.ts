@@ -46,7 +46,6 @@ type Where = Record<string, unknown>;
  */
 export const USER_RELATION_FIELDS: ReadonlySet<string> = new Set([
   "user",
-  "recordedBy",
   "reportedBy",
   "reviewedBy",
   "actor",

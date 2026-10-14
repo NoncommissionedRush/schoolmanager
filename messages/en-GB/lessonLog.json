@@ -1,0 +1,28 @@
+{
+  "title": "Lesson log",
+  "visibleToStudents": "Students in this group can see this.",
+  "covered": "What we covered",
+  "coveredPlaceholder": "e.g. Unit 4: present perfect vs past simple, speaking practice in pairs.",
+  "homework": "Homework (optional)",
+  "homeworkHint": "What students should prepare for the next lesson.",
+  "homeworkPlaceholder": "e.g. One page essay about your favourite movie.",
+  "save": "Save",
+  "saved": "Lesson log saved.",
+  "lastSaved": "Last saved by {name}, {dateTime}",
+  "notYet": "You can fill this in once the lesson has started.",
+  "remove": {
+    "title": "Remove the lesson log and homework?",
+    "description": "Students will no longer see what was covered or the homework for this lesson.",
+    "confirm": "Remove"
+  },
+  "conflict": "{name} saved this lesson log while you were editing. Copy your text, reload, and save again.",
+  "conflictRemoved": "Someone removed this lesson log while you were editing. Copy your text, reload, and save again.",
+  "tooLong": "Keep this under {max} characters.",
+  "counter": "{count} / {max} characters",
+  "previousHomework": "Homework from the previous lesson ({date})",
+  "saveError": "Couldn't save the lesson log. Your text is still here.",
+  "locked": {
+    "cancelled": "This lesson was cancelled, so its lesson log can't be changed.",
+    "notStarted": "You can fill this in once the lesson has started."
+  }
+}

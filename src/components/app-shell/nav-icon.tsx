@@ -7,7 +7,6 @@ import {
   GraduationCap,
   House,
   LayoutDashboard,
-  ListChecks,
   NotebookPen,
   Presentation,
   Settings,
@@ -42,7 +41,6 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   settings: Settings,
   "notebook-pen": NotebookPen,
   "clipboard-list": ClipboardList,
-  "list-checks": ListChecks,
 };
 
 export function NavIconGlyph({

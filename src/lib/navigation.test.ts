@@ -20,9 +20,11 @@ describe("navigationFor", () => {
       "/admin/levels",
       "/admin/settings",
     ]);
+    // The teacher lesson log (CARM-35) ships ahead of the rest of P2.
     expect(navigationFor("TEACHER", 0).map((i) => i.href)).toEqual([
       "/teacher",
       "/teacher/timetable",
+      "/teacher/lessons",
     ]);
     expect(navigationFor("STUDENT", 0).map((i) => i.href)).toEqual([
       "/student",

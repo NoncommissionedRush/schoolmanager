@@ -312,9 +312,6 @@ async function loadSyncLessons(
       log: { select: { id: true } },
       _count: {
         select: {
-          attendance: true,
-          assignmentsSet: true,
-          assignmentsDue: true,
           teacherNotes: true,
           absenceReports: true,
           replacementsFrom: true,

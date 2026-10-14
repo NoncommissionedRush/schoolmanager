@@ -3,7 +3,8 @@
 Management system for a language school (designed to support other school
 types later). Three roles: **admin**, **teacher** and **student**. Covers
 timetables (recurring slots → dated lessons), group and 1-on-1 lessons,
-attendance, lesson logs, absences and replacement lessons.
+lesson logs with homework, internal teacher notes, absences and replacement
+lessons.
 
 **Stack:** Next.js (App Router) + TypeScript (strict), PostgreSQL + Prisma,
 Tailwind CSS + shadcn/ui, next-intl, Vitest, Playwright. Package manager: pnpm.

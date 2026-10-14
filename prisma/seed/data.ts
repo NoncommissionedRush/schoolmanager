@@ -456,3 +456,13 @@ export const LESSON_LOG_TOPICS = [
   "Modal verbs for advice (should, ought to); role-play at the doctor's.",
   "Revision of unit 2; mini quiz and error correction.",
 ];
+
+/** Homework set in the seeded lesson logs; `null` = no homework that day. */
+export const LESSON_HOMEWORK = [
+  "Workbook p. 18, ex. 1–4.",
+  null,
+  "Write 10 sentences about your weekend using the past simple.",
+  "One page essay about your favourite movie.",
+  null,
+  "Listening: podcast episode 3 and the questions on the handout.",
+];

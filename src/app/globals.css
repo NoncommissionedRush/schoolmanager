@@ -67,6 +67,9 @@
   --color-lesson-cancelled-surface: var(--lesson-cancelled-surface);
   --color-lesson-cancelled-text: var(--lesson-cancelled-text);
   --color-lesson-now: var(--lesson-now);
+  --color-internal: var(--internal);
+  --color-internal-surface: var(--internal-surface);
+  --color-internal-band: var(--internal-band);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -133,6 +136,10 @@
   --lesson-cancelled-surface: #f8fafc;
   --lesson-cancelled-text: #475569;
   --lesson-now: #dc2626;
+  /* Internal TeacherNotes (lessons.md §4): dashed border + dark band. */
+  --internal: #475569;
+  --internal-surface: #f8fafc;
+  --internal-band: #1e293b;
 
   --sidebar: #ffffff;
   --sidebar-foreground: #0f172a;
