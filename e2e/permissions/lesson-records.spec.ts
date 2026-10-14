@@ -373,8 +373,12 @@ test("the cases cover every teacher server action; students have none", () => {
   const declared = serverActionsIn("src/app/teacher");
   expect(declared.length).toBeGreaterThan(0);
   expect(declared.filter((key) => !covered.has(key))).toEqual([]);
-  // Students write nothing (lessons.md §2): no server action of their own.
-  expect(serverActionsIn("src/app/student")).toEqual([]);
+  // Students write no lesson records (lessons.md §2). Their only action is
+  // cancelling their own lesson (absences.md §5.2, CARM-42), which takes no
+  // log, homework or note; the Phase 3 suite (CARM-44) covers it.
+  expect(serverActionsIn("src/app/student")).toEqual([
+    "src/app/student/absences/actions.ts#cancelLessonAction",
+  ]);
 });
 
 test.describe("lesson records › students", () => {

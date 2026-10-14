@@ -16,6 +16,7 @@ const ROOMS = "src/app/admin/settings/rooms/actions.ts";
 const TERMS = "src/app/admin/settings/terms/actions.ts";
 const TIMETABLE = "src/app/admin/timetable/actions.ts";
 const LESSONS = "src/app/admin/lessons/actions.ts";
+const ABSENCES = "src/app/admin/absences/actions.ts";
 
 export type ActionCase = {
   name: string;
@@ -413,6 +414,29 @@ export function crossSchoolCases(
       name: "load earlier internal notes",
       action: [LESSONS, "loadEarlierNotesAction"],
       args: [target.lesson, 0],
+    },
+    // Absences (CARM-42)
+    {
+      name: "list a student's lessons to report an absence",
+      action: [ABSENCES, "loadReportableLessonsAction"],
+      args: [target.student],
+    },
+    {
+      name: "report an absence for their student",
+      action: [ABSENCES, "reportAbsenceAction"],
+      args: [
+        { studentId: target.student, lessonId: target.lesson, reason: null },
+      ],
+    },
+    {
+      name: "report an absence for own student on their lesson",
+      action: [ABSENCES, "reportAbsenceAction"],
+      args: [{ studentId: own.student, lessonId: target.lesson, reason: null }],
+    },
+    {
+      name: "delete an absence",
+      action: [ABSENCES, "deleteAbsenceAction"],
+      args: [target.absence, []],
     },
   ];
 }

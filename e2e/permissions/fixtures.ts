@@ -111,6 +111,7 @@ export async function schoolIds(slug: string) {
     holiday: await first("holidays"),
     availability: await first("teacher_availability"),
     teacherNote: await first("teacher_notes"),
+    absence: await first("absence_reports"),
   };
 }
 

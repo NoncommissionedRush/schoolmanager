@@ -6,6 +6,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { hashPassword } from "../src/server/auth/password";
 import { toSchoolSlug } from "../src/server/schools";
 import { generateLessonOccurrences } from "../src/server/scheduling/generate-lessons";
+import { creditExpiry } from "../src/server/scheduling/replacements";
 import { fromIsoDate } from "../src/server/scheduling/time";
 import {
   ADMIN,
@@ -507,14 +508,20 @@ async function main() {
         studentId: sId,
         reportedById: studentUserIds.get(sId)!,
         reason: a.reason,
-        reportedAt: new Date(`${a.date}T06:00:00Z`),
+        // Two days ahead: before the default 24-hour cutoff, so it earns a credit.
+        createdAt: new Date(lesson.startsAt.getTime() - 2 * 86_400_000),
       },
     });
+    const { expiresAt } = creditExpiry(lesson.startsAt, 30, SCHOOL.timezone);
     const credit = await db.makeupCredit.upsert({
       where: {
         studentId_sourceLessonId: { studentId: sId, sourceLessonId: lesson.id },
       },
-      update: { status: a.replacement ? "USED" : "AVAILABLE" },
+      update: {
+        status: a.replacement ? "USED" : "AVAILABLE",
+        expiresAt,
+        usedAt: a.replacement ? report.createdAt : null,
+      },
       create: {
         id: id("makeup-credit", a.key),
         schoolId,
@@ -522,7 +529,8 @@ async function main() {
         sourceLessonId: lesson.id,
         absenceReportId: report.id,
         status: a.replacement ? "USED" : "AVAILABLE",
-        expiresAt: fromIsoDate(TERM.endDate),
+        expiresAt,
+        usedAt: a.replacement ? report.createdAt : null,
       },
     });
     if (a.replacement) {
@@ -546,6 +554,26 @@ async function main() {
         create: { id: rowId, ...data },
       });
     }
+  }
+
+  // A late cancellation the office took by phone: no credit (after the
+  // 24-hour cutoff), "via office" on the teacher's Students card.
+  {
+    const lesson = lessonOf("b1-evening", "2026-10-21");
+    const sId = membersByGroup.get(groupIds.get("b1-evening")!)![1];
+    await db.absenceReport.upsert({
+      where: { lessonId_studentId: { lessonId: lesson.id, studentId: sId } },
+      update: {},
+      create: {
+        id: id("absence", "late-by-office"),
+        schoolId,
+        lessonId: lesson.id,
+        studentId: sId,
+        reportedById: admin.id,
+        reason: "Phoned the office: ill",
+        createdAt: new Date(lesson.startsAt.getTime() - 3 * 3_600_000),
+      },
+    });
   }
 
   // --- Audit log ------------------------------------------------------------
