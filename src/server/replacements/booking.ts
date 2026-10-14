@@ -23,11 +23,8 @@ import {
   toZonedDateTime,
   validUntilOf,
 } from "@/server/scheduling";
-import {
-  lockTimetable,
-  type SchoolDb,
-  type Tx,
-} from "@/server/timetable/service";
+import { lockTimetable } from "@/server/timetable/lock";
+import type { SchoolDb, Tx } from "@/server/timetable/service";
 import { isMemberAt, membersAt } from "@/server/timetable/week";
 
 import { ACTIVE_REPLACEMENT, releaseSpentCredit } from "./release";
@@ -751,6 +748,69 @@ async function reviewBooking(
     booking.id,
     now,
   );
+}
+
+/**
+ * Slot split (§5 _Slot splits_): moves the active bookings into each old
+ * lesson onto its successor when `reviewReplacement` on the successor has
+ * no failing reasons, oldest booking first so seats go first come, first
+ * served. Bookings left behind are released when the old lesson is
+ * cancelled. Runs inside the timetable service's locked transaction, after
+ * the absences were moved. Audited as `replacement.moved` (no actor: the
+ * admin edited the slot, not the booking).
+ */
+export async function carryOverBookings(
+  tx: Tx,
+  schoolId: string,
+  moves: readonly { fromLessonId: string; toLessonId: string }[],
+  now: Date,
+): Promise<{ moved: string[]; left: string[] }> {
+  const moved: string[] = [];
+  const left: string[] = [];
+  for (const { fromLessonId, toLessonId } of moves) {
+    const [bookings, target] = await Promise.all([
+      tx.replacementRequest.findMany({
+        where: {
+          targetLessonId: fromLessonId,
+          status: { in: [...ACTIVE_REPLACEMENT] },
+        },
+        select: bookingSelect,
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
+      tx.lesson.findFirstOrThrow({
+        where: { id: toLessonId },
+        select: targetSelect,
+      }),
+    ]);
+    for (const booking of bookings) {
+      const reasons = await reviewBooking(tx, booking, target, now);
+      if (reasons.length > 0) {
+        left.push(booking.id);
+        continue;
+      }
+      await tx.replacementRequest.update({
+        where: { id: booking.id },
+        data: { targetLessonId: toLessonId },
+      });
+      await tx.auditLog.create({
+        data: {
+          schoolId,
+          actorId: null,
+          action: "replacement.moved",
+          entityType: "ReplacementRequest",
+          entityId: booking.id,
+          data: {
+            reason: "SLOT_SPLIT",
+            previousTargetLessonId: fromLessonId,
+            targetLessonId: toLessonId,
+            studentId: booking.studentId,
+          },
+        },
+      });
+      moved.push(booking.id);
+    }
+  }
+  return { moved, left };
 }
 
 export type ReviewResult =

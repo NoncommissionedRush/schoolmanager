@@ -7,9 +7,12 @@ import {
   type LessonSyncInput,
   type LessonSyncPlan,
   planLessonSync,
+  planSlotCarryOver,
   planSlotEdit,
+  type SlotCarryOverInput,
 } from "./lesson-sync";
 import { h, slot, TERM, TZ } from "./testing/fixtures";
+import { addDays } from "./time";
 import type { HolidayInfo, SlotInfo } from "./types";
 
 /** Stored lessons for `slots`, as publishing would create them. */
@@ -264,5 +267,115 @@ describe("planSlotEdit", () => {
 
   it("refuses a whole-slot edit once lessons exist", () => {
     expect(() => planSlotEdit(monday, {}, null, 3)).toThrow();
+  });
+});
+
+describe("planSlotCarryOver", () => {
+  // Monday lessons 10-12, 10-19, 10-26, 11-02; split from Wednesday 10-21.
+  const D = "2026-10-21";
+  const ended = { ...monday, validUntil: addDays(D, -1) };
+  const old = stored([monday]);
+  const carry = (
+    nextExtra: Partial<SlotInfo>,
+    extra: Partial<SlotCarryOverInput> = {},
+  ) =>
+    planSlotCarryOver({
+      ended,
+      next: slot("next", { validFrom: D, ...nextExtra }),
+      term: TERM,
+      holidays: [],
+      lessons: old,
+      cancelling: ["mon@2026-10-26"],
+      timeZone: TZ,
+      from: D,
+      ...extra,
+    });
+
+  it("pairs a cancelled lesson with the same week's new occurrence", () => {
+    expect(carry({ startMinute: h(11), endMinute: h(12) })).toEqual([
+      {
+        fromLessonId: "mon@2026-10-26",
+        toSlotId: "next",
+        toDate: "2026-10-26",
+        cancelSuccessor: null,
+      },
+    ]);
+    // Monday → Thursday stays in the same ISO week.
+    expect(carry({ weekday: 4 })).toMatchObject([{ toDate: "2026-10-29" }]);
+  });
+
+  it("has no successor when the new weekday falls before the split date", () => {
+    // A Friday slot moved to Monday from Wednesday 10-21: the Friday 10-23
+    // lesson's week has its Monday (10-19) before the split.
+    const friday = slot("mon", { weekday: 5 });
+    const fridays = stored([friday]);
+    expect(
+      carry(
+        { weekday: 1 },
+        {
+          ended: { ...friday, validUntil: addDays(D, -1) },
+          lessons: fridays,
+          cancelling: ["mon@2026-10-23", "mon@2026-10-30"],
+        },
+      ),
+    ).toEqual([
+      {
+        fromLessonId: "mon@2026-10-30",
+        toSlotId: "next",
+        toDate: "2026-10-26",
+        cancelSuccessor: null,
+      },
+    ]);
+  });
+
+  it("creates the successor of a cancelled 1-on-1 cancelled the same way", () => {
+    const lessons = old.map((l) =>
+      l.id === "mon@2026-11-02"
+        ? {
+            ...l,
+            status: "CANCELLED" as const,
+            cancelReason: "STUDENT_CANCELLED",
+          }
+        : l.id === "mon@2026-10-26"
+          ? { ...l, status: "CANCELLED" as const, cancelReason: "RESCHEDULED" }
+          : l,
+    );
+    expect(carry({ weekday: 2 }, { lessons, cancelling: [] })).toEqual([
+      {
+        fromLessonId: "mon@2026-10-26",
+        toSlotId: "next",
+        toDate: "2026-10-27",
+        cancelSuccessor: "RESCHEDULED",
+      },
+      {
+        fromLessonId: "mon@2026-11-02",
+        toSlotId: "next",
+        toDate: "2026-11-03",
+        cancelSuccessor: "STUDENT_CANCELLED",
+      },
+    ]);
+    // Cancelled for another reason (a holiday, the school): nothing follows.
+    const holiday = lessons.map((l) => ({ ...l, cancelReason: "HOLIDAY" }));
+    expect(carry({}, { lessons: holiday, cancelling: [] })).toEqual([]);
+  });
+
+  it("carries nothing to a holiday, a started lesson or another group", () => {
+    const holidays = [
+      {
+        id: "hol",
+        name: "Break",
+        termId: null,
+        startDate: "2026-10-26",
+        endDate: "2026-10-26",
+      },
+    ];
+    expect(carry({}, { holidays })).toEqual([]);
+    expect(carry({}, { now: new Date("2026-10-26T08:00:00Z") })).toEqual([]);
+    expect(carry({ groupId: "g2" })).toEqual([]);
+  });
+
+  it("ignores lessons the split doesn't cancel and the old slot's past", () => {
+    expect(carry({}, { cancelling: [] })).toEqual([]);
+    expect(carry({}, { cancelling: ["mon@2026-10-19"] })).toEqual([]);
   });
 });
