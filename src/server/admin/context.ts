@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import type { Viewer } from "@/server/auth/access";
 import { requireRole } from "@/server/auth/session";
 import { scopeToSchool } from "@/server/db/school-scope";
+import { GeneratorError } from "@/server/timetable/generator-service";
 import { SchedulingError } from "@/server/timetable/service";
 
 import { type ActionResult, AdminError, msg, toFailure } from "./result";
@@ -28,8 +29,8 @@ export async function adminContext(): Promise<AdminContext> {
 
 /**
  * Runs an admin server action: checks the role, then maps refusals from the
- * services (`AdminError`, `SchedulingError`) to an `ActionResult`. Anything
- * else is a bug and propagates.
+ * services (`AdminError`, `SchedulingError`, `GeneratorError`) to an
+ * `ActionResult`. Anything else is a bug and propagates.
  */
 export async function runAdminAction<T>(
   action: (context: AdminContext) => Promise<ActionResult<T>>,
@@ -39,6 +40,12 @@ export async function runAdminAction<T>(
     return await action(context);
   } catch (error) {
     if (error instanceof AdminError) return toFailure(error);
+    if (error instanceof GeneratorError) {
+      return {
+        ok: false,
+        formError: msg(`scheduling.generator.errors.${error.code}`),
+      };
+    }
     if (error instanceof SchedulingError) {
       return {
         ok: false,

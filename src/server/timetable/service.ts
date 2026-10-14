@@ -4,6 +4,7 @@
 // them in one transaction per action. Callers check `requireRole("ADMIN")`
 // first and pass `getSchoolScopedDb()`. See docs/architecture/scheduling.md.
 
+import type { Prisma } from "@/generated/prisma/client";
 import type { scopeToSchool } from "@/server/db/school-scope";
 import {
   type CarryOverResult,
@@ -77,7 +78,7 @@ export type LessonChanges = {
 // Loading
 // ---------------------------------------------------------------------------
 
-type Loaded = {
+export type Loaded = {
   context: SchedulingContext;
   term: SchedulingContext["terms"][number] & { publishedAt: Date | null };
   schoolId: string;
@@ -87,7 +88,7 @@ type Loaded = {
 const iso = (date: Date) => toIsoDate(date);
 const isoOrNull = (date: Date | null) => (date ? toIsoDate(date) : null);
 
-function toSlotInfo(slot: {
+export function toSlotInfo(slot: {
   id: string;
   termId: string;
   groupId: string;
@@ -118,7 +119,7 @@ function toSlotInfo(slot: {
  * overlapping it, with their slots, lessons and holidays, plus the school's
  * groups, rooms, people and availability.
  */
-async function load(tx: Tx, termId: string, now: Date): Promise<Loaded> {
+export async function load(tx: Tx, termId: string, now: Date): Promise<Loaded> {
   const term = await tx.term.findUnique({ where: { id: termId } });
   if (!term) throw new SchedulingError("NOT_FOUND", `Term ${termId} not found`);
   const { school, context } = await loadContext(
@@ -326,7 +327,7 @@ async function loadContext(tx: Tx, from: Date, to: Date) {
   };
 }
 
-async function inTransaction<T>(
+export async function inTransaction<T>(
   db: SchoolDb,
   fn: (tx: Tx, schoolId: string) => Promise<T>,
 ): Promise<T> {
@@ -367,12 +368,20 @@ async function loadSyncLessons(
   from: IsoDate,
   slotIds?: string[],
 ): Promise<ExistingLesson[]> {
+  return loadExistingLessons(tx, {
+    termId,
+    timetableSlotId: slotIds ? { in: slotIds } : { not: null },
+    occurrenceDate: { gte: fromIsoDate(from) },
+  });
+}
+
+/** Lessons matching `where`, with dependents flagged. */
+export async function loadExistingLessons(
+  tx: Tx,
+  where: Prisma.LessonWhereInput,
+): Promise<ExistingLesson[]> {
   const rows = await tx.lesson.findMany({
-    where: {
-      termId,
-      timetableSlotId: slotIds ? { in: slotIds } : { not: null },
-      occurrenceDate: { gte: fromIsoDate(from) },
-    },
+    where,
     select: {
       id: true,
       termId: true,
@@ -410,7 +419,7 @@ async function loadSyncLessons(
   }));
 }
 
-async function applyPlan(
+export async function applyPlan(
   tx: Tx,
   schoolId: string,
   termId: string,
@@ -459,7 +468,7 @@ async function applyPlan(
 }
 
 /** Reconciles lessons of `slots` (all of them belong to `loaded.term`) from `from` on. */
-async function syncSlots(
+export async function syncSlots(
   tx: Tx,
   loaded: Loaded,
   slots: SlotInfo[],
@@ -492,7 +501,10 @@ async function syncSlots(
   );
 }
 
-const addChanges = (a: LessonChanges, b: LessonChanges): LessonChanges => ({
+export const addChanges = (
+  a: LessonChanges,
+  b: LessonChanges,
+): LessonChanges => ({
   created: a.created + b.created,
   removed: a.removed + b.removed,
   cancelled: a.cancelled + b.cancelled,
@@ -501,7 +513,7 @@ const addChanges = (a: LessonChanges, b: LessonChanges): LessonChanges => ({
 const maxDate = (a: IsoDate, b: IsoDate) => (a > b ? a : b);
 
 /** Conflict summary stored in the audit log. */
-const auditConflicts = (conflicts: Conflict[]) =>
+export const auditConflicts = (conflicts: Conflict[]) =>
   conflicts.map((c) => ({
     type: c.type,
     key: c.key,
@@ -510,7 +522,7 @@ const auditConflicts = (conflicts: Conflict[]) =>
     params: c.params,
   }));
 
-async function audit(
+export async function audit(
   tx: Tx,
   schoolId: string,
   actor: Actor,
@@ -1080,40 +1092,54 @@ export async function publishTerm(
   termId: string,
   now = new Date(),
 ): Promise<PublishResult> {
-  return inTransaction(db, async (tx, schoolId) => {
-    const loaded = await load(tx, termId, now);
-    const all = checkTimetable(buildCalendar(loaded.context), termId);
-    const blocking = [...all]
-      .map(([slotId, conflicts]) => ({
-        slotId,
-        conflicts: conflicts.filter((c) => c.severity === "blocking"),
-      }))
-      .filter((entry) => entry.conflicts.length > 0);
-    if (blocking.length > 0) return { ok: false, blocking };
+  return inTransaction(db, (tx, schoolId) =>
+    publishTermIn(tx, schoolId, actor, termId, now),
+  );
+}
 
-    const warnings = [...all.values()].reduce((n, list) => n + list.length, 0);
-    if (!loaded.term.publishedAt) {
-      await tx.term.update({
-        where: { id: termId },
-        data: { timetablePublishedAt: now },
-      });
-    }
-    const slots = loaded.context.slots.filter((s) => s.termId === termId);
-    const lessons = await syncSlots(
-      tx,
-      loaded,
-      slots,
-      maxDate(loaded.term.startDate, loaded.today),
-      now,
-      "term",
-    );
-    await audit(tx, schoolId, actor, "timetable.published", "Term", termId, {
-      slots: slots.length,
-      warnings,
-      lessons,
+/**
+ * `publishTerm` inside the caller's transaction, which holds the timetable
+ * lock (applying a generator draft, generator.md §5.6).
+ */
+export async function publishTermIn(
+  tx: Tx,
+  schoolId: string,
+  actor: Actor,
+  termId: string,
+  now: Date,
+): Promise<PublishResult> {
+  const loaded = await load(tx, termId, now);
+  const all = checkTimetable(buildCalendar(loaded.context), termId);
+  const blocking = [...all]
+    .map(([slotId, conflicts]) => ({
+      slotId,
+      conflicts: conflicts.filter((c) => c.severity === "blocking"),
+    }))
+    .filter((entry) => entry.conflicts.length > 0);
+  if (blocking.length > 0) return { ok: false, blocking };
+
+  const warnings = [...all.values()].reduce((n, list) => n + list.length, 0);
+  if (!loaded.term.publishedAt) {
+    await tx.term.update({
+      where: { id: termId },
+      data: { timetablePublishedAt: now },
     });
-    return { ok: true, lessons, warnings };
+  }
+  const slots = loaded.context.slots.filter((s) => s.termId === termId);
+  const lessons = await syncSlots(
+    tx,
+    loaded,
+    slots,
+    maxDate(loaded.term.startDate, loaded.today),
+    now,
+    "term",
+  );
+  await audit(tx, schoolId, actor, "timetable.published", "Term", termId, {
+    slots: slots.length,
+    warnings,
+    lessons,
   });
+  return { ok: true, lessons, warnings };
 }
 
 async function regenerateIn(

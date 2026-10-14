@@ -38,5 +38,64 @@
     "NOT_PUBLISHED": "The timetable of this term is not published yet.",
     "TERM_HAS_LESSONS": "This term already has lessons and cannot be deleted.",
     "SLOT_HAS_LESSONS": "This slot already has lessons. End it instead of deleting it."
+  },
+  "generator": {
+    "status": {
+      "SKIPPED": "Skipped this term",
+      "KEPT": "Keeps its current lessons",
+      "NO_LESSON_TIMES": "No lesson times",
+      "NO_ROOM": "A lesson time has no room",
+      "TIMES_CLASH": "Its times clash",
+      "LEVEL_UNCOVERED": "Nobody teaches its level",
+      "READY": "Ready"
+    },
+    "reasons": {
+      "LEVEL_UNCOVERED": "Nobody teaches {level}.",
+      "NO_TEACHER_FITS": "{teachers, plural, one {The only {level} teacher is} other {All # {level} teachers are}} busy or unavailable.",
+      "REMOVED_BY_ADMIN": "Set to no teacher by an admin.",
+      "TIME_LIMIT": "The run stopped before it reached this group.",
+      "INTERNAL_CHECK_FAILED": "The final check found a clash, so the group was left without a teacher. Please report this."
+    },
+    "teacherReasons": {
+      "ARCHIVED": "Archived",
+      "UNAVAILABLE_WEEKLY": "{weekday, select, 1 {Mon} 2 {Tue} 3 {Wed} 4 {Thu} 5 {Fri} 6 {Sat} other {Sun}} — unavailable ({allDay, select, yes {all day} other {weekly, {time}}})",
+      "BUSY": "{weekday, select, 1 {Mon} 2 {Tue} 3 {Wed} 4 {Thu} 5 {Fri} 6 {Sat} other {Sun}} — teaching {otherGroup} ({otherTime}) on {dateCount, plural, one {# date} other {# dates}}, first on {firstDate}",
+      "TEACHING_IN_DRAFT": "{weekday, select, 1 {Mon} 2 {Tue} 3 {Wed} 4 {Thu} 5 {Fri} 6 {Sat} other {Sun}} — gets {otherGroup} ({otherTime}) in this draft{locked, select, yes { (locked)} other {}}",
+      "OVER_MAX_HOURS": "Over the weekly maximum: {withMinutes} min with this group, {maxMinutes} min allowed (now {currentMinutes} min)"
+    },
+    "suggestions": {
+      "SWAP": "Give this group to {teacher} and {otherGroup} to {otherTeacher}",
+      "ONLY_UNAVAILABLE": "{teacher} is only unavailable: pick anyway or change their availability",
+      "ONLY_MAX_HOURS": "{teacher} is only over their weekly maximum: pick anyway or raise it",
+      "NOT_TEACHING_LEVEL": "{teacher} is free but doesn't teach {level}: pick anyway or add the level"
+    },
+    "notices": {
+      "MIXED_TEACHERS": "Its lessons have different teachers, so it has no current teacher.",
+      "OVER_MAX_HOURS": "{teacher} gets {minutes} min a week, over their maximum of {maxMinutes} min.",
+      "PRE_EXISTING_CONFLICT": "Existing clash between lessons the draft doesn't change. Fix it in the timetable editor."
+    },
+    "pickerSections": {
+      "AVAILABLE": "Available",
+      "UNAVAILABLE": "Unavailable",
+      "NOT_TEACHING_LEVEL": "Doesn't teach {level}",
+      "OVER_MAX_HOURS": "Over max hours",
+      "BUSY": "Busy"
+    },
+    "errors": {
+      "RUN_IN_PROGRESS": "Teachers are being assigned for this term. Wait until the run has finished.",
+      "RUN_INTERRUPTED": "The run stopped unexpectedly. The previous draft is unchanged; run it again.",
+      "DRAFT_CHANGED": "Someone else changed this draft. Review the latest version and try again.",
+      "BLOCKING_CONFLICTS": "Some changes clash with the timetable and can't be saved.",
+      "UNACKNOWLEDGED_CONFLICTS": "Review and confirm the warnings before publishing.",
+      "EFFECTIVE_DATE_PASSED": "The date the changes start on has passed. Pick a later date.",
+      "EFFECTIVE_DATE_OUTSIDE_TERM": "The date the changes start on must be inside the term.",
+      "TERM_PUBLISHED": "This term is already published. Choose how to change it from a date instead.",
+      "TERM_NOT_PUBLISHED": "This term isn't published yet. Assign teachers for the whole term instead.",
+      "TEACHER_ARCHIVED": "A teacher in this draft has been archived. Choose someone else.",
+      "NOTHING_TO_ASSIGN": "No group needs a teacher in this term.",
+      "GROUP_NOT_IN_DRAFT": "This group isn't part of the draft. Run the assignment again to include it.",
+      "LESSON_TIMES_OVERLAP": "Two lesson times of this group overlap.",
+      "INTERNAL_ERROR": "The run failed. Try again; if it keeps failing, report it."
+    }
   }
 }

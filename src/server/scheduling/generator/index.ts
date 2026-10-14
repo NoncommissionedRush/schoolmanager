@@ -12,5 +12,6 @@ export {
   fingerprintPayload,
   GENERATOR_HARD_CONFLICTS,
 } from "./generate";
+export { timeAsSlot } from "./readiness";
 export { compareObjectives } from "./score";
 export * from "./types";

@@ -310,6 +310,16 @@ async function createFixtures() {
 /** Compiled admin actions by `filename#exportedName`. */
 let actions: Map<string, ServerAction>;
 
+/**
+ * Admin action files no page uses yet. Next compiles only the actions a
+ * page imports, so these can't be called over HTTP at all until their
+ * screens exist. Remove each entry when its pages land.
+ */
+const NOT_WIRED_YET = [
+  // Timetable generator: the Assign teachers screens arrive in CARM-56.
+  "src/app/admin/timetable/generator-actions.ts",
+];
+
 async function newSession(browser: Browser, email: string, home: string) {
   const page = await browser.newPage();
   await signIn(page, email);
@@ -434,7 +444,9 @@ test.describe("permission leaks › admin server actions", () => {
 
       test("is refused by every admin action", async () => {
         // Arguments don't matter: the role is checked before anything else.
-        const declared = serverActionsIn("src/app/admin");
+        const declared = serverActionsIn("src/app/admin").filter(
+          (key) => !NOT_WIRED_YET.some((file) => key.startsWith(`${file}#`)),
+        );
         expect(declared.length).toBeGreaterThan(30);
         expect([...actions.keys()].sort()).toEqual(declared);
         for (const [key, { id, path }] of actions) {
