@@ -103,7 +103,8 @@ conflict and every overridable one is acknowledged (`decideSave`); otherwise
 it returns `BLOCKING_CONFLICTS` or `UNACKNOWLEDGED_CONFLICTS` with the fresh
 list, so a clash created meanwhile by someone else is never overridden
 blindly. The audit entry (`timetable_slot.created` / `.updated`) records the
-actor and every overridden conflict (type, key, dates, params).
+actor, every overridden conflict (type, key, dates, params) and the
+admin's optional `reason`.
 
 All timetable writes of a school take one Postgres advisory lock
 (`pg_advisory_xact_lock`), so two admins cannot both pass the check and

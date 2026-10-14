@@ -565,7 +565,11 @@ export type SaveSlotResult =
 export async function saveSlot(
   db: SchoolDb,
   actor: Actor,
-  request: SlotRequest & { acknowledgedConflictKeys?: string[] },
+  request: SlotRequest & {
+    acknowledgedConflictKeys?: string[];
+    /** The admin's optional reason for overriding warnings (audited). */
+    reason?: string;
+  },
   now = new Date(),
 ): Promise<SaveSlotResult> {
   return inTransaction(db, async (tx, schoolId) => {
@@ -593,6 +597,7 @@ export async function saveSlot(
       slot: request.slot,
       effectiveFrom,
       overridden: auditConflicts(decision.overridden),
+      ...(request.reason && { reason: request.reason }),
     };
 
     if (!existing) {
