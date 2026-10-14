@@ -15,6 +15,13 @@ import { Prisma, type PrismaClient } from "@/generated/prisma/client";
  * own scalar fields; relation reads (`include`, relation `select`, `_count`)
  * throw. Load school data from the tenant side instead (e.g.
  * `membership.findMany({ include: { user: true } })`).
+ *
+ * The same rule applies to filters: every `where` (top-level and nested in
+ * `include`/`select`/`_count`) is walked recursively through `AND`/`OR`/`NOT`
+ * and relation filters, and wherever it reaches a `User` it may only test
+ * the user's scalar fields. Otherwise a filter such as
+ * `{ user: { memberships: { some: { schoolId: B } } } }` would answer a
+ * yes/no question about another school.
  */
 
 export class CrossSchoolAccessError extends Error {
@@ -47,9 +54,88 @@ const USER_SCALARS: ReadonlySet<string> = new Set(
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const LOGICAL_OPERATORS: ReadonlySet<string> = new Set(["AND", "OR", "NOT"]);
+
+/** Wrappers of a relation filter: `{ some: {…} }`, `{ is: {…} }`, … */
+const RELATION_FILTERS: ReadonlySet<string> = new Set([
+  "some",
+  "every",
+  "none",
+  "is",
+  "isNot",
+]);
+
+const asList = (value: unknown): unknown[] =>
+  Array.isArray(value) ? value : [value];
+
+/**
+ * Throws if a `where` filter reaches into a `User` (the query root when
+ * `isUser`, or any User relation further down) and tests anything but the
+ * user's own scalar fields. Recurses through `AND`/`OR`/`NOT`, relation
+ * filters (`some`/`every`/`none`/`is`/`isNot`) and nested relations.
+ */
+function assertSafeWhere(
+  where: unknown,
+  isUser: boolean,
+  model: string,
+  operation: string,
+  path: string,
+) {
+  for (const node of asList(where)) {
+    if (!isObject(node)) continue;
+    for (const [key, value] of Object.entries(node)) {
+      const keyPath = `${path}.${key}`;
+      if (LOGICAL_OPERATORS.has(key)) {
+        assertSafeWhere(value, isUser, model, operation, keyPath);
+      } else if (isUser) {
+        if (!USER_SCALARS.has(key)) {
+          throw new CrossSchoolAccessError(
+            model,
+            operation,
+            `(${keyPath}: relation filters on User are not allowed)`,
+          );
+        }
+        // Scalar filters (`{ contains: … }`, `{ not: … }`) can't leave User.
+      } else if (USER_RELATION_FIELDS.has(key)) {
+        assertSafeRelationFilter(value, true, model, operation, keyPath);
+      } else if (isObject(value)) {
+        // Another relation (or a scalar filter, which has no relation keys).
+        assertSafeRelationFilter(value, false, model, operation, keyPath);
+      }
+    }
+  }
+}
+
+/** A relation's filter: either wrapped (`{ some: {…} }`) or a bare `where`. */
+function assertSafeRelationFilter(
+  filter: unknown,
+  isUser: boolean,
+  model: string,
+  operation: string,
+  path: string,
+) {
+  if (!isObject(filter)) return;
+  const wrapped = Object.keys(filter).filter((key) =>
+    RELATION_FILTERS.has(key),
+  );
+  if (wrapped.length > 0) {
+    for (const key of wrapped) {
+      assertSafeWhere(filter[key], isUser, model, operation, `${path}.${key}`);
+    }
+    const rest = Object.fromEntries(
+      Object.entries(filter).filter(([key]) => !RELATION_FILTERS.has(key)),
+    );
+    assertSafeWhere(rest, isUser, model, operation, path);
+  } else {
+    assertSafeWhere(filter, isUser, model, operation, path);
+  }
+}
+
 /**
  * Throws if a `User` node — the query root when `isUser`, or any nested
- * `User` relation — reads a relation. Walks `include` and `select` trees.
+ * `User` relation — reads a relation, or if any `where` along the way
+ * filters through a User's relations. Walks `include`, `select` and
+ * `_count` trees.
  */
 function assertNoUserRelationReads(
   node: unknown,
@@ -59,6 +145,9 @@ function assertNoUserRelationReads(
   path: string,
 ) {
   if (!isObject(node)) return;
+  if ("where" in node) {
+    assertSafeWhere(node.where, isUser, model, operation, `${path}.where`);
+  }
   for (const key of ["include", "select"] as const) {
     const fields = node[key];
     if (!isObject(fields)) continue;
@@ -71,6 +160,11 @@ function assertNoUserRelationReads(
           operation,
           `(${fieldPath}: User relations span schools; read them from the tenant side)`,
         );
+      }
+      if (field === "_count") {
+        // `_count: { select: { relation: { where } } }` filters relations.
+        assertNoUserRelationReads(value, false, model, operation, fieldPath);
+        continue;
       }
       assertNoUserRelationReads(
         value,
@@ -245,16 +339,7 @@ function scopeGlobal(
     return a;
   }
   if (model === "User" && READ_OPERATIONS.has(operation)) {
-    for (const key of Object.keys((a.where ?? {}) as Where)) {
-      if (!USER_SCALARS.has(key) && !["AND", "OR", "NOT"].includes(key)) {
-        throw new CrossSchoolAccessError(
-          model,
-          operation,
-          `(where.${key}: relation filters on User are not allowed)`,
-        );
-      }
-    }
-    // Only users who belong to the current school are visible.
+    // `where` was checked by `assertNoUserRelationReads`. Only users who belong to the current school are visible.
     a.where = withExtraCondition(a.where as Where, {
       memberships: { some: { schoolId } },
     });
