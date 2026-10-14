@@ -1120,21 +1120,23 @@ that doc:
   the same. Teachers still can't.
 - **R2 — Late booking cancel** (decision 9). A student can cancel a
   replacement **after** its cutoff, until the lesson starts. The booking
-  becomes `CANCELLED` (reason `STUDENT`) and the credit stays `USED`.
+  becomes `CANCELLED` (reason `STUDENT_LATE`) and the credit stays `USED`.
   `replacements.md` §6 currently says "after that the booking stands". The
   same applies to a rescheduled 1-on-1 after its cutoff: the lesson stays
   scheduled, the student is shown as not coming, and the credit stays used.
 - **R3 — Grace on release** (decision 10): fixed at 7 days, as a constant
   (answers `replacements.md` open question 1).
 
-Two small points to settle in PR #23:
+PR #23 (commit `260fddd`) applies R1–R3 and settles two details the UI
+relies on:
 
-- The review-queue reason for an over-full lesson is `ROOM_FULL` in the §6
-  table, but §5 and the CARM-39 comment say `OVER_CAPACITY`. The UI uses
-  `ROOM_FULL` for both until PR #23 picks one.
-- The teacher's _Not coming_ list shows replacement students who cancelled
-  late (§6.1), so the roster needs those `CANCELLED` replacements as well
-  as the active ones.
+- The reason for an over-full lesson is `ROOM_FULL`, both when booking and
+  in the review queue.
+- A booking cancelled before its cutoff stores `cancelReason` `STUDENT`; one
+  cancelled after it stores `STUDENT_LATE`. The _Late_ badge and "credit
+  spent" read that stored value, so changing the cutoff later doesn't
+  change history. Both show as **Cancelled by student** to admins. The
+  teacher's _Not coming_ list includes `STUDENT_LATE` replacements (§6.1).
 
 ## 13. Owner decisions on this spec (2026-10-14)
 
