@@ -393,9 +393,10 @@ dates, shown in addition) · Slots · Holidays · actions (_Edit_, _Open
 timetable_, _Delete_).
 
 Term dialog: Name (required, unique), Start date, End date (required, end ≥
-start → `terms.error.endBeforeStart`). Overlapping another term → warning,
-not error (`terms.warning.overlap` "Overlaps with {term}. Lessons of both
-terms will run in parallel."). Editing dates of a **published** term:
+start → `terms.error.endBeforeStart`). Overlapping another term → error
+(`terms.error.overlap` "These dates overlap {term}. Terms can't share a
+day.", on the date inside the other term; first and last days count, see
+`data-model.md` "Terms never overlap"). Editing dates of a **published** term:
 the dialog states `terms.impact.datesChanged` "Lessons outside the new dates
 are removed (or cancelled if they have history); new dates get lessons." On
 save the UI calls `regenerateLessons` and shows the result toast
@@ -754,7 +755,7 @@ Namespaces map to files under `messages/en-GB/` (new: `people`, `teachers`,
 | `terms.openTimetable`            | Open timetable                                                                                                                                                     |
 | `terms.error.endBeforeStart`     | The last day must be on or after the first day.                                                                                                                    |
 | `terms.error.cannotRemovePast`   | A published term can't start or end before today.                                                                                                                  |
-| `terms.warning.overlap`          | Overlaps with {term}. Lessons of both terms will run in parallel.                                                                                                  |
+| `terms.error.overlap`            | These dates overlap {term}. Terms can't share a day.                                                                                                               |
 | `terms.impact.datesChanged`      | Lessons outside the new dates are removed (or cancelled if they have history); new dates get lessons.                                                              |
 | `terms.delete.cascade`           | Its {slots, plural, one {# slot} other {# slots}} and {holidays, plural, one {# term holiday} other {# term holidays}} are deleted too. School-wide holidays stay. |
 | `terms.empty.title`              | No terms yet                                                                                                                                                       |

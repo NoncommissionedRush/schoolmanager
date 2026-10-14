@@ -760,10 +760,11 @@ counts: §5.10.
 - **Room archived with running slots**: slots and lessons keep the room, and
   the room keeps being checked for double bookings and capacity. Read-only
   views show the room name as usual; students don't see that it's archived.
-- **Term overlap**: two published terms in the same week → both terms'
-  lessons appear in read-only views; the editor works on one term at a
-  time, but cross-term double bookings are still reported (module checks
-  overlapping dates).
+- **Term overlap**: can't happen — a school's terms never share a day
+  (`data-model.md` "Terms never overlap"). Back-to-back terms in one week
+  both show their lessons in read-only views; the editor works on one term
+  at a time, and cross-term double bookings are still reported (the module
+  checks every term overlapping the checked dates).
 - **Very long names**: blocks truncate with tooltip; details sheet wraps.
 - **Many rooms** (> 8): By-room view scrolls horizontally with a sticky time
   axis; column min-width 140 px.
