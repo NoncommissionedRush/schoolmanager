@@ -44,16 +44,23 @@ x(school_id, id)`. A `Lesson` of school A cannot point at a `Group` of
   midnight** in the school's timezone (`School.timezone`, IANA name). E.g.
   17:30 → `1050`.
 - Concrete `Lesson.startsAt/endsAt` are absolute instants (`timestamptz`).
-  `src/server/timetable/generate-lessons.ts` converts slots to lessons and
+  `src/server/scheduling/generate-lessons.ts` converts slots to lessons and
   keeps local wall-clock time across DST changes.
 - Calendar days (`Term`, `Holiday`, `TeacherAvailability.date`,
-  `Assignment.dueDate`) are `date` columns; ranges are inclusive.
+  `TimetableSlot.validFrom/validUntil`, `Assignment.dueDate`) are `date`
+  columns; ranges are inclusive.
+- `School.teachingWeekdays` (default Mon–Sat) and
+  `School.dayStartMinute`/`dayEndMinute` (default 07:00–21:00) are the
+  school's normal teaching week; the conflict checker warns outside them.
 
 ## Timetable → lessons
 
 `TimetableSlot` is a weekly template (group, teacher, room, weekday, start/end)
-within a `Term`. Lessons are generated per term from the slots, skipping
-`Holiday` days. Generated lessons store the slot's local date in
+within a `Term`, in effect from `validFrom` to `validUntil` (null = term
+bounds). Lessons are generated per term from the slots, skipping `Holiday`
+days (the term's own and the school-wide ones). Editing or ending a slot in a
+published term, conflict checks and lesson regeneration are described in
+[scheduling.md](scheduling.md). Generated lessons store the slot's local date in
 `occurrence_date` and are unique per `(timetable_slot_id, occurrence_date)`,
 so regenerating is idempotent even after a slot or a single lesson has been
 moved to another time (CHECK: generated lessons must have an
@@ -99,6 +106,8 @@ must, and must be covered by tests.
 Prisma does not model CHECK constraints, so these live in
 `prisma/migrations/*_phase1_3_data_model/migration.sql`:
 
+- school teaching weekdays within 1–7 (at least one), day start < day end
+  (in `*_scheduling_slot_lifecycle`)
 - group capacity ≥ 1, and exactly 1 for `ONE_ON_ONE`; room capacity ≥ 1
 - term / holiday `start_date ≤ end_date`
 - slot weekday 1–7, `0 ≤ start_minute < end_minute ≤ 1440`
@@ -114,6 +123,10 @@ Prisma does not model CHECK constraints, so these live in
 Only `User.deletedAt` and `Group.deletedAt` — history (lessons, attendance)
 must survive when a person leaves or a group is closed. Everything else is
 hard-deleted; `onDelete` is `Restrict` wherever a delete would lose history.
+A `Term` can only be deleted while it has no lessons (lessons → term is
+`Restrict`); its slots and its own holidays go with it (`Cascade`). Timetable
+slots are ended (`validUntil`), not deleted, once they have lessons. See
+[scheduling.md](scheduling.md#deleting-terms-and-holidays).
 
 ## ER diagram
 
@@ -178,7 +191,9 @@ for readability. (`VerificationToken` stands alone.)
 "Demo Language School" (Europe/Bratislava): 1 admin, 8 teachers (some with
 weekly/one-off unavailability), 40 students, levels A1–C1, 6 courses, 10 groups
 and 3 1-on-1s, 4 physical rooms + 1 online room, term "Autumn 2026" with
-holidays, a published timetable and lessons generated 2026-09-14 → 2026-11-08.
+holidays (one school-wide), a published timetable (A2 Morning's Thursday slot
+ends on 2026-10-25 and continues on Fridays) and lessons generated
+2026-09-14 → 2026-11-08.
 Lessons before 2026-10-14 are `COMPLETED`; the last two weeks have attendance
 and lesson logs. Also: homework, teacher notes, one substitution, one cancelled
 lesson, absences with makeup credits and two replacements (auto-approved and

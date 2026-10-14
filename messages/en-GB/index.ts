@@ -7,6 +7,7 @@ import errors from "./errors.json";
 import layout from "./layout.json";
 import metadata from "./metadata.json";
 import nav from "./nav.json";
+import scheduling from "./scheduling.json";
 import validation from "./validation.json";
 
 const messages = {
@@ -17,6 +18,7 @@ const messages = {
   layout,
   metadata,
   nav,
+  scheduling,
   validation,
 };
 

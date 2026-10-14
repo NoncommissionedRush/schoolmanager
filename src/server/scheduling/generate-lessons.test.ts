@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   generateLessonOccurrences,
   type SlotTemplate,
+  slotOccurrenceDates,
 } from "./generate-lessons";
 
 const monday: SlotTemplate = {
@@ -118,5 +119,41 @@ describe("generateLessonOccurrences", () => {
       teacherId: "t1",
       roomId: "r1",
     });
+  });
+
+  it("only generates lessons while the slot is in effect", () => {
+    const lessons = generateLessonOccurrences({
+      slots: [
+        { ...monday, validUntil: "2026-10-19" },
+        { ...wednesday, validFrom: "2026-10-27" },
+      ],
+      term,
+      holidays: [],
+      timeZone,
+    });
+    expect(lessons.map((l) => `${l.timetableSlotId}@${l.date}`)).toEqual([
+      "slot-mon@2026-10-12",
+      "slot-mon@2026-10-19",
+      "slot-wed@2026-10-28",
+    ]);
+  });
+});
+
+describe("slotOccurrenceDates", () => {
+  it("lists the slot's weekday within term and validity, minus holidays", () => {
+    expect(
+      slotOccurrenceDates(
+        { weekday: 3, validFrom: "2026-10-14", validUntil: null },
+        term,
+        [{ startDate: "2026-10-21", endDate: "2026-10-21" }],
+      ),
+    ).toEqual(["2026-10-14", "2026-10-28"]);
+    expect(
+      slotOccurrenceDates(
+        { weekday: 3, validFrom: "2026-10-30", validUntil: "2026-10-29" },
+        term,
+        [],
+      ),
+    ).toEqual([]);
   });
 });

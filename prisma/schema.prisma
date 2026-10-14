@@ -83,13 +83,19 @@ enum MakeupCreditStatus {
 // ---------------------------------------------------------------------------
 
 model School {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String   @unique
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String   @unique
   /// IANA timezone used to interpret slot times, e.g. "Europe/Bratislava".
-  timezone  String   @default("Europe/Bratislava")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  timezone         String   @default("Europe/Bratislava")
+  /// ISO weekdays lessons are normally held on (default Mon–Sat). Outside
+  /// them, or outside the day window below, the timetable editor warns.
+  teachingWeekdays Int[]    @default([1, 2, 3, 4, 5, 6]) @map("teaching_weekdays")
+  /// Teaching day window, minutes since midnight (default 07:00–21:00).
+  dayStartMinute   Int      @default(420) @map("day_start_minute")
+  dayEndMinute     Int      @default(1260) @map("day_end_minute")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   memberships         Membership[]
   teacherProfiles     TeacherProfile[]
@@ -408,7 +414,8 @@ model Holiday {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  term   Term?  @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Restrict)
+  /// A term's own holidays go with it; school-wide ones (`termId` null) stay.
+  term   Term?  @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Cascade)
 
   @@unique([schoolId, id])
   @@index([schoolId, startDate])
@@ -446,18 +453,24 @@ model TeacherAvailability {
 // ---------------------------------------------------------------------------
 
 /// Recurring weekly template. Lessons are generated from slots per term.
+/// A slot is in effect from `validFrom` to `validUntil` (inclusive; null =
+/// term start / end). Slots with lessons are never rewritten: an edit ends
+/// the slot and continues with a new one, so past lessons keep their
+/// template. See docs/architecture/scheduling.md.
 model TimetableSlot {
-  id          String   @id @default(uuid()) @db.Uuid
-  schoolId    String   @map("school_id") @db.Uuid
-  termId      String   @map("term_id") @db.Uuid
-  groupId     String   @map("group_id") @db.Uuid
-  teacherId   String   @map("teacher_id") @db.Uuid
-  roomId      String?  @map("room_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  schoolId    String    @map("school_id") @db.Uuid
+  termId      String    @map("term_id") @db.Uuid
+  groupId     String    @map("group_id") @db.Uuid
+  teacherId   String    @map("teacher_id") @db.Uuid
+  roomId      String?   @map("room_id") @db.Uuid
   weekday     Int
-  startMinute Int      @map("start_minute")
-  endMinute   Int      @map("end_minute")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  startMinute Int       @map("start_minute")
+  endMinute   Int       @map("end_minute")
+  validFrom   DateTime? @map("valid_from") @db.Date
+  validUntil  DateTime? @map("valid_until") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   school  School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   term    Term           @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Cascade)
@@ -469,6 +482,7 @@ model TimetableSlot {
   @@unique([schoolId, id])
   @@index([schoolId, termId, weekday])
   @@index([schoolId, teacherId])
+  @@index([schoolId, groupId])
   @@map("timetable_slots")
 }
 
@@ -496,7 +510,9 @@ model Lesson {
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
   school            School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  term              Term            @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Cascade)
+  /// Restrict: lessons carry history (attendance, logs); a term with lessons
+  /// cannot be deleted.
+  term              Term            @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Restrict)
   timetableSlot     TimetableSlot?  @relation(fields: [schoolId, timetableSlotId], references: [schoolId, id], onDelete: Restrict)
   group             Group           @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Restrict)
   teacher           TeacherProfile  @relation("LessonTeacher", fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Restrict)

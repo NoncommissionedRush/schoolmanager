@@ -5,8 +5,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { hashPassword } from "../src/server/auth/password";
 import { toSchoolSlug } from "../src/server/schools";
-import { generateLessonOccurrences } from "../src/server/timetable/generate-lessons";
-import { fromIsoDate } from "../src/server/timetable/time";
+import { generateLessonOccurrences } from "../src/server/scheduling/generate-lessons";
+import { fromIsoDate } from "../src/server/scheduling/time";
 import {
   ADMIN,
   COURSES,
@@ -196,7 +196,7 @@ async function main() {
     const rowId = id("holiday", holiday.key);
     const data = {
       schoolId,
-      termId: term.id,
+      termId: holiday.schoolWide ? null : term.id,
       name: holiday.name,
       startDate: fromIsoDate(holiday.startDate),
       endDate: fromIsoDate(holiday.endDate),
@@ -276,8 +276,15 @@ async function main() {
         weekday: s.weekday,
         startMinute: s.start,
         endMinute: s.end,
+        validFrom: s.validFrom ?? null,
+        validUntil: s.validUntil ?? null,
       };
-      const { id: slotId, ...data } = slot;
+      const { id: slotId, ...fields } = slot;
+      const data = {
+        ...fields,
+        validFrom: slot.validFrom ? fromIsoDate(slot.validFrom) : null,
+        validUntil: slot.validUntil ? fromIsoDate(slot.validUntil) : null,
+      };
       await db.timetableSlot.upsert({
         where: { id: slotId },
         update: { termId: term.id, ...data },
