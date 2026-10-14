@@ -15,6 +15,7 @@ import {
   type SchoolDb,
   type Scope,
 } from "../shared";
+import { hoursToMinutes, type TeacherLevelsInput } from "./levels";
 import { pickCurrentTerm, teacherLoad } from "./load";
 
 /**
@@ -55,7 +56,13 @@ export async function listTeachers(
       orderBy: { user: { name: "asc" } },
       skip: window.skip,
       take: window.take,
-      select: { id: true, color: true, user: userScalars },
+      select: {
+        id: true,
+        color: true,
+        maxMinutesPerWeek: true,
+        user: userScalars,
+        levels: { select: { levelId: true } },
+      },
     }),
     listTerms(db),
     db.teacherProfile.count({ where: { user: { deletedAt: null } } }),
@@ -84,6 +91,8 @@ export async function listTeachers(
       email: profile.user.email,
       color: profile.color,
       archived: !!profile.user.deletedAt,
+      levelIds: profile.levels.map((level) => level.levelId),
+      maxMinutesPerWeek: profile.maxMinutesPerWeek,
       groups: load.get(profile.id)?.groups ?? 0,
       lessonsPerWeek: load.get(profile.id)?.lessonsPerWeek ?? 0,
     })),
@@ -104,8 +113,10 @@ export async function getTeacher(db: SchoolDb, id: string) {
       id: true,
       bio: true,
       color: true,
+      maxMinutesPerWeek: true,
       updatedAt: true,
       user: userScalars,
+      levels: { select: { levelId: true } },
     },
   });
   if (!profile) return null;
@@ -118,6 +129,8 @@ export async function getTeacher(db: SchoolDb, id: string) {
     bio: profile.bio,
     color: profile.color,
     colorName: colorName(profile.color),
+    levelIds: profile.levels.map((level) => level.levelId),
+    maxMinutesPerWeek: profile.maxMinutesPerWeek,
     updatedAt: profile.updatedAt.toISOString(),
   };
 }
@@ -213,3 +226,69 @@ export async function teacherSlots(
 }
 
 export { pickCurrentTerm };
+
+/** Levels in rank order, for the "Levels they teach" card and the list. */
+export async function rankedLevels(db: SchoolDb) {
+  return db.level.findMany({
+    orderBy: { rank: "asc" },
+    select: { id: true, code: true, name: true, archivedAt: true },
+  });
+}
+
+/**
+ * Replaces the levels a teacher teaches and sets their weekly maximum
+ * (timetable-generator.md §5.2). Archived levels already on the teacher
+ * may stay; new ones must be active.
+ */
+export async function saveTeacherLevels(
+  scope: Scope,
+  teacherId: string,
+  input: TeacherLevelsInput,
+) {
+  const { db, schoolId } = scope;
+  return db.$transaction(async (tx) => {
+    const profile = await tx.teacherProfile.findUnique({
+      where: { id: teacherId },
+      select: {
+        id: true,
+        user: { select: { name: true } },
+        levels: { select: { levelId: true } },
+      },
+    });
+    if (!profile) throw notFound();
+    const existing = new Set(profile.levels.map((level) => level.levelId));
+    const levels = await tx.level.findMany({
+      where: { id: { in: input.levelIds } },
+      select: { id: true, archivedAt: true },
+    });
+    const pickable = levels.filter(
+      (level) => !level.archivedAt || existing.has(level.id),
+    );
+    if (pickable.length !== input.levelIds.length) throw notFound();
+    await tx.teacherLevel.deleteMany({ where: { teacherId } });
+    if (input.levelIds.length > 0) {
+      await tx.teacherLevel.createMany({
+        data: input.levelIds.map((levelId) => ({
+          schoolId,
+          teacherId,
+          levelId,
+        })),
+      });
+    }
+    await tx.teacherProfile.update({
+      where: { id: teacherId },
+      data: { maxMinutesPerWeek: hoursToMinutes(input.maxHours) },
+    });
+    await tx.auditLog.create({
+      data: {
+        schoolId,
+        actorId: scope.actor.userId,
+        action: "teacher.levels_updated",
+        entityType: "TeacherProfile",
+        entityId: teacherId,
+        data: { levelIds: input.levelIds, maxHours: input.maxHours },
+      },
+    });
+    return { name: profile.user.name };
+  });
+}

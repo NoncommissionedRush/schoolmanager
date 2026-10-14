@@ -26,7 +26,8 @@ import {
 import { adminContext } from "@/server/admin/context";
 import { parseListParams } from "@/server/admin/list";
 import { schoolToday } from "@/server/admin/shared";
-import { listTeachers } from "@/server/admin/teachers/service";
+import { levelRangeLabel } from "@/server/admin/teachers/levels";
+import { listTeachers, rankedLevels } from "@/server/admin/teachers/service";
 
 import {
   ColorDot,
@@ -42,8 +43,13 @@ async function TeachersPage({ searchParams }: PageProps<"/admin/teachers">) {
   const t = await getTranslations("teachers");
   const tc = await getTranslations("common");
   const list = parseListParams(await searchParams);
-  const { teachers, total, window, activeCount, anyCount, nextColor } =
-    await listTeachers(db, list, schoolToday(viewer.school.timezone));
+  const [
+    { teachers, total, window, activeCount, anyCount, nextColor },
+    levels,
+  ] = await Promise.all([
+    listTeachers(db, list, schoolToday(viewer.school.timezone)),
+    rankedLevels(db),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-screen-2xl flex-col gap-6">
@@ -84,6 +90,7 @@ async function TeachersPage({ searchParams }: PageProps<"/admin/teachers">) {
                     <TableRow>
                       <TableHead>{t("col.name")}</TableHead>
                       <TableHead>{t("col.email")}</TableHead>
+                      <TableHead>{t("levels.column")}</TableHead>
                       <TableHead>{t("col.groups")}</TableHead>
                       <TableHead>{t("col.lessonsPerWeek")}</TableHead>
                       {list.status === "all" && (
@@ -113,6 +120,13 @@ async function TeachersPage({ searchParams }: PageProps<"/admin/teachers">) {
                           </span>
                         </TableCell>
                         <TableCell>{teacher.email}</TableCell>
+                        <TableCell>
+                          {levelRangeLabel(levels, teacher.levelIds) || (
+                            <span className="text-muted-foreground">
+                              {t("levels.empty")}
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell>{teacher.groups}</TableCell>
                         <TableCell>{teacher.lessonsPerWeek}</TableCell>
                         {list.status === "all" && (
