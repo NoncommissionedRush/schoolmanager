@@ -362,7 +362,7 @@ export type GroupTeacherChangeInput = {
   newTeacherId: string;
   /** First date with the new teacher. */
   from: IsoDate;
-  /** Lessons starting at or before this instant are left alone. */
+  /** Lessons starting at or before this instant keep their teacher. */
   now?: Date;
   timeZone: string;
 };
@@ -381,8 +381,8 @@ export type GroupTeacherChangePlan = {
   /**
    * Lessons that move to the new slot of `fromSlotId` (the same slot for
    * `update`), same `occurrenceDate`, whatever their status. `setTeacher`:
-   * SCHEDULED, gets `teacherId` = the new teacher; `clearSubstitute`: the
-   * substitute was the new teacher.
+   * SCHEDULED and not started, gets `teacherId` = the new teacher;
+   * `clearSubstitute`: the substitute was the new teacher.
    */
   repoint: {
     lessonId: string;
@@ -401,12 +401,13 @@ export type GroupTeacherChangePlan = {
 
 /**
  * Gives a group a new teacher from `from` without touching its lessons'
- * time, room or students (generator.md §5.6). Every not-started lesson of
- * the group's slots dated on or after `from` is re-pointed to the new
+ * time, room or students (generator.md §5.6). Every lesson of the group's
+ * slots dated on or after `from` is re-pointed to the new
  * slot, so absences, bookings, credits, notes and cancellations stay on the
  * same row and `planLessonSync` creates no second occurrence for its date.
- * Nothing is cancelled or deleted, and lessons before `from` are left
- * alone. Pure and deterministic: sorted by slot, then date, then id.
+ * Nothing is cancelled or deleted, lessons before `from` are left alone,
+ * and one already started (moved by hand to an earlier time) keeps its
+ * teacher. Pure and deterministic: sorted by slot, then date, then id.
  */
 export function planGroupTeacherChange({
   slots,
@@ -440,11 +441,11 @@ export function planGroupTeacherChange({
 
   for (const slot of changing) {
     const own = sortedLessons.filter((l) => l.timetableSlotId === slot.id);
+    // Every lesson dated from `from` moves, so no second occurrence is
+    // created for its date; one moved by hand to a time that has started
+    // keeps its teacher.
     const moving = own.filter(
-      (l) =>
-        l.occurrenceDate !== null &&
-        l.occurrenceDate >= from &&
-        !started(l.startsAt),
+      (l) => l.occurrenceDate !== null && l.occurrenceDate >= from,
     );
     const nextFrom =
       slot.validFrom && slot.validFrom > from ? slot.validFrom : from;
@@ -461,7 +462,8 @@ export function planGroupTeacherChange({
       });
     }
     for (const lesson of moving) {
-      const scheduled = lesson.status === "SCHEDULED";
+      const scheduled =
+        lesson.status === "SCHEDULED" && !started(lesson.startsAt);
       plan.repoint.push({
         lessonId: lesson.id,
         fromSlotId: slot.id,

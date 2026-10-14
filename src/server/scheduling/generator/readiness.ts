@@ -339,6 +339,9 @@ export function prepare(raw: GeneratorInput): Prepared {
   const fixedSlots = fixedContext.slots;
 
   // Kept live slots of the term count toward their teachers (§2.3).
+  // TODO(generator.md §11 "Kept live minutes"): a slot that is ending and
+  // its successor both count here, and so do a reconsidered group's own
+  // times; safe for rule 5 but it can refuse a teacher who would fit.
   const baselineMinutes = new Map<string, number>();
   const baselineDays = new Map<string, Set<number>>();
   for (const slot of fixedSlots) {

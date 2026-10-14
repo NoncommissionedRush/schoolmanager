@@ -582,6 +582,37 @@ describe("planGroupTeacherChange (generator.md §5.6)", () => {
     expect(sync.cancel).toEqual([]);
   });
 
+  it("re-points a lesson from D moved to a time that has started, keeping its teacher", () => {
+    const early = lessons().map((l) =>
+      l.id === "mon@2026-10-26"
+        ? {
+            ...l,
+            startsAt: new Date("2026-10-20T07:00:00Z"),
+            endsAt: new Date("2026-10-20T08:30:00Z"),
+          }
+        : l,
+    );
+    const before = input({ lessons: early });
+    const plan = planGroupTeacherChange(before);
+    expect(plan.repoint[0]).toEqual({
+      lessonId: "mon@2026-10-26",
+      fromSlotId: "mon",
+      setTeacher: false,
+      clearSubstitute: false,
+    });
+    expect(plan.checkLessons).not.toContain("mon@2026-10-26");
+    const after = applyChange(before.slots, before.lessons, plan);
+    expect(after.lessons.find((l) => l.id === "mon@2026-10-26")).toMatchObject({
+      timetableSlotId: "mon-next",
+      teacherId: "t1",
+    });
+    // No second lesson for 26 October.
+    const sync = planLessonSync(
+      base({ slots: after.slots, lessons: after.lessons, from: D, now: NOW }),
+    );
+    expect(sync).toEqual({ create: [], remove: [], cancel: [] });
+  });
+
   it("changes a slot that starts on or after D in place", () => {
     const later = slot("later", { validFrom: "2026-11-02" });
     const plan = planGroupTeacherChange(

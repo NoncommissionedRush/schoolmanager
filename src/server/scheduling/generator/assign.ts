@@ -236,6 +236,10 @@ export function* assign(
     // Eject: take one group out and re-insert every group without a
     // teacher, the ejected one last. Reaches "one out, two in", which the
     // chains of insert can't (they only eject groups that fit elsewhere).
+    // A group with live slots never loses its teacher this way: the
+    // objective counts it like a new group, but its lessons would end (§5.2).
+    const running = (g: number) =>
+      e.groups[g].times.some((t) => t.liveSlotId !== null);
     const waiting = movable.filter(
       (g) => state.teacherOf[g] < 0 && e.eligible[g].length > 0,
     );
@@ -287,7 +291,8 @@ export function* assign(
           );
         }
         insert(state, g, REPAIR_DEPTH, { nodes: REPAIR_NODES }, new Set());
-        if (compareObjectives(state.objective(), before) < 0) {
+        const dropsRunning = running(g) && state.teacherOf[g] < 0;
+        if (!dropsRunning && compareObjectives(state.objective(), before) < 0) {
           state.commit();
           moved = true;
         } else {

@@ -1422,6 +1422,10 @@ async function applyIn(
       (s) => s.termId === termId && s.groupId === group.groupId,
     );
     if (!teacherId) {
+      // Only the admin's "No teacher" ends a running group's lessons
+      // (§5.3); a group nobody could take keeps its slots as they are.
+      const row = assignments.find((a) => a.groupId === group.groupId);
+      if (!row?.locked || row.origin !== "MANUAL") continue;
       const ended = groupSlots
         .filter((s) => ids.has(s.id))
         .map((s) => ({ ...s, validUntil: addDays(D!, -1) }));

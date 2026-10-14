@@ -7,6 +7,7 @@ import {
   h,
   LEVEL_A,
   LEVEL_B,
+  liveSlot,
   lt,
   tch,
 } from "../testing/generator-fixtures";
@@ -384,6 +385,48 @@ describe("generator properties (§6.3)", () => {
       }
     },
     PROPERTY_TEST_TIMEOUT_MS * 2,
+  );
+
+  it(
+    "10. never leaves a running group without a teacher (REPLAN_FROM)",
+    () => {
+      const check = (input: GeneratorInput, label: string) => {
+        const result = assignTeachers(input);
+        for (const group of result.readiness.groups) {
+          if (group.currentTeacherId === null) continue;
+          const a = result.assignments.find((x) => x.groupId === group.groupId);
+          if (!a) continue;
+          expect(a.teacherId, `${label} ${group.groupId}`).not.toBeNull();
+        }
+      };
+      for (const seed of SEEDS) check(publishedInput(seed), `seed ${seed}`);
+      // Small schools where some groups already run, sometimes with a
+      // teacher who no longer fits: eject would like to drop them.
+      let running = 0;
+      for (let seed = 1; seed <= 200; seed++) {
+        const input = smallInstance(2000 + seed);
+        const r = prng(seed);
+        const slots = input.groups.flatMap((g) => {
+          if (r.next() < 0.4) return [];
+          running++;
+          const teacher = r.pick(input.teachers).id;
+          return g.lessonTimes.map((t) =>
+            liveSlot(`live-${t.id}`, g.id, teacher, t),
+          );
+        });
+        check(
+          {
+            ...input,
+            mode: "REPLAN_FROM",
+            effectiveFrom: "2026-10-19",
+            context: { ...input.context, slots },
+          },
+          `small ${seed}`,
+        );
+      }
+      expect(running).toBeGreaterThan(300);
+    },
+    PROPERTY_TEST_TIMEOUT_MS,
   );
 
   it("6. accounts for every included group once", () => {

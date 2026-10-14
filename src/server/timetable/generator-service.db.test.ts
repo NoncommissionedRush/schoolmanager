@@ -905,6 +905,13 @@ describe.skipIf(!url)("generator service (database)", () => {
       const view = (await getDraft(db, ids.published, NOW))!;
       expect(view.summary).toMatchObject({ final: { changedTeachers: 0 } });
 
+      // A running group left without a teacher by a run (not by the admin)
+      // keeps its lessons.
+      await client.timetableDraftAssignment.updateMany({
+        where: { draftId, groupId: ids.g1 },
+        data: { teacherId: null, locked: false, origin: "GENERATED" },
+      });
+
       // A pre-existing clash between untouched live slots doesn't refuse.
       const dup = await client.timetableSlot.create({
         data: {
@@ -939,15 +946,74 @@ describe.skipIf(!url)("generator service (database)", () => {
       expect(applied).toMatchObject({
         ok: true,
         counts: {
-          groups: { changed: 0 },
+          groups: { changed: 0, unassigned: 1 },
           slots: { created: 0, ended: 0 },
-          lessons: { repointed: 0, created: 0 },
+          lessons: { repointed: 0, created: 0, removed: 0, cancelled: 0 },
         },
       });
       expect(
         (applied as { preExisting: ApplyIssue[] }).preExisting.length,
       ).toBeGreaterThan(0);
       await client.timetableSlot.delete({ where: { id: dup.id } });
+      expect(
+        await client.timetableSlot.count({
+          where: {
+            groupId: ids.g1,
+            termId: ids.published,
+            validUntil: null,
+          },
+        }),
+      ).toBe(1);
+    });
+
+    it("REPLAN_FROM ends a group's lessons only when the admin sets no teacher", async () => {
+      const { draftId } = await runToEnd({
+        termId: ids.published,
+        mode: "REPLAN_FROM",
+      });
+      const view = (await getDraft(db, ids.published, NOW))!;
+      const saved = await saveAssignment(
+        db,
+        { draftId, version: view.version, groupId: ids.g3, teacherId: null },
+        NOW,
+      );
+      expect(saved.ok).toBe(true);
+      const version = (saved as { draft: { version: number } }).draft.version;
+      const preview = await previewApply(
+        db,
+        actor,
+        { draftId, publish: false },
+        NOW,
+      );
+      const applied = await applyDraft(
+        db,
+        actor,
+        {
+          draftId,
+          version,
+          acknowledgedConflictKeys: keys(preview.issues),
+          publish: false,
+        },
+        NOW,
+      );
+      expect(applied).toMatchObject({
+        ok: true,
+        counts: { groups: { unassigned: 1 }, slots: { ended: 1 } },
+      });
+      const g3 = await client.timetableSlot.findFirstOrThrow({
+        where: { groupId: ids.g3, termId: ids.published, teacherId: ids.cleo },
+      });
+      expect(toIsoDate(g3.validUntil!)).toBe("2026-10-25");
+      expect(
+        await client.lesson.count({
+          where: {
+            groupId: ids.g3,
+            termId: ids.published,
+            status: "SCHEDULED",
+            occurrenceDate: { gte: fromIsoDate(D) },
+          },
+        }),
+      ).toBe(0);
     });
   });
 

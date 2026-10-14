@@ -342,7 +342,9 @@ No new runtime dependency is needed.
    better of the two), the ejected one last. Eject reaches "one out, two
    in", which insert's chains can't: they only eject groups that fit
    elsewhere. Without it the engine missed the oracle's staffing on 10.5 %
-   of the small instances of §6.3 property 9. A move is taken when it
+   of the small instances of §6.3 property 9. Eject never leaves a group
+   with live slots without a teacher (its lessons would end, §5.2). A move
+   is taken when it
    improves the objective (§3.3) lexicographically; passes repeat until one
    makes no move or the budget (§4.4) is used. Only unlocked groups move.
    Deltas are O(1) for the workload keys (two teachers change).
@@ -405,13 +407,13 @@ teach its level, a **reason list per teacher**. Same shape as a
 `Conflict`: code, ICU params (`scheduling.generator.reasons.<CODE>` /
 `.teacherReasons.<CODE>`) and refs to link.
 
-| Group reason            | When                                                                   |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `LEVEL_UNCOVERED`       | No non-archived teacher teaches the level ("Nobody teaches {level}.")  |
-| `NO_TEACHER_FITS`       | Teachers teach the level, none could take it; see the per-teacher list |
-| `REMOVED_BY_ADMIN`      | The admin set "No teacher" and it is locked (§5.3)                     |
-| `TIME_LIMIT`            | The time cap fired before construction reached the group               |
-| `INTERNAL_CHECK_FAILED` | Step 6 found a generator-hard conflict (a bug; never expected)         |
+| Group reason            | When                                                                    |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `LEVEL_UNCOVERED`       | No non-archived teacher teaches the level ("Nobody teaches {level}.")   |
+| `NO_TEACHER_FITS`       | Teachers teach the level, none could take it; see the per-teacher list  |
+| `REMOVED_BY_ADMIN`      | The admin set "No teacher" and it is locked (§5.3)                      |
+| `TIME_LIMIT`            | The time cap (or `maxIterations`) stopped construction before the group |
+| `INTERNAL_CHECK_FAILED` | Step 6 found a generator-hard conflict (a bug; never expected)          |
 
 Per teacher who teaches the level (archived ones too, last), **every**
 reason that applies, in this order:
@@ -1104,7 +1106,9 @@ Details the implementation settled, for review against the rules above:
   its live slots in the fixed context.
 - **Kept live minutes** (§2.3) count every live slot of the term in effect on
   or after the start date, so a slot ending soon and its successor both
-  count until the first one ends.
+  count until the first one ends; in REPLAN_FROM a group's own times
+  double the same way. This errs on the safe side for rule 5 (never over a
+  maximum) but can refuse a teacher who would fit. TODO in `readiness.ts`.
 - **REPLAN_FROM fixed context.** The reconsidered groups' slots end on
   _D_ − 1 and their slot lessons from _D_ leave the context; their ad-hoc
   lessons stay in it (they keep their own time and are re-checked with
@@ -1123,7 +1127,17 @@ Details the implementation settled, for review against the rules above:
 - **Apply.** REPLACE deletes all of the term's editor slots (also those of
   groups not in the draft), then creates one slot per lesson time of each
   assigned group. A slot that starts on or after _D_ and keeps no lesson of
-  its own gets the new teacher in place instead of being split.
+  its own gets the new teacher in place instead of being split. In
+  REPLAN_FROM a group with live slots and no teacher in the draft keeps its
+  slots unless the admin set "No teacher" (locked, `MANUAL`); a group nobody
+  could take (e.g. `MIXED_TEACHERS`) is not ended.
+- **Teacher change.** `planGroupTeacherChange` re-points every lesson of the
+  group's slots dated on or after _D_, also one moved by hand to a time that
+  has already started (it keeps its teacher), so no second occurrence is
+  created for its date.
+- **Verify** strips only assignments the engine chose: locked, fallback
+  and groups still with their current teacher keep their conflicts as
+  warnings (they come from live data).
 - **Measured** (Node 23, Apple Silicon, seeds 1–5, `generator.performance.test.ts`):
   whole run 27–43 ms, eligibility 20–35 ms, 60/60 groups staffed on every
   seed of both variants, workload range below the planted assignment's.

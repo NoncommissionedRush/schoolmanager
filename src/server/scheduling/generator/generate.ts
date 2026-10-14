@@ -268,8 +268,12 @@ export function* assignTeachersSteps(
   yield { phase: "checking", assigned: 0, total: 0, iterations: 0 };
   const analysis = analyse(input, false);
   const { state } = analysis;
-  // Locked and kept (fallback) assignments are not the engine's choice.
-  const generated = (g: number) => !state.locked[g] && !state.fallback[g];
+  // Locked, kept (fallback) and still-current teachers are not the
+  // engine's choice: their conflicts come from live data and are shown.
+  const generated = (g: number) =>
+    !state.locked[g] &&
+    !state.fallback[g] &&
+    !(state.current[g] >= 0 && state.teacherOf[g] === state.current[g]);
 
   let construction: WorkloadSummary | null = null;
   const steps = assign(state, {

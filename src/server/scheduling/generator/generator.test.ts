@@ -599,6 +599,33 @@ describe("published terms (§2.4, §5.2)", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("REPLAN_FROM never takes a running group's teacher away", () => {
+    // Ejecting gA would give t1 both gB and gC (2 groups instead of 1).
+    const a1 = lt("a1", 1, h(9), h(10, 30));
+    const a2 = lt("a2", 3, h(9), h(10, 30));
+    const result = assignTeachers(
+      build(
+        [
+          grp("gA", LEVEL_A, [a1, a2]),
+          grp("gB", LEVEL_A, [lt("b1", 1, h(9), h(10, 30))]),
+          grp("gC", LEVEL_A, [lt("c1", 3, h(9), h(10, 30))]),
+        ],
+        [tch("t1", [LEVEL_A])],
+        {
+          mode: "REPLAN_FROM",
+          effectiveFrom: "2026-10-19",
+          slots: [
+            liveSlot("sA1", "gA", "t1", a1),
+            liveSlot("sA2", "gA", "t1", a2),
+          ],
+        },
+      ),
+    );
+    expect(teacherOf(result, "gA")).toBe("t1");
+    expect(teacherOf(result, "gB")).toBeNull();
+    expect(teacherOf(result, "gC")).toBeNull();
+  });
+
   it("marks mixed teachers", () => {
     const result = assignTeachers(
       build(
