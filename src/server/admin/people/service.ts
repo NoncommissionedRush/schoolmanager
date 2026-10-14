@@ -70,7 +70,7 @@ export async function assertEmailFree(
     );
   }
   if (existing) throw new AdminError(msg("people.error.emailTaken"), "email");
-  // Used in another school (User is global, Q2): same message in v1.
+  // Used in another school: a user belongs to one school only, same message.
   const elsewhere = await users.user.count({
     where: { email, ...(exceptUserId ? { id: { not: exceptUserId } } : {}) },
   });

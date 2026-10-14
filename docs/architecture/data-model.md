@@ -8,10 +8,11 @@ rules that are not obvious from the schema alone.
 - `School` is the tenant. Every other table except `User` and the Auth.js
   tables (`Account`, `VerificationToken`) carries `school_id`
   (indexed via `@@unique([schoolId, id])` and further composite indexes).
-- `User` is global so one person can belong to several schools. What a user
-  may do in a school comes from `Membership` (`ADMIN` / `TEACHER` / `STUDENT`;
-  **one role per user and school** — unique `(school_id, user_id)`, decision
-  2026-10-14). Authorization reads this row, never the existence of a
+- `User` has no `school_id` (sign-in finds the user by email before a school
+  is known), but **every user belongs to exactly one school**: one
+  `Membership` per user (unique `user_id`, decision 2026-10-14, see
+  [multi-school-users.md](multi-school-users.md)). The membership holds the
+  user's role (`ADMIN` / `TEACHER` / `STUDENT`, one role per user). Authorization reads this row, never the existence of a
   Teacher/StudentProfile.
 - **Cross-school references are impossible at the DB level.** Each
   tenant-owned table has a unique `(school_id, id)` and every relation between

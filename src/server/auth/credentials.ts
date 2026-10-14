@@ -14,7 +14,7 @@ export type CredentialUser = {
   id: string;
   passwordHash: string | null;
   deletedAt: Date | null;
-  /** Memberships, oldest first. */
+  /** The user's membership; at most one (unique `Membership.userId`). */
   memberships: { schoolId: string; role: Role }[];
 };
 
@@ -38,8 +38,8 @@ export function normalizeEmail(email: string): string {
  * is "disabled" when soft-deleted or no longer a member of any school (only
  * reported after the password matched).
  *
- * v1 runs one school per deployment, so a user's session school is their
- * oldest membership; choosing between schools at login is P6.
+ * Every user belongs to exactly one school, so the session school is the
+ * school of their only membership.
  */
 export async function verifyCredentials(
   input: { email: string; password: string },

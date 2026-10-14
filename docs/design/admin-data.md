@@ -276,8 +276,8 @@ lesson blocks keep the lesson-type tokens, so color never carries meaning
 alone. Swatches have text names for screen readers ("Teal", "Orange", …).
 
 Email already used by an **archived** user in this school → error with link
-_Restore {name} instead_. Email used in another school (global `User`) → see
-Q2; v1 shows `people.error.emailTaken`.
+_Restore {name} instead_. Email used in another school → `people.error.emailTaken`
+(a user belongs to one school only, see Q2).
 
 ### 6.3 Teacher — detail (`/admin/teachers/[id]`)
 
@@ -930,8 +930,9 @@ Owner decisions (2026-10-14, CARM-22):
 - **Password reset doesn't sign out open sessions:** accepted for v1. Archiving
   does sign the person out (§5.4).
 
-Still open:
+Owner decision (2026-10-14, CARM-33):
 
-- **Q2 — Same person in two schools.** `User` is global and email unique.
-  When an admin adds an email that exists in another school, v1 shows "already
-  used". Fine while there is one school (P6 decides the multi-school flow).
+- **Q2 — Same person in two schools:** not supported. Every user belongs to
+  exactly one school (`docs/architecture/multi-school-users.md`). An email
+  that exists in another school is "already used"; the person needs a
+  different email there.

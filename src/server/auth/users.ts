@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 
 import type { CredentialUser } from "./credentials";
 
-/** Loads what a password sign-in needs; memberships oldest first. */
+/** Loads what a password sign-in needs, including the user's membership. */
 export function findCredentialUser(
   email: string,
 ): Promise<CredentialUser | null> {
@@ -14,10 +14,7 @@ export function findCredentialUser(
       id: true,
       passwordHash: true,
       deletedAt: true,
-      memberships: {
-        select: { schoolId: true, role: true },
-        orderBy: { createdAt: "asc" },
-      },
+      memberships: { select: { schoolId: true, role: true } },
     },
   });
 }

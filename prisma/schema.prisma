@@ -113,8 +113,10 @@ model School {
   @@map("schools")
 }
 
-/// A person. Global (not tenant-owned) so one person can belong to several
-/// schools; per-school roles live in `Membership`.
+/// A person. Not tenant-owned (sign-in looks users up by email before a
+/// school is known), but every user belongs to exactly one school: their
+/// single `Membership` (decision 2026-10-14,
+/// docs/architecture/multi-school-users.md).
 model User {
   id            String    @id @default(uuid()) @db.Uuid
   /// Stored lower-cased; sign-in compares case-insensitively.
@@ -142,8 +144,9 @@ model User {
   @@map("users")
 }
 
-/// A user's role in a school. One role per user and school in v1 (decision
-/// 2026-10-14, docs/design/app-layout.md §9); authorization checks this row,
+/// A user's role in their school. One membership per user: one school and one
+/// role (decisions 2026-10-14, docs/design/app-layout.md §9 and
+/// docs/architecture/multi-school-users.md); authorization checks this row,
 /// never the existence of a Teacher/StudentProfile.
 model Membership {
   id        String   @id @default(uuid()) @db.Uuid
