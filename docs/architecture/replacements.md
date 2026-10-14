@@ -93,8 +93,9 @@ uses the admin reschedule (§7). Audit: `absence.reported` with the actor.
 | Group       | `AbsenceReport` + `MakeupCredit` (usable for a group replacement). The lesson runs for the others.                                                    | `AbsenceReport` only, no credit. Lesson runs.                                               |
 | 1-on-1      | `AbsenceReport` + `MakeupCredit` (usable only to reschedule, §7). The lesson is **cancelled** (`STUDENT_CANCELLED`) so the teacher and room are free. | `AbsenceReport` only, no credit. The lesson stays `SCHEDULED` (the teacher keeps the time). |
 
-- **A rescheduled 1-on-1 lesson never earns a new credit.** If the lesson
-  is the result of a reschedule (§7, `Lesson.rescheduledFromId` set), the
+- **A rescheduled 1-on-1 lesson never extends a credit.** If the lesson is
+  the result of a reschedule (§7, `Lesson.rescheduledFromId` set) and a
+  credit is spent on it (`MakeupCredit.rescheduledLessonId`), the
   student's options before the cutoff are:
   - _Reschedule_ again with the **same** credit, which is cancelled and
     moved as one step.
@@ -107,6 +108,18 @@ uses the admin reschedule (§7). Audit: `absence.reported` with the actor.
   original credit stays `USED`. The teacher's roster lists them as not
   coming (§9). That way repeated cancelling can never move the expiry back
   (§4).
+
+- **An admin-moved lesson with no credit behind it** (admin reschedule,
+  §7) is treated like the regular 1-on-1 it replaces, so moving a lesson
+  never leaves the student worse off. Before the cutoff, cancelling earns a
+  credit as in the table above, but `creditExpiry` is counted from the
+  **chain root**. The chain root is the first lesson reached by following
+  `rescheduledFromId` back, which is the regular lesson the admin moved
+  originally. The credit's `sourceLessonId` is the cancelled lesson. Once
+  that credit is spent on a reschedule, the rule above applies, so a
+  chain mints at most one credit and its expiry can't be stretched by
+  rescheduling. After the cutoff it is the same as any late 1-on-1
+  cancellation.
 
 - A report is **final** in v1: students cannot withdraw it, whoever
   reported it. Withdrawing
@@ -250,7 +263,7 @@ cancelled old lesson, so the student would count again in `seatsTaken` and
 
 An absence belongs to the **weekly occurrence**, not to the row. So in a
 split, every old-slot lesson `L` from D on that is being cancelled or is
-already `STUDENT_CANCELLED` is matched with its **successor** `S`. `S` is
+already `STUDENT_CANCELLED` or `RESCHEDULED` (admin reschedule, §7) is matched with its **successor** `S`. `S` is
 the new slot's occurrence in the same ISO week, in the school's time zone,
 if there is one. A weekday change still matches, because a weekly slot
 has one occurrence per week. `planSlotEdit` returns these pairs as
@@ -258,11 +271,11 @@ has one occurrence per week. `planSlotEdit` returns these pairs as
 deterministic, and I'll add it to `lesson-sync.ts`. In the same
 transaction the service then does the following:
 
-| What `L` has                     | What happens with successor `S`                                                                                                                                                                                                                                                           |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Absence reports (group lesson)   | Moved to `S`, with their credits' `sourceLessonId` and the `originalLessonId` of their replacements. No new credit is earned, and `expiresAt` stays the same. The student is absent from `S`, so they don't count in its seats or their clashes.                                          |
-| `STUDENT_CANCELLED` (1-on-1)     | `S` is created already `CANCELLED` (`STUDENT_CANCELLED`). Absence, credit and the rescheduled lesson's `rescheduledFromId` are moved to `S`. That keeps lesson generation idempotent through the existing `(slot, occurrenceDate)` row, so the student never gets the week's lesson back. |
-| Active replacements **into** `L` | Moved to `S` if `reviewReplacement` on `S` (§6) has no failing reasons. Otherwise they are released (`CANCELLED`, `LESSON_CANCELLED`) and the credit is returned with grace (§4).                                                                                                         |
+| What `L` has                                  | What happens with successor `S`                                                                                                                                                                                                                                                                            |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Absence reports (group lesson)                | Moved to `S`, with their credits' `sourceLessonId` and the `originalLessonId` of their replacements. No new credit is earned, and `expiresAt` stays the same. The student is absent from `S`, so they don't count in its seats or their clashes.                                                           |
+| `STUDENT_CANCELLED` or `RESCHEDULED` (1-on-1) | `S` is created already `CANCELLED` with the same reason as `L`. Any absence and credit on `L`, and the ad-hoc lesson's `rescheduledFromId`, are moved to `S`. That keeps lesson generation idempotent through the existing `(slot, occurrenceDate)` row, so the student never gets the week's lesson back. |
+| Active replacements **into** `L`              | Moved to `S` if `reviewReplacement` on `S` (§6) has no failing reasons. Otherwise they are released (`CANCELLED`, `LESSON_CANCELLED`) and the credit is returned with grace (§4).                                                                                                                          |
 
 Once everything is moved, `L` is judged by the existing rule: it is
 deleted if it is untouched, and cancelled (`TIMETABLE_CHANGED`) otherwise,
@@ -479,7 +492,8 @@ source is cancelled and a new ad-hoc lesson is created with
   group's regular teacher; substitutes are a P5 workflow.
   `rescheduleOptions` can still suggest conflict-free times.
 - **Admin cancels:** an admin can cancel a rescheduled lesson, which
-  releases its credit with grace (§4).
+  releases its credit with grace (§4). Cancelling by the student follows §3, including
+  the case of an admin-moved lesson with no credit.
 - **Audit:** `lesson.rescheduled` records the actor, student, credit if
   any, source and new lesson, from and to, room, every acknowledged
   conflict and the admin's optional note (e.g. "agreed by phone").
@@ -617,15 +631,22 @@ replacement students`, replacement students marked. _Not coming_ = the
   qualify; back-to-back is not a clash; DST weeks for expiry and the
   15-minute grid), each release path in §4.
 - Unit, the cases from the CARM-40 review:
-  - Cancelling or re-rescheduling a rescheduled 1-on-1, any number of
-    times, never creates a credit and never changes `expiresAt`.
+  - Cancelling or re-rescheduling a rescheduled 1-on-1 that has a credit
+    spent on it, any number of times, never creates a credit and never
+    changes `expiresAt`.
   - `reviewReplacement` passes on a booking into an exactly full lesson,
     and doesn't report its own target as a clash or its own credit as
     used.
   - Slot splits: same-day and weekday-change successors; a successor
-    falling before D; a 1-on-1 `STUDENT_CANCELLED` successor created
-    cancelled and staying so after `planLessonSync` runs again
-    (idempotent); a replacement moved versus released.
+    falling before D; a 1-on-1 `STUDENT_CANCELLED` successor and an
+    admin-`RESCHEDULED` successor, each created cancelled with the same
+    reason, the ad-hoc lesson's `rescheduledFromId` moved, and still
+    cancelled after `planLessonSync` runs again (idempotent); a replacement
+    moved versus released.
+  - Cancelling an admin-moved lesson that has no credit: before the
+    cutoff it earns one credit with the expiry counted from the chain
+    root; rescheduling or cancelling again mints nothing more; after the
+    cutoff it earns nothing.
   - Admin absence delete: refused while the credit is `USED`; a 1-on-1
     lesson is restored only without blocking conflicts.
 - Unit, the CARM-39 answers:
