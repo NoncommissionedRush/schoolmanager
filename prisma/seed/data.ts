@@ -172,7 +172,13 @@ export const TERM = {
 /** Lessons are generated for the first weeks only (covers DEMO_TODAY). */
 export const LESSON_GENERATION_END = "2026-11-08";
 
-export const HOLIDAYS = [
+export const HOLIDAYS: {
+  key: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  schoolWide?: boolean;
+}[] = [
   {
     key: "autumn-break",
     name: "Autumn break",
@@ -180,7 +186,9 @@ export const HOLIDAYS = [
     endDate: "2026-10-30",
   },
   {
+    // Public holiday: school-wide (`termId` null), applies to every term.
     key: "nov-17",
+    schoolWide: true,
     name: "Struggle for Freedom and Democracy Day",
     startDate: "2026-11-17",
     endDate: "2026-11-17",
@@ -193,7 +201,14 @@ export const HOLIDAYS = [
   },
 ];
 
-type SlotSpec = { weekday: number; start: number; end: number };
+type SlotSpec = {
+  weekday: number;
+  start: number;
+  end: number;
+  /** Slot lifecycle (docs/architecture/scheduling.md); omitted = whole term. */
+  validFrom?: string;
+  validUntil?: string;
+};
 const twice = (days: [number, number], start: number): SlotSpec[] =>
   days.map((weekday) => ({ weekday, start, end: start + 90 }));
 
@@ -241,7 +256,14 @@ export const GROUPS: GroupSpec[] = [
     capacity: 8,
     teacher: "t-horvath",
     room: "room-2",
-    slots: twice([2, 4], h(9)),
+    // Mid-term change: the Thursday lesson moves to Friday from 26 October.
+    // The Thursday slot ends (its earlier lessons stay) and a Friday slot
+    // continues, exactly as the timetable editor records such an edit.
+    slots: [
+      { weekday: 2, start: h(9), end: h(10, 30) },
+      { weekday: 4, start: h(9), end: h(10, 30), validUntil: "2026-10-25" },
+      { weekday: 5, start: h(9), end: h(10, 30), validFrom: "2026-10-26" },
+    ],
   },
   {
     key: "a2-evening",
