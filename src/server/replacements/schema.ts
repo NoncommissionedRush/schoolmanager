@@ -78,8 +78,30 @@ export const adminRescheduleSchema = z.object({
   note: optionalText({ max: REVIEW_NOTE_MAX }),
 });
 
+/**
+ * Admin reschedule from the student's AVAILABLE 1-on-1 credit (CARM-47):
+ * the same fields, the credit instead of a lesson.
+ */
+export const adminCreditRescheduleSchema = adminRescheduleSchema
+  .omit({ lessonId: true })
+  .extend({ creditId: z.string() });
+
+/** An admin books a replacement with the student's group credit (CARM-47). */
+export const adminBookReplacementSchema = z.object({
+  creditId: z.string(),
+  targetLessonId: z.string(),
+  acknowledgedKeys: z.array(z.string()).max(50).default([]),
+  note: optionalText({ max: REVIEW_NOTE_MAX }),
+});
+
 export type RejectReplacementInput = z.input<typeof rejectReplacementSchema>;
 export type OverrideReplacementInput = z.input<
   typeof overrideReplacementSchema
 >;
 export type AdminRescheduleFormInput = z.input<typeof adminRescheduleSchema>;
+export type AdminCreditRescheduleFormInput = z.input<
+  typeof adminCreditRescheduleSchema
+>;
+export type AdminBookReplacementInput = z.input<
+  typeof adminBookReplacementSchema
+>;

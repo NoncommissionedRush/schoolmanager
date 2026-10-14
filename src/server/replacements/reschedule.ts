@@ -569,8 +569,7 @@ export async function rescheduleLesson(
 // Admin reschedule (§7, owner decision 2026-10-14)
 // ---------------------------------------------------------------------------
 
-export type AdminRescheduleInput = {
-  lessonId: string;
+type AdminRescheduleFields = {
   /** Local date and time in the school's time zone. */
   date: string;
   startMinute: number;
@@ -579,6 +578,13 @@ export type AdminRescheduleInput = {
   acknowledgedKeys: readonly string[];
   note: string | null;
 };
+
+/**
+ * What the admin moves: a scheduled 1-on-1 lesson, or (CARM-47) the
+ * student's AVAILABLE 1-on-1 credit, spent on a new lesson for them.
+ */
+export type AdminRescheduleInput = AdminRescheduleFields &
+  ({ lessonId: string } | { creditId: string });
 
 export type AdminRescheduleResult =
   | { status: "rescheduled"; lessonId: string; startsAt: string }
@@ -591,12 +597,117 @@ export type AdminRescheduleResult =
       })[];
     };
 
+const adminLessonSelect = {
+  ...lessonSelect,
+  group: {
+    select: {
+      type: true,
+      memberships: {
+        select: {
+          studentId: true,
+          joinedAt: true,
+          leftAt: true,
+          student: {
+            select: {
+              groupMemberships: {
+                select: { groupId: true, joinedAt: true, leftAt: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.LessonSelect;
+
+/** What an admin reschedule moves and for whom, loaded under the lock. */
+async function loadAdminSource(tx: Tx, input: AdminRescheduleInput, now: Date) {
+  if ("creditId" in input) {
+    const credit = await tx.makeupCredit.findFirst({
+      where: { id: input.creditId },
+      select: {
+        id: true,
+        studentId: true,
+        status: true,
+        expiresAt: true,
+        sourceLesson: { select: lessonSelect },
+        student: {
+          select: {
+            groupMemberships: {
+              select: { groupId: true, joinedAt: true, leftAt: true },
+            },
+          },
+        },
+      },
+    });
+    // Only 1-on-1 credits move a lesson; group ones book a replacement.
+    if (!credit || credit.sourceLesson.group.type !== "ONE_ON_ONE") {
+      throw notFound();
+    }
+    if (creditState(credit, now) !== "AVAILABLE") {
+      throw refusal("CREDIT_UNAVAILABLE");
+    }
+    return {
+      moving: null,
+      missed: credit.sourceLesson,
+      student: {
+        id: credit.studentId,
+        memberships: credit.student.groupMemberships,
+      },
+      credit: {
+        id: credit.id,
+        studentId: credit.studentId,
+        status: credit.status,
+        expiresAt: credit.expiresAt,
+        sourceGroupId: credit.sourceLesson.groupId,
+        spentOnMoving: false,
+      },
+    };
+  }
+  const lesson = await tx.lesson.findFirst({
+    where: { id: input.lessonId },
+    select: adminLessonSelect,
+  });
+  if (!lesson || lesson.group.type !== "ONE_ON_ONE") throw notFound();
+  if (lesson.status !== "SCHEDULED") throw refusal("LESSON_CANCELLED");
+  if (lesson.startsAt.getTime() <= now.getTime()) {
+    throw refusal("LESSON_STARTED");
+  }
+  const member = membersAt(lesson.group.memberships, lesson.startsAt)[0];
+  if (!member) throw refusal("NO_STUDENT");
+  const spent =
+    lesson.spentCredit?.status === "USED" ? lesson.spentCredit : null;
+  return {
+    moving: lesson,
+    missed: lesson,
+    student: {
+      id: member.studentId,
+      memberships: member.student.groupMemberships,
+    },
+    credit: spent && {
+      id: spent.id,
+      studentId: spent.studentId,
+      status: spent.status,
+      expiresAt: spent.expiresAt,
+      sourceGroupId: lesson.groupId,
+      spentOnMoving: true,
+    },
+  };
+}
+
 /**
  * An admin moves any upcoming scheduled 1-on-1, also after the cutoff, on
  * a lesson with a late absence or one that is itself a reschedule. No
  * credit is created or spent; a credit spent on the source moves with it.
- * Blocking conflicts and OUTSIDE_TERM refuse; overridable conflicts and
- * STUDENT_CLASH need each key acknowledged.
+ *
+ * From a credit (CARM-47, §7 _Admin reschedule_) the admin runs the
+ * student's "reschedule from a credit" for them: a new lesson continues
+ * the credit's chain and the credit is spent on it. A time on or after the
+ * credit's expiry needs acknowledging like a conflict.
+ *
+ * Blocking conflicts, OUTSIDE_TERM and an unusable credit refuse;
+ * overridable conflicts, CREDIT_EXPIRES_FIRST and STUDENT_CLASH need each
+ * key acknowledged.
  */
 export async function rescheduleByAdmin(
   db: SchoolDb,
@@ -604,44 +715,12 @@ export async function rescheduleByAdmin(
   input: AdminRescheduleInput,
   now: Date,
 ): Promise<AdminRescheduleResult> {
-  if (
-    !isUuid(input.lessonId) ||
-    (input.roomId !== null && !isUuid(input.roomId))
-  ) {
+  const sourceId = "creditId" in input ? input.creditId : input.lessonId;
+  if (!isUuid(sourceId) || (input.roomId !== null && !isUuid(input.roomId))) {
     throw notFound();
   }
   return inLockedTransaction(db, async (tx, school) => {
     const tz = school.timezone;
-    const lesson = await tx.lesson.findFirst({
-      where: { id: input.lessonId },
-      select: {
-        ...lessonSelect,
-        group: {
-          select: {
-            type: true,
-            memberships: {
-              select: {
-                studentId: true,
-                joinedAt: true,
-                leftAt: true,
-                student: {
-                  select: {
-                    groupMemberships: {
-                      select: { groupId: true, joinedAt: true, leftAt: true },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-    if (!lesson || lesson.group.type !== "ONE_ON_ONE") throw notFound();
-    if (lesson.status !== "SCHEDULED") throw refusal("LESSON_CANCELLED");
-    if (lesson.startsAt.getTime() <= now.getTime()) {
-      throw refusal("LESSON_STARTED");
-    }
     if (input.roomId) {
       const room = await tx.room.findFirst({
         where: { id: input.roomId },
@@ -649,8 +728,11 @@ export async function rescheduleByAdmin(
       });
       if (!room) throw notFound();
     }
-    const member = membersAt(lesson.group.memberships, lesson.startsAt)[0];
-    if (!member) throw refusal("NO_STUDENT");
+    const { moving, missed, student, credit } = await loadAdminSource(
+      tx,
+      input,
+      now,
+    );
 
     const startsAt = zonedTimeToUtc(input.date, input.startMinute, tz);
     const endsAt = new Date(
@@ -663,34 +745,21 @@ export async function rescheduleByAdmin(
     );
     const attending = await loadAttending(
       tx,
-      {
-        id: member.studentId,
-        memberships: member.student.groupMemberships,
-      },
+      { id: student.id, memberships: student.memberships },
       startsAt,
       endsAt,
     );
-    const spent =
-      lesson.spentCredit?.status === "USED" ? lesson.spentCredit : null;
     const calendar = buildCalendar(context);
     const check = checkReschedule(
       calendar,
       {
         mode: "admin",
-        groupId: lesson.groupId,
-        teacherId: lesson.teacherId,
-        movingLessonId: lesson.id,
+        groupId: missed.groupId,
+        teacherId: missed.teacherId,
+        movingLessonId: moving?.id ?? null,
         durationMinutes: input.durationMinutes,
-        credit: spent
-          ? {
-              studentId: spent.studentId,
-              status: spent.status,
-              expiresAt: spent.expiresAt,
-              sourceGroupId: lesson.groupId,
-              spentOnMoving: true,
-            }
-          : null,
-        studentId: member.studentId,
+        credit,
+        studentId: student.id,
         cutoffMinutes: school.absenceCutoffMinutes,
         publishedTermIds,
         attending,
@@ -729,25 +798,38 @@ export async function rescheduleByAdmin(
       };
     }
 
-    const { count } = await tx.lesson.updateMany({
-      where: { id: lesson.id, status: "SCHEDULED" },
-      data: { status: "CANCELLED", cancelReason: RESCHEDULED },
-    });
-    if (count !== 1) throw refusal("LESSON_CANCELLED");
+    let fromLessonId: string;
+    if (moving) {
+      const { count } = await tx.lesson.updateMany({
+        where: { id: moving.id, status: "SCHEDULED" },
+        data: { status: "CANCELLED", cancelReason: RESCHEDULED },
+      });
+      if (count !== 1) throw refusal("LESSON_CANCELLED");
+      fromLessonId = moving.id;
+    } else {
+      // From a credit: continue the chain where it ended, as the student would.
+      fromLessonId = await chainTail(tx, missed.id);
+    }
     const created = await createRescheduled(tx, school, {
       termId: check.termId!,
-      groupId: lesson.groupId,
-      teacherId: lesson.teacherId,
+      groupId: missed.groupId,
+      teacherId: missed.teacherId,
       roomId: input.roomId,
       startsAt,
       endsAt,
-      rescheduledFromId: lesson.id,
+      rescheduledFromId: fromLessonId,
     });
-    if (spent) {
-      await tx.makeupCredit.update({
-        where: { id: spent.id },
-        data: { rescheduledLessonId: created.id },
+    if (credit) {
+      // Conditional: a credit spent or expired meanwhile is never spent twice.
+      const { count } = await tx.makeupCredit.updateMany({
+        where: credit.spentOnMoving
+          ? { id: credit.id, status: "USED" }
+          : { id: credit.id, status: "AVAILABLE", expiresAt: { gt: now } },
+        data: credit.spentOnMoving
+          ? { rescheduledLessonId: created.id }
+          : { status: "USED", usedAt: now, rescheduledLessonId: created.id },
       });
+      if (count !== 1) throw refusal("CREDIT_UNAVAILABLE");
     }
     await tx.auditLog.create({
       data: {
@@ -759,10 +841,12 @@ export async function rescheduleByAdmin(
         data: JSON.parse(
           JSON.stringify({
             by: "admin",
-            studentId: member.studentId,
-            creditId: spent?.id ?? null,
-            fromLessonId: lesson.id,
-            from: lesson.startsAt.toISOString(),
+            studentId: student.id,
+            creditId: credit?.id ?? null,
+            /** The admin spent the student's AVAILABLE credit (CARM-47). */
+            creditSpent: credit !== null && !credit.spentOnMoving,
+            fromLessonId,
+            from: (moving ?? missed).startsAt.toISOString(),
             to: startsAt.toISOString(),
             roomId: input.roomId,
             note: input.note,

@@ -823,6 +823,7 @@ export type AdminAbsenceRow = {
     groupName: string;
     oneOnOne: boolean;
     started: boolean;
+    roomId: string | null;
   };
   student: { id: string; name: string };
   reportedAt: string;
@@ -830,6 +831,7 @@ export type AdminAbsenceRow = {
   byAdmin: string | null;
   reason: string | null;
   credit: {
+    id: string;
     state: "AVAILABLE" | "USED" | "EXPIRED";
     validUntil: IsoDate;
   } | null;
@@ -873,12 +875,13 @@ export async function listAdminAbsences(
       student: {
         select: { id: true, userId: true, user: { select: { name: true } } },
       },
-      makeupCredit: { select: { status: true, expiresAt: true } },
+      makeupCredit: { select: { id: true, status: true, expiresAt: true } },
       lesson: {
         select: {
           id: true,
           startsAt: true,
           endsAt: true,
+          roomId: true,
           group: { select: { name: true, type: true } },
         },
       },
@@ -895,6 +898,7 @@ export async function listAdminAbsences(
         groupName: row.lesson.group.name,
         oneOnOne: row.lesson.group.type === "ONE_ON_ONE",
         started: row.lesson.startsAt <= now,
+        roomId: row.lesson.roomId,
       },
       student: { id: row.student.id, name: row.student.user.name },
       reportedAt: row.createdAt.toISOString(),
@@ -904,6 +908,7 @@ export async function listAdminAbsences(
           : null,
       reason: row.reason,
       credit: row.makeupCredit && {
+        id: row.makeupCredit.id,
         state: creditState(row.makeupCredit, now),
         validUntil: validUntilOf(row.makeupCredit.expiresAt, timeZone),
       },
