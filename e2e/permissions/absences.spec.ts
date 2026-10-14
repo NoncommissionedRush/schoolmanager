@@ -7,7 +7,7 @@ import {
   toZonedDateTime,
   zonedTimeToUtc,
 } from "../../src/server/scheduling/time";
-import { DEMO_LOGINS, sql } from "../helpers";
+import { currentTermId, DEMO_LOGINS, sql } from "../helpers";
 import { callAction, FormFields, serverActionsIn } from "../server-actions";
 import {
   expectNoneOf,
@@ -24,8 +24,9 @@ import {
 
 // Phase 3 permissions (CARM-44): absences, makeup credits, replacement
 // bookings, 1-on-1 reschedules and the school's absence settings. Runs on
-// its own term, groups, rooms, students and lessons in school A, so the
-// seeded data and the specs running in parallel don't matter:
+// its own groups, rooms, students and lessons in school A (in the term
+// running today), so the seeded data and the specs running in parallel
+// don't matter:
 //
 // - Rita (S1) and Sam (S2) are members of "own" and of nothing else; Rita
 //   also has a 1-on-1 that starts in two hours (after the 24-hour cutoff).
@@ -67,7 +68,7 @@ const WHO = Object.keys(NAMES) as Who[];
 const emailOf = (who: Who) => `e2e-p3-${who}-${suffix}@demo-school.test`;
 
 const ids = {
-  term: randomUUID(),
+  term: "", // the current term (beforeAll)
   level: randomUUID(),
   room: randomUUID(),
   tinyRoom: randomUUID(),
@@ -306,17 +307,8 @@ test.describe("phase 3 permissions", () => {
     teacherProfile = row.teacher;
     const school = a.school;
 
-    await sql(
-      `INSERT INTO terms (id, school_id, name, start_date, end_date, timetable_published_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, now(), now())`,
-      [
-        ids.term,
-        school,
-        `P3 ${suffix}`,
-        addDays(today, -60),
-        addDays(today, 40),
-      ],
-    );
+    // Terms never overlap: the lessons go into the term running today.
+    ids.term = await currentTermId(school, today, addDays(today, 33));
     await sql(
       `INSERT INTO rooms (id, school_id, name, kind, capacity, updated_at)
        VALUES ($1, $3, $4, 'PHYSICAL', 5, now()), ($2, $3, $5, 'PHYSICAL', 1, now())`,
@@ -490,8 +482,7 @@ test.describe("phase 3 permissions", () => {
     for (const page of pages.values()) await page.context().close();
     const students = Object.values(ids.students);
     const groups = Object.values(ids.groups);
-    // By group, not term: a reschedule lands in whichever published term
-    // covers its date, which may be another spec's or the seed's.
+    // By group: the lessons share the term running today with other specs.
     const lessons = await sql<{ id: string }>(
       "SELECT id FROM lessons WHERE group_id = ANY($1)",
       [groups],
@@ -530,7 +521,6 @@ test.describe("phase 3 permissions", () => {
     await sql("DELETE FROM rooms WHERE id = ANY($1)", [
       [ids.room, ids.tinyRoom],
     ]);
-    await sql("DELETE FROM terms WHERE id = $1", [ids.term]);
   });
 
   test("the cases cover every student server action", () => {

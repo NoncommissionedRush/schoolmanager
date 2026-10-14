@@ -211,14 +211,17 @@ async function snapshot(ids: SchoolIds) {
     rows[`${table}:${id}`] = row?.row ?? "missing";
   }
   // Levels: E2E-% codes belong to specs running in parallel (admin-actions
-  // adds and removes E2E-LEAK in this school), so they're left out.
+  // adds and removes E2E-LEAK in this school), so they're left out. Lessons:
+  // only the seeded groups' (deterministic v5 ids); specs running in
+  // parallel add lessons of their own groups to the same term.
   const [counts] = await sql<{ row: string }>(
     `SELECT row(
        (SELECT count(*) FROM users WHERE name = 'Role Leak'),
        (SELECT count(*) FROM rooms WHERE name LIKE 'Role Leak%'),
        (SELECT count(*) FROM terms WHERE name LIKE 'Role Leak%'),
        (SELECT count(*) FROM levels WHERE school_id = $1 AND code NOT LIKE 'E2E-%'),
-       (SELECT md5(string_agg(l::text, '|' ORDER BY l.id)) FROM lessons l WHERE term_id = $2),
+       (SELECT md5(string_agg(l::text, '|' ORDER BY l.id)) FROM lessons l WHERE term_id = $2
+          AND l.group_id::text LIKE '________-____-5%'),
        (SELECT count(*) FROM absence_reports WHERE lesson_id = $3),
        (SELECT md5(string_agg(c::text, '|' ORDER BY c.id)) FROM makeup_credits c WHERE student_id = $4)
      )::text AS row`,

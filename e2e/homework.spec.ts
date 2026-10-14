@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import { DEMO_LOGINS, signIn, sql } from "./helpers";
+import { DEMO_LOGINS, insertOwnTerm, signIn, sql } from "./helpers";
 
 // Happy path of CARM-36 (lessons.md §6–7): a teacher writes the log and the
 // homework, the student sees it on the home card, the Homework tab and the
@@ -43,11 +43,14 @@ test.describe("homework › teacher writes, student reads, admin views", () => {
       [DEMO_LOGINS.teacher, DEMO_LOGINS.student],
     );
     // A January term, away from the weeks other specs look at.
-    await sql(
-      `INSERT INTO terms (id, school_id, name, start_date, end_date, timetable_published_at, updated_at)
-       VALUES ($1, $2, $3, '2026-01-12', '2026-01-18', now(), now())`,
-      [ids.term, row.school, `E2E Homework ${suffix}`],
-    );
+    await insertOwnTerm({
+      id: ids.term,
+      schoolId: row.school,
+      name: `E2E Homework ${suffix}`,
+      startDate: "2026-01-12",
+      days: 7,
+      published: true,
+    });
     await sql(
       `INSERT INTO groups (id, school_id, level_id, type, name, capacity, updated_at)
        VALUES ($1, $2, $3, 'GROUP', $4, 8, now())`,

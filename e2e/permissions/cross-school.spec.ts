@@ -276,9 +276,11 @@ async function targetedRows(ids: SchoolIds) {
     );
     rows[`${table}:${id}`] = row?.row ?? "missing";
   }
+  // The seeded groups' lessons (deterministic v5 ids): specs running in
+  // parallel add lessons of their own groups to the same term.
   const [lessons] = await sql<{ digest: string }>(
     `SELECT md5(string_agg(l::text, '|' ORDER BY l.id)) AS digest
-     FROM lessons l WHERE term_id = $1`,
+     FROM lessons l WHERE term_id = $1 AND l.group_id::text LIKE '________-____-5%'`,
     [ids.term],
   );
   rows.lessons = lessons.digest;

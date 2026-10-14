@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import { DEMO_LOGINS, signIn, sql } from "./helpers";
+import { DEMO_LOGINS, insertOwnTerm, signIn, sql } from "./helpers";
 
 // Happy path of the teacher lesson page (CARM-35, lessons.md §5): find a
 // lesson without a log, write what was covered and the homework, guard
@@ -29,11 +29,14 @@ test.describe("teacher lesson page › log, homework and internal notes", () => 
        WHERE s.slug = 'demo-language-school'`,
       [GROUP, DEMO_LOGINS.teacher],
     );
-    await sql(
-      `INSERT INTO terms (id, school_id, name, start_date, end_date, timetable_published_at, updated_at)
-       VALUES ($1, $2, $3, '2026-01-05', '2026-01-11', now(), now())`,
-      [termId, row.school, termName],
-    );
+    await insertOwnTerm({
+      id: termId,
+      schoolId: row.school,
+      name: termName,
+      startDate: "2026-01-05",
+      days: 7,
+      published: true,
+    });
     await sql(
       `INSERT INTO lessons (id, school_id, term_id, group_id, teacher_id, starts_at, ends_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, now() - interval '150 minutes', now() - interval '60 minutes', now())`,

@@ -8,13 +8,14 @@ import {
   zonedTimeToUtc,
 } from "../src/server/scheduling/time";
 import { mondayOf } from "../src/server/timetable/week";
-import { DEMO_LOGINS, signIn, sql } from "./helpers";
+import { currentTermId, DEMO_LOGINS, signIn, sql } from "./helpers";
 
 // Happy path of CARM-42 (absences.md §5): a student cancels an upcoming
 // lesson in time and gets a makeup credit, cancels a lesson that starts
 // soon without one, and sees both on the Absences tab; the teacher sees
-// who isn't coming on the lesson page. Runs on its own term, group, student
-// and lessons so it doesn't depend on (or change) the seeded data.
+// who isn't coming on the lesson page. Runs on its own group, student and
+// lessons (in the term running today) so it doesn't depend on (or change)
+// the seeded data.
 test.describe("absences › student cancels and gets a makeup credit", () => {
   test.describe.configure({ mode: "serial" });
   const TZ = "Europe/Bratislava";
@@ -22,7 +23,7 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
   const group = `E2E Absence ${suffix}`;
   const studentEmail = `e2e-absence-${suffix}@demo-school.test`;
   const ids = {
-    term: randomUUID(),
+    term: "", // the current term (beforeAll)
     group: randomUUID(),
     user: randomUUID(),
     student: randomUUID(),
@@ -60,11 +61,8 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
        WHERE s.slug = 'demo-language-school'`,
       [DEMO_LOGINS.teacher, DEMO_LOGINS.student],
     );
-    await sql(
-      `INSERT INTO terms (id, school_id, name, start_date, end_date, timetable_published_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, now(), now())`,
-      [ids.term, row.school, group, addDays(today, -7), addDays(today, 30)],
-    );
+    // Terms never overlap: the lessons go into the term running today.
+    ids.term = await currentTermId(row.school, today, earlyDate);
     await sql(
       `INSERT INTO groups (id, school_id, level_id, type, name, capacity, updated_at)
        VALUES ($1, $2, $3, 'GROUP', $4, 8, now())`,
@@ -121,7 +119,6 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
     await sql("DELETE FROM memberships WHERE user_id = $1", [ids.user]);
     await sql("DELETE FROM users WHERE id = $1", [ids.user]);
     await sql("DELETE FROM groups WHERE id = $1", [ids.group]);
-    await sql("DELETE FROM terms WHERE id = $1", [ids.term]);
   });
 
   test("the student cancels in time, gets a credit, and the teacher sees it", async ({

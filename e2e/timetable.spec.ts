@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import { DEMO_LOGINS, signIn, sql } from "./helpers";
+import { DEMO_LOGINS, insertOwnTerm, signIn, sql } from "./helpers";
 
 // Happy path of the timetable editor (CARM-25): create a slot, hit a
 // conflict, override a warning, publish, and see the lesson as the teacher
 // and as a student of the group. Runs in its own draft term in March 2027,
 // far from the seeded Autumn 2026 term.
 const TERM_START = "2027-03-01"; // Monday
-const TERM_END = "2027-03-28";
+const TERM_DAYS = 28;
 
 async function removeTerm(name: string) {
   const terms = await sql<{ id: string }>(
@@ -26,6 +26,8 @@ async function removeTerm(name: string) {
 test.describe("timetable editor › create, override, publish", () => {
   const termName = `E2E Timetable ${Date.now()}`;
   let termId: string;
+  /** TERM_START, or a later Monday if those dates are taken. */
+  let termStart: string;
   let groupId: string;
   let teacherId: string;
 
@@ -49,11 +51,14 @@ test.describe("timetable editor › create, override, publish", () => {
     groupId = group.id;
     teacherId = teacher.id;
     termId = randomUUID();
-    await sql(
-      `INSERT INTO terms (id, school_id, name, start_date, end_date, updated_at)
-       VALUES ($1, $2, $3, $4, $5, now())`,
-      [termId, school.id, termName, TERM_START, TERM_END],
-    );
+    ({ startDate: termStart } = await insertOwnTerm({
+      id: termId,
+      schoolId: school.id,
+      name: termName,
+      startDate: TERM_START,
+      days: TERM_DAYS,
+      published: false,
+    }));
     // Jana already teaches A2 Evening on Mondays 10:00–11:00 in this term.
     await sql(
       `INSERT INTO timetable_slots
@@ -161,14 +166,24 @@ test.describe("timetable editor › create, override, publish", () => {
     await expect(
       teacher.getByRole("heading", { level: 1, name: "My timetable" }),
     ).toBeVisible();
-    await teacher.goto(`/teacher/timetable?week=${TERM_START}`);
+    await teacher.goto(`/teacher/timetable?week=${termStart}`);
     const lesson = teacher.getByRole("button", {
       name: /^A1 Morning, Monday 06:00 to 07:00/,
     });
     await expect(lesson).toBeVisible();
     await lesson.click();
     const details = teacher.getByRole("dialog", { name: "A1 Morning" });
-    await expect(details.getByText(/Monday,? 1 March 2027/)).toBeVisible();
+    const [, day, month, year] = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "UTC",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+      .format(new Date(termStart))
+      .match(/^(\d+) (\w+) (\d+)$/)!;
+    await expect(
+      details.getByText(new RegExp(`Monday,? ${day} ${month} ${year}`)),
+    ).toBeVisible();
     await expect(details.getByText(/Students \(\d+\)/)).toBeVisible();
     await teacher.close();
 
@@ -178,7 +193,7 @@ test.describe("timetable editor › create, override, publish", () => {
     });
     await signIn(student, DEMO_LOGINS.student);
     await student.waitForURL("/student");
-    await student.goto(`/student/timetable?week=${TERM_START}`);
+    await student.goto(`/student/timetable?week=${termStart}`);
     const card = student.getByRole("button", {
       name: /^A1 Morning, Monday 06:00 to 07:00/,
     });

@@ -8,14 +8,15 @@ import {
   zonedTimeToUtc,
 } from "../src/server/scheduling/time";
 import { mondayOf } from "../src/server/timetable/week";
-import { DEMO_LOGINS, signIn, sql } from "./helpers";
+import { currentTermId, DEMO_LOGINS, signIn, sql } from "./helpers";
 import { callAction, serverActionsIn } from "./server-actions";
 
 // Happy path of CARM-43 (absences.md §4.1, §6.1, §7.3): a student cancels
 // a lesson in time, books a replacement in another group of their level
 // with the credit, the teacher sees them on that lesson, and an admin
-// overrides the booking onto another lesson. Runs on its own term, groups,
-// room, student and lessons so it doesn't depend on the seeded data.
+// overrides the booking onto another lesson. Runs on its own groups, room,
+// student and lessons (in the term running today) so it doesn't depend on
+// the seeded data.
 test.describe("replacements › cancel, book, teacher sees, admin overrides", () => {
   test.describe.configure({ mode: "serial" });
   const TZ = "Europe/Bratislava";
@@ -25,7 +26,7 @@ test.describe("replacements › cancel, book, teacher sees, admin overrides", ()
   const studentEmail = `e2e-replacement-${suffix}@demo-school.test`;
   const STUDENT = `Rita Replacement ${suffix}`;
   const ids = {
-    term: randomUUID(),
+    term: "", // the current term (beforeAll)
     own: randomUUID(),
     other: randomUUID(),
     room: randomUUID(),
@@ -58,11 +59,8 @@ test.describe("replacements › cancel, book, teacher sees, admin overrides", ()
        WHERE s.slug = 'demo-language-school'`,
       [DEMO_LOGINS.teacher, DEMO_LOGINS.student],
     );
-    await sql(
-      `INSERT INTO terms (id, school_id, name, start_date, end_date, timetable_published_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, now(), now())`,
-      [ids.term, row.school, own, addDays(today, -7), addDays(today, 30)],
-    );
+    // Terms never overlap: the lessons go into the term running today.
+    ids.term = await currentTermId(row.school, today, movedDate);
     await sql(
       `INSERT INTO rooms (id, school_id, name, kind, capacity, updated_at)
        VALUES ($1, $2, $3, 'PHYSICAL', 5, now())`,
@@ -135,7 +133,6 @@ test.describe("replacements › cancel, book, teacher sees, admin overrides", ()
     await sql("DELETE FROM users WHERE id = $1", [ids.user]);
     await sql("DELETE FROM groups WHERE id = ANY($1)", [[ids.own, ids.other]]);
     await sql("DELETE FROM rooms WHERE id = $1", [ids.room]);
-    await sql("DELETE FROM terms WHERE id = $1", [ids.term]);
   });
 
   test("the student cancels, gets a credit and books a replacement", async ({

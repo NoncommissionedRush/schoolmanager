@@ -28,15 +28,17 @@ test.describe("admin › terms & holidays", () => {
       "Published",
     );
 
-    // Create: end before start is rejected; an overlap only warns.
+    // Create: an overlap with another term and an end before the start are
+    // both rejected.
     await page.getByRole("button", { name: "New term" }).click();
     const dialog = page.getByRole("dialog", { name: "New term" });
     await dialog.getByLabel("Name").fill(term);
     await dialog.getByLabel("First day").fill("2026-10-01");
     await dialog.getByLabel("Last day").fill("2026-10-31");
+    await dialog.getByRole("button", { name: "Create term" }).click();
     await expect(
       dialog.getByText(
-        "Overlaps with Autumn 2026. Lessons of both terms will run in parallel.",
+        "These dates overlap Autumn 2026. Terms can't share a day.",
       ),
     ).toBeVisible();
     await dialog.getByLabel("First day").fill(`${year}-02-10`);
