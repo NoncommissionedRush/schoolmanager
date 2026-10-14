@@ -597,7 +597,9 @@ export async function saveSlot(
       slot: request.slot,
       effectiveFrom,
       overridden: auditConflicts(decision.overridden),
-      ...(request.reason && { reason: request.reason }),
+      // A reason only means something next to an actual override.
+      ...(request.reason &&
+        decision.overridden.length > 0 && { reason: request.reason }),
     };
 
     if (!existing) {
@@ -736,6 +738,8 @@ export async function saveSlot(
 export type EndSlotResult = {
   /** `deleted` when the slot never took effect and nothing refers to it. */
   outcome: "ended" | "deleted";
+  /** Last day of the slot, clamped to its own `validUntil` if earlier. */
+  lastDate: IsoDate;
   lessons: LessonChanges;
 };
 
@@ -799,7 +803,7 @@ export async function endSlot(
         lessons,
       },
     );
-    return { outcome, lessons };
+    return { outcome, lastDate: validUntil, lessons };
   });
 }
 
