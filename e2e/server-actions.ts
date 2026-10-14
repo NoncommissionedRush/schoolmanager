@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import {
   type APIRequestContext,
@@ -65,6 +65,23 @@ export function compiledServerActions(): Map<string, ServerAction> {
     });
   }
   return actions;
+}
+
+/**
+ * Page URLs under `dir` (e.g. `src/app/admin`), dynamic segments filled with
+ * a placeholder id. In dev, request them once so their actions compile.
+ */
+export function pagesIn(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const child = join(dir, name);
+    if (statSync(child).isDirectory()) return pagesIn(child);
+    if (name !== "page.tsx") return [];
+    const route = relative("src/app", dir).replace(
+      /\[[^\]]+\]/g,
+      PLACEHOLDER_ID,
+    );
+    return [`/${route}`];
+  });
 }
 
 /**

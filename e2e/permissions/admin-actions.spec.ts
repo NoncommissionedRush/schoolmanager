@@ -1,6 +1,3 @@
-import { readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
-
 import {
   type APIRequestContext,
   type Browser,
@@ -16,6 +13,7 @@ import {
   callServerAction,
   compiledServerActions,
   FormFields,
+  pagesIn,
   PLACEHOLDER_ID,
   type ServerAction,
   serverActionsIn,
@@ -309,20 +307,6 @@ async function createFixtures() {
   );
 }
 
-/** Admin pages as URLs, dynamic segments filled with a placeholder id. */
-function adminPages(dir = "src/app/admin"): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const child = join(dir, name);
-    if (statSync(child).isDirectory()) return adminPages(child);
-    if (name !== "page.tsx") return [];
-    const route = relative("src/app", dir).replace(
-      /\[[^\]]+\]/g,
-      PLACEHOLDER_ID,
-    );
-    return [`/${route}`];
-  });
-}
-
 /** Compiled admin actions by `filename#exportedName`. */
 let actions: Map<string, ServerAction>;
 
@@ -360,7 +344,7 @@ test.describe("permission leaks › admin server actions", () => {
     // In dev every route compiles on first request; render each admin page
     // once so all admin actions are in the manifest (a no-op on a build).
     const admin = await newSession(browser, DEMO_LOGINS.admin, "/admin");
-    for (const path of adminPages()) await admin.request.get(path);
+    for (const path of pagesIn("src/app/admin")) await admin.request.get(path);
     await admin.close();
 
     actions = new Map(
