@@ -61,14 +61,25 @@ export function LessonList({
   items,
   hrefPrefix,
   hrefSuffix = "",
+  showTeacher = false,
 }: {
   items: LessonListItem[];
   /** Link of a row: `${hrefPrefix}${id}${hrefSuffix}`. */
   hrefPrefix: string;
   hrefSuffix?: string;
+  /** Teacher column (admin list, §7). */
+  showTeacher?: boolean;
 }) {
   const hrefOf = (id: string) => `${hrefPrefix}${id}${hrefSuffix}`;
   const t = useTranslations("lessons.list.col");
+  const tl = useTranslations("lessons.list");
+  const teacherOf = (item: LessonListItem) =>
+    item.substituteName
+      ? tl("substituteFor", {
+          substitute: item.substituteName,
+          teacher: item.teacherName,
+        })
+      : item.teacherName;
   const formatDate = useDateFormat();
   const when = (item: LessonListItem) =>
     `${formatDate(item.date, "weekdayDate")}, ${formatMinutes(item.startMinute)}–${formatMinutes(item.endMinute)}`;
@@ -81,6 +92,7 @@ export function LessonList({
             <TableRow>
               <TableHead>{t("when")}</TableHead>
               <TableHead>{t("group")}</TableHead>
+              {showTeacher && <TableHead>{t("teacher")}</TableHead>}
               <TableHead>{t("covered")}</TableHead>
               <TableHead>{t("homework")}</TableHead>
             </TableRow>
@@ -102,6 +114,9 @@ export function LessonList({
                 <TableCell className="align-top">
                   <GroupCell group={item.group} />
                 </TableCell>
+                {showTeacher && (
+                  <TableCell className="align-top">{teacherOf(item)}</TableCell>
+                )}
                 <TableCell className="max-w-sm align-top whitespace-normal">
                   <Excerpt text={item.content} />
                 </TableCell>
@@ -125,6 +140,9 @@ export function LessonList({
                 <StatusBadge item={item} />
               </span>
               <GroupCell group={item.group} />
+              {showTeacher && (
+                <span className="text-muted-foreground">{teacherOf(item)}</span>
+              )}
               <span className="flex flex-col">
                 <span className="text-muted-foreground">{t("covered")}</span>
                 <Excerpt text={item.content} />

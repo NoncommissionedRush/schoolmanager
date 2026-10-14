@@ -55,6 +55,7 @@ const toLogView = (row: LogRow | null): LessonLogView | null =>
 const pageSelect = {
   id: true,
   termId: true,
+  timetableSlotId: true,
   groupId: true,
   teacherId: true,
   substituteTeacherId: true,
@@ -82,8 +83,11 @@ const pageSelect = {
   log: { select: logSelect },
 } satisfies Prisma.LessonSelect;
 
-export type TeacherLessonPage = {
+/** A lesson page as teachers and admins see it (§5.2, §7). */
+export type LessonPage = {
   id: string;
+  termId: string;
+  slotId: string | null;
   group: { id: string; name: string; type: "GROUP" | "ONE_ON_ONE" };
   level: string;
   /** Local date and times in the school's timezone. */
@@ -96,7 +100,6 @@ export type TeacherLessonPage = {
   room: { name: string; online: boolean; meetingUrl: string | null } | null;
   teacherName: string;
   substituteName: string | null;
-  relation: TeacherRelation;
   badge: "cancelled" | "noLog" | null;
   /** Why the log can't be written now, or null when it can. */
   lock: "cancelled" | "notStarted" | null;
@@ -107,6 +110,8 @@ export type TeacherLessonPage = {
   /** Current members, for the note form's "About" picker. */
   students: { id: string; name: string }[];
 };
+
+export type TeacherLessonPage = LessonPage & { relation: TeacherRelation };
 
 /**
  * Everything the teacher lesson page shows except the internal notes, or
@@ -120,7 +125,37 @@ export async function loadTeacherLesson(
   timeZone: string,
 ): Promise<TeacherLessonPage | null> {
   if (!teacherId || !isUuid(lessonId)) return null;
-  const mine = teacherLessonWhere(teacherId);
+  const found = await loadLessonPage(
+    db,
+    teacherLessonWhere(teacherId),
+    lessonId,
+    now,
+    timeZone,
+  );
+  return (
+    found && {
+      ...found.page,
+      relation: teacherRelation(found.lesson, teacherId),
+    }
+  );
+}
+
+/**
+ * A lesson page among the lessons matching `mine` (the caller's access
+ * rule, also used for previous/next), or null when there is none.
+ */
+export async function loadLessonPage(
+  db: SchoolDb,
+  mine: Prisma.LessonWhereInput,
+  lessonId: string,
+  now: Date,
+  timeZone: string,
+): Promise<{
+  page: LessonPage;
+  /** Who teaches it, for the caller's own rules. */
+  lesson: { teacherId: string; substituteTeacherId: string | null };
+} | null> {
+  if (!isUuid(lessonId)) return null;
   const lesson = await db.lesson.findFirst({
     where: { AND: [{ id: lessonId }, mine] },
     select: pageSelect,
@@ -166,8 +201,10 @@ export async function loadTeacherLesson(
   const current = lesson.group.memberships.filter(
     (m) => m.leftAt === null || m.leftAt > now,
   );
-  return {
+  const page: LessonPage = {
     id: lesson.id,
+    termId: lesson.termId,
+    slotId: lesson.timetableSlotId,
     group: {
       id: lesson.groupId,
       name: lesson.group.name,
@@ -187,7 +224,6 @@ export async function loadTeacherLesson(
     },
     teacherName: lesson.teacher.user.name,
     substituteName: lesson.substituteTeacher?.user.name ?? null,
-    relation: teacherRelation(lesson, teacherId),
     badge: lessonBadge(lesson, lesson.log, now),
     lock: logLock(lesson, now),
     log: toLogView(lesson.log),
@@ -202,6 +238,13 @@ export async function loadTeacherLesson(
     students: current
       .map((m) => ({ id: m.student.id, name: m.student.user.name }))
       .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+  return {
+    page,
+    lesson: {
+      teacherId: lesson.teacherId,
+      substituteTeacherId: lesson.substituteTeacherId,
+    },
   };
 }
 
@@ -305,6 +348,8 @@ const listSelect = {
   endsAt: true,
   status: true,
   group: { select: { id: true, name: true, type: true } },
+  teacher: { select: { user: { select: { name: true } } } },
+  substituteTeacher: { select: { user: { select: { name: true } } } },
   log: { select: { content: true, homework: true } },
 } satisfies Prisma.LessonSelect;
 
@@ -320,6 +365,8 @@ export type LessonListItem = {
   content: string | null;
   homework: string | null;
   badge: "cancelled" | "noLog" | null;
+  teacherName: string;
+  substituteName: string | null;
 };
 
 function toListItem(row: ListRow, now: Date, tz: string): LessonListItem {
@@ -335,6 +382,8 @@ function toListItem(row: ListRow, now: Date, tz: string): LessonListItem {
     content: row.log?.content ?? null,
     homework: row.log?.homework ?? null,
     badge: lessonBadge(row, row.log, now),
+    teacherName: row.teacher.user.name,
+    substituteName: row.substituteTeacher?.user.name ?? null,
   };
 }
 
@@ -360,6 +409,18 @@ export type LessonList = {
   terms: { id: string; name: string }[];
   termId: string | null;
   groups: { id: string; name: string }[];
+  /** Teachers of the term's lessons (admin filter); empty for teachers. */
+  teachers: { id: string; name: string }[];
+};
+
+export type ListOptions = {
+  filter: LessonFilter;
+  termId?: string;
+  groupId?: string;
+  /** Admin filter: lessons this teacher teaches or substitutes. */
+  teacherId?: string;
+  /** Load the teacher filter's options (admin list). */
+  withTeachers?: boolean;
 };
 
 /** Lists can't grow without bound; a term has far fewer lessons per teacher. */
@@ -373,7 +434,28 @@ const LIST_LIMIT = 300;
 export async function listTeacherLessons(
   db: SchoolDb,
   teacherId: string | null,
-  options: { filter: LessonFilter; termId?: string; groupId?: string },
+  options: Omit<ListOptions, "teacherId" | "withTeachers">,
+  now: Date,
+  timeZone: string,
+): Promise<LessonList> {
+  return listLessons(
+    db,
+    teacherId ? teacherLessonWhere(teacherId) : null,
+    options,
+    now,
+    timeZone,
+  );
+}
+
+/**
+ * Lessons matching `access` (null: none) in one published term, for a list
+ * filter (§5.4, §7). Admins pass `{}` for the whole school and may filter
+ * by teacher.
+ */
+export async function listLessons(
+  db: SchoolDb,
+  access: Prisma.LessonWhereInput | null,
+  options: ListOptions,
   now: Date,
   timeZone: string,
 ): Promise<LessonList> {
@@ -388,8 +470,9 @@ export async function listTeacherLessons(
     terms: terms.map(({ id, name }) => ({ id, name })),
     termId: null,
     groups: [],
+    teachers: [],
   };
-  if (!teacherId) return empty;
+  if (!access) return empty;
   const today = toZonedDateTime(now, timeZone).date;
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   const term =
@@ -400,21 +483,47 @@ export async function listTeacherLessons(
   if (!term) return empty;
 
   const scope: Prisma.LessonWhereInput = {
-    AND: [teacherLessonWhere(teacherId), { termId: term.id }],
+    AND: [access, { termId: term.id }],
   };
-  const groupRows = await db.lesson.findMany({
-    where: scope,
-    distinct: ["groupId"],
-    select: { group: { select: { id: true, name: true } } },
-  });
-  const groups = groupRows
-    .map((r) => r.group)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const withTeachers = options.withTeachers === true;
+  const [groupRows, teacherRows] = await Promise.all([
+    db.lesson.findMany({
+      where: scope,
+      distinct: ["groupId"],
+      select: { group: { select: { id: true, name: true } } },
+    }),
+    withTeachers
+      ? db.teacherProfile.findMany({
+          where: {
+            OR: [
+              { lessons: { some: scope } },
+              { substituteLessons: { some: scope } },
+            ],
+          },
+          select: { id: true, user: { select: { name: true } } },
+        })
+      : [],
+  ]);
+  const byName = (a: { name: string }, b: { name: string }) =>
+    a.name.localeCompare(b.name);
+  const groups = groupRows.map((r) => r.group).sort(byName);
+  const teachers = teacherRows
+    .map((r) => ({ id: r.id, name: r.user.name }))
+    .sort(byName);
   const groupId = groups.some((g) => g.id === options.groupId)
     ? options.groupId
     : undefined;
+  const teacherId = teachers.some((t) => t.id === options.teacherId)
+    ? options.teacherId
+    : undefined;
   const scoped: Prisma.LessonWhereInput = {
-    AND: [scope, ...(groupId ? [{ groupId }] : [])],
+    AND: [
+      scope,
+      ...(groupId ? [{ groupId }] : []),
+      ...(teacherId
+        ? [{ OR: [{ teacherId }, { substituteTeacherId: teacherId }] }]
+        : []),
+    ],
   };
   const direction = options.filter === "past" ? "desc" : "asc";
   const [rows, noLogCount] = await Promise.all([
@@ -435,6 +544,7 @@ export async function listTeacherLessons(
     terms: terms.map(({ id, name }) => ({ id, name })),
     termId: term.id,
     groups,
+    teachers,
   };
 }
 

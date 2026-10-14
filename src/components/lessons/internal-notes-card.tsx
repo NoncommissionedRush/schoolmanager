@@ -44,6 +44,12 @@ import type { NoteView } from "@/server/notes/teacher-notes";
 import { CharCounter } from "./char-counter";
 import { LinkifiedText } from "./linkified-text";
 
+/** Loads the next page of earlier notes ("Show more"). */
+export type LoadEarlierNotes = (
+  lessonId: string,
+  offset: number,
+) => Promise<ActionResult<NoteView[]>>;
+
 /** Server actions for teachers; omitted on read-only (admin) pages. */
 export type NoteActions = {
   create: (input: {
@@ -56,10 +62,6 @@ export type NoteActions = {
     body: string;
   }) => Promise<ActionResult<NoteView>>;
   remove: (noteId: string) => Promise<ActionResult<{ id: string }>>;
-  loadEarlier: (
-    lessonId: string,
-    offset: number,
-  ) => Promise<ActionResult<NoteView[]>>;
 };
 
 function failureMessage(result: ActionResult<unknown>): Message | null {
@@ -427,12 +429,14 @@ export function InternalNotesCard({
   students,
   initial,
   actions,
+  loadEarlier,
 }: {
   lessonId: string;
   groupName: string;
   students: { id: string; name: string }[];
   initial: { onLesson: NoteView[]; earlier: NoteView[]; earlierCount: number };
   actions: NoteActions | null;
+  loadEarlier: LoadEarlierNotes;
 }) {
   const t = useTranslations("teacherNotes");
   const render = useMessage();
@@ -448,9 +452,8 @@ export function InternalNotesCard({
     list.map((n) => (n.id === note.id ? note : n));
 
   function showMore() {
-    if (!actions) return;
     startLoading(async () => {
-      const result = await actions.loadEarlier(lessonId, earlier.length);
+      const result = await loadEarlier(lessonId, earlier.length);
       if (result.ok) {
         setEarlier((current) => [
           ...current,
@@ -535,7 +538,7 @@ export function InternalNotesCard({
                     <AlertDescription>{render(loadError)}</AlertDescription>
                   </Alert>
                 )}
-                {actions && earlier.length < earlierCount && (
+                {earlier.length < earlierCount && (
                   <Button
                     type="button"
                     variant="outline"
@@ -554,6 +557,42 @@ export function InternalNotesCard({
             </div>
           )}
         </>
+      )}
+    </InternalSection>
+  );
+}
+
+/**
+ * A read-only list of internal notes in the internal style, e.g. all notes
+ * about one student on the admin's student detail (lessons.md §7).
+ */
+export function ReadOnlyNotesCard({
+  heading,
+  notes,
+  empty,
+}: {
+  heading: string;
+  notes: NoteView[];
+  empty: string;
+}) {
+  const ids = useId();
+  return (
+    <InternalSection headingId={`${ids}-heading`} heading={heading}>
+      {notes.length === 0 ? (
+        <p className="text-sm text-slate-700">{empty}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {notes.map((note) => (
+            <NoteItem
+              key={note.id}
+              note={note}
+              actions={null}
+              showLessonDate
+              onChanged={() => {}}
+              onDeleted={() => {}}
+            />
+          ))}
+        </ul>
       )}
     </InternalSection>
   );
