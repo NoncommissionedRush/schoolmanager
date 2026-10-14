@@ -1,0 +1,122 @@
+{
+  "title": "Courses & groups",
+  "description": "{count, plural, one {# active group} other {# active groups}}",
+  "back": "Courses & groups",
+  "entities": "groups",
+  "search": "Search groups",
+  "caption": "{count, plural, one {Groups, # result} other {Groups, # results}}",
+  "tab": {
+    "groups": "Groups",
+    "courses": "Courses",
+    "members": "Members",
+    "details": "Details",
+    "timetable": "Timetable"
+  },
+  "new": "New group",
+  "newTitle": "New group",
+  "editTitle": "Edit group",
+  "create": "Create group",
+  "manageMembers": "Manage members",
+  "filter": {
+    "type": "Type",
+    "level": "Level",
+    "course": "Course",
+    "all": "All"
+  },
+  "field": {
+    "type": "Type",
+    "name": "Name",
+    "level": "Level",
+    "course": "Course",
+    "noCourse": "No course",
+    "capacity": "Capacity",
+    "capacityOneOnOne": "1-on-1 lessons have one student.",
+    "student": "Student",
+    "noStudent": "Add the student later",
+    "typeLocked": "The type can't change once the group has lessons.",
+    "chooseLevel": "Choose a level"
+  },
+  "type": {
+    "group": "Group lesson",
+    "oneOnOne": "1-on-1",
+    "GROUP": "Group lesson",
+    "ONE_ON_ONE": "1-on-1"
+  },
+  "oneOnOneName": "{student} 1-on-1",
+  "col": {
+    "name": "Name",
+    "type": "Type",
+    "level": "Level",
+    "course": "Course",
+    "members": "Members",
+    "teachers": "Teachers"
+  },
+  "membersCount": "{count} / {capacity}",
+  "membersHeader": "Members {count} / {capacity}",
+  "full": "Full",
+  "noStudent": "No student",
+  "option": "{name} ({level}, {count} / {capacity})",
+  "members": {
+    "add": "Add members",
+    "addTitle": "Add members to {name}",
+    "addSubmit": "Add members",
+    "placesLeft": "{count, plural, =0 {No places left} one {# place left} other {# places left}}",
+    "full": "The group is full. Increase the capacity to add more.",
+    "showAllLevels": "Show all levels",
+    "search": "Search students",
+    "students": "Students",
+    "levelTag": "Level {level}",
+    "noLevelTag": "No level",
+    "timeClash": "Time clash with {group}",
+    "startDate": "First day in the group",
+    "past": "Past members",
+    "noPast": "No past members.",
+    "empty": "No members yet. Add students to this group.",
+    "noCandidates": "No students to add. Everyone matching is already a member.",
+    "name": "Name",
+    "level": "Level",
+    "joined": "Joined",
+    "left": "Left",
+    "remove": "Remove from group",
+    "removeTitle": "Remove {name} from {group}?",
+    "removeDate": "Last day in the group",
+    "added": "{count, plural, one {# student added to {group}} other {# students added to {group}}}",
+    "removed": "{name} removed from {group}",
+    "noneSelected": "Choose at least one student.",
+    "alreadyMember": "One of these students is already in the group.",
+    "notMember": "This student has already left the group.",
+    "leftBeforeJoined": "The last day can't be before the day they joined.",
+    "leftInFuture": "The last day can't be in the future."
+  },
+  "archive": {
+    "consequence": "It's hidden from pickers and the default list. Members and past lessons are kept."
+  },
+  "error": {
+    "capacityBelowMembers": "This group already has {count} members. Remove members first or choose at least {count}.",
+    "archived": "{name} is archived. Restore it before adding members.",
+    "archivedChoice": "This option is no longer available. Choose another."
+  },
+  "blocked": {
+    "hasSlots": "{name} has timetable slots in current or upcoming terms. End them in the timetable first.",
+    "slotItem": "{weekday} {from}–{to} ({term})"
+  },
+  "timetable": {
+    "weekday": "Day",
+    "time": "Time",
+    "teacher": "Teacher",
+    "room": "Room",
+    "valid": "Runs",
+    "whole": "Whole term",
+    "from": "From {date}",
+    "until": "Until {date}",
+    "between": "{from} – {to}",
+    "empty": "No timetable slots in current or upcoming terms.",
+    "noRoom": "No room"
+  },
+  "openInEditor": "Open in timetable editor",
+  "empty": {
+    "title": "No groups yet",
+    "description": "Create group classes and 1-on-1s, then add students.",
+    "action": "New group"
+  }
+}

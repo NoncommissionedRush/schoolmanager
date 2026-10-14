@@ -1,0 +1,26 @@
+{
+  "title": "Settings",
+  "nav": {
+    "school": "School",
+    "terms": "Terms & holidays",
+    "rooms": "Rooms",
+    "admins": "Administrators"
+  },
+  "school": {
+    "title": "School",
+    "description": "Your school's name, time zone, school days and hours.",
+    "name": "School name",
+    "timezone": "Time zone",
+    "timezoneLocked": "The time zone can't change once lessons exist.",
+    "week": "School days",
+    "hours": "School hours",
+    "hoursHint": "The timetable shows these hours and warns about lessons outside them.",
+    "from": "From",
+    "to": "To",
+    "save": "Save changes",
+    "error": {
+      "timezone": "Choose a time zone from the list.",
+      "noDays": "Choose at least one school day."
+    }
+  }
+}

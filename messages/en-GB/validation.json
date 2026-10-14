@@ -1,4 +1,16 @@
 {
   "required": "Enter your {field}.",
-  "email": "Enter a valid email address."
+  "email": "Enter a valid email address.",
+  "requiredField": "Enter a value.",
+  "select": "Choose {field}.",
+  "maxLength": "Use {max} characters or fewer.",
+  "minLength": "Use at least {min} characters.",
+  "passwordMin": "Use at least 10 characters.",
+  "integerRange": "Enter a whole number from {min} to {max}.",
+  "url": "Enter a link starting with https://",
+  "timeOrder": "The end time must be after the start time.",
+  "dateOrder": "The end date must be on or after the start date.",
+  "date": "Enter a valid date.",
+  "time": "Enter a valid time.",
+  "unique": "{field} \"{value}\" is already used."
 }

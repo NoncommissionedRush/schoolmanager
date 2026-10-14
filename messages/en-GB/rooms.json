@@ -1,0 +1,52 @@
+{
+  "title": "Rooms",
+  "description": "{count, plural, one {# active room} other {# active rooms}}",
+  "entities": "rooms",
+  "new": "New room",
+  "newTitle": "New room",
+  "editTitle": "Edit room",
+  "create": "Create room",
+  "search": "Search rooms",
+  "caption": "Rooms, {count} results",
+  "filter": {
+    "kind": "Type",
+    "all": "All"
+  },
+  "field": {
+    "name": "Name",
+    "kind": "Type",
+    "capacity": "Capacity",
+    "capacityOnlineHint": "Leave empty for no limit.",
+    "meetingUrl": "Meeting link",
+    "meetingUrlPlaceholder": "https://"
+  },
+  "kind": {
+    "physical": "Physical room",
+    "online": "Online room",
+    "PHYSICAL": "Physical",
+    "ONLINE": "Online"
+  },
+  "col": {
+    "name": "Name",
+    "kind": "Type",
+    "capacity": "Capacity",
+    "meetingUrl": "Meeting link",
+    "usedIn": "Used in slots"
+  },
+  "noCapacity": "No limit",
+  "warning": {
+    "capacityBelowGroup": "{group} has {count} students; the timetable will show a capacity warning."
+  },
+  "empty": {
+    "title": "No rooms yet",
+    "description": "Add classrooms and online rooms to use them in the timetable.",
+    "action": "Add room"
+  },
+  "archive": {
+    "title": "Archive {name}?",
+    "consequence": "It's hidden from the timetable editor's room pickers. Past lessons keep it.",
+    "slotsKeepRunning": "{count, plural, one {# slot still uses} other {# slots still use}} this room. They keep running and are still checked. To move them, edit them in the timetable.",
+    "openTimetable": "Open timetable"
+  },
+  "editSubmit": "Save changes"
+}

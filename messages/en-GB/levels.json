@@ -1,0 +1,48 @@
+{
+  "title": "Skill levels",
+  "description": "Levels order your groups and decide which replacement lessons a student can join.",
+  "entities": "levels",
+  "new": "New level",
+  "newTitle": "New level",
+  "editTitle": "Edit level",
+  "create": "Create level",
+  "editSubmit": "Save changes",
+  "caption": "Skill levels, {count} results",
+  "col": {
+    "order": "Order",
+    "code": "Code",
+    "name": "Name",
+    "students": "Students",
+    "groups": "Groups"
+  },
+  "field": {
+    "code": "Code",
+    "codeHint": "Short label, e.g. B1",
+    "name": "Name"
+  },
+  "moveUp": "Move up",
+  "moveDown": "Move down",
+  "moved": "{code} moved",
+  "error": {
+    "codeTaken": "Code \"{code}\" is already used."
+  },
+  "empty": {
+    "title": "No levels yet",
+    "description": "Add the levels you teach, from easiest to hardest.",
+    "action": "Add level",
+    "preset": "Add CEFR levels (A1–C2)"
+  },
+  "preset": {
+    "added": "{count, plural, =0 {All CEFR levels already exist} one {# level added} other {# levels added}}",
+    "A1": "Beginner",
+    "A2": "Elementary",
+    "B1": "Intermediate",
+    "B2": "Upper intermediate",
+    "C1": "Advanced",
+    "C2": "Proficiency"
+  },
+  "archive": {
+    "title": "Archive {code}?",
+    "consequence": "{students, plural, one {# student} other {# students}} and {groups, plural, one {# group} other {# groups}} keep this level. It's hidden when you pick a level for new students, groups and courses."
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "lead": "The timetable editor warns you when a lesson is planned while {firstName} is unavailable.",
+  "weekly": {
+    "title": "Weekly unavailability",
+    "add": "Add unavailable time",
+    "addTitle": "Add unavailable time",
+    "editTitle": "Edit unavailable time",
+    "row": "Every {weekday} · {from}–{to}",
+    "empty": "{firstName} is available during all school hours.",
+    "merged": "Merged with an existing time on {weekday}.",
+    "editLabel": "Edit {weekday} {from}–{to}",
+    "deleteLabel": "Delete {weekday} {from}–{to}",
+    "deleteTitle": "Delete {weekday} {from}–{to}?",
+    "caption": "Weekly unavailability of {name}"
+  },
+  "exceptions": {
+    "title": "Exceptions",
+    "add": "Add exception",
+    "addTitle": "Add exception",
+    "showPast": "Show past exceptions",
+    "empty": "No exceptions planned.",
+    "caption": "Exceptions for {name}",
+    "deleteLabel": "Delete exception on {date}",
+    "deleteTitle": "Delete the exception on {date}?",
+    "col": {
+      "date": "Date",
+      "type": "Type",
+      "time": "Time",
+      "note": "Note",
+      "actions": "Actions"
+    }
+  },
+  "field": {
+    "weekdays": "Days",
+    "from": "From",
+    "to": "To",
+    "note": "Note",
+    "type": "Type",
+    "date": "Date",
+    "dateTo": "To date",
+    "dateToHint": "Optional. Adds one exception per day, up to 31 days.",
+    "wholeDay": "Whole day"
+  },
+  "type": {
+    "unavailable": "Unavailable on this date",
+    "available": "Available on this date (overrides the weekly rule)"
+  },
+  "badge": {
+    "unavailable": "Unavailable",
+    "available": "Available"
+  },
+  "wholeDay": "Whole day",
+  "save": "Save",
+  "deleted": "Deleted",
+  "impact": "{count, plural, one {# scheduled lesson is} other {# scheduled lessons are}} affected on these dates.",
+  "savedWithImpact": "Saved. {count, plural, one {# lesson needs} other {# lessons need}} a substitute or a change.",
+  "viewInTimetable": "View in timetable",
+  "warning": {
+    "noWeeklyRule": "There's no weekly unavailability on this day, so this exception has no effect."
+  },
+  "error": {
+    "rangeTooLong": "Choose 31 days or fewer. Add longer absences in parts."
+  }
+}

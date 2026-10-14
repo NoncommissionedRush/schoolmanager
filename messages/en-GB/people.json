@@ -1,0 +1,35 @@
+{
+  "field": {
+    "name": "Full name",
+    "email": "Email",
+    "password": "Password",
+    "passwordHint": "At least 10 characters. You'll see it once after saving so you can share it."
+  },
+  "password": {
+    "generate": "Generate",
+    "show": "Show password",
+    "hide": "Hide password",
+    "setNew": "Set new password",
+    "dialogTitle": "Set a new password for {name}"
+  },
+  "credentials": {
+    "title": "Share these sign-in details",
+    "description": "This password won't be shown again. Ask {firstName} to keep it safe.",
+    "copy": "Copy sign-in details",
+    "copyText": "Email: {email} Password: {password}",
+    "done": "Done",
+    "emailLabel": "Email",
+    "passwordLabel": "Password"
+  },
+  "signIn": "Sign-in",
+  "lastPasswordChange": "Password last set {date}",
+  "neverSet": "Password not changed since the account was created.",
+  "error": {
+    "emailTaken": "This email is already used by another account.",
+    "emailArchived": "This email belongs to an archived account. Restore {name} instead."
+  },
+  "archive": {
+    "consequenceSignIn": "{firstName} won't be able to sign in.",
+    "consequenceHistory": "Past lessons and attendance are kept."
+  }
+}

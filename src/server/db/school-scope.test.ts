@@ -261,6 +261,154 @@ describe("scopeArgs — User relations span schools", () => {
     ).toThrow(CrossSchoolAccessError);
   });
 
+  describe("relation filters are walked recursively", () => {
+    const leaks: [string, string, Record<string, unknown>][] = [
+      // QA follow-up on PR #5: both answered "is this user also in school B?"
+      [
+        "User",
+        "count",
+        { where: { AND: [{ memberships: { some: { schoolId: OTHER } } }] } },
+      ],
+      [
+        "Membership",
+        "count",
+        { where: { user: { memberships: { some: { schoolId: OTHER } } } } },
+      ],
+      [
+        "User",
+        "findMany",
+        { where: { OR: [{ name: "a" }, { teacherProfiles: { some: {} } }] } },
+      ],
+      [
+        "User",
+        "findFirst",
+        { where: { NOT: { memberships: { none: { schoolId: OTHER } } } } },
+      ],
+      [
+        "Membership",
+        "findMany",
+        { where: { user: { is: { studentProfiles: { some: {} } } } } },
+      ],
+      [
+        "Lesson",
+        "findMany",
+        {
+          where: {
+            attendance: {
+              some: {
+                recordedBy: { memberships: { some: { schoolId: OTHER } } },
+              },
+            },
+          },
+        },
+      ],
+      [
+        "Group",
+        "findMany",
+        {
+          where: {
+            AND: {
+              memberships: {
+                some: {
+                  student: {
+                    user: { OR: [{ memberships: { some: {} } }] },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+      [
+        "Group",
+        "findMany",
+        {
+          include: {
+            memberships: {
+              where: { student: { user: { accounts: { some: {} } } } },
+            },
+          },
+        },
+      ],
+      [
+        "Room",
+        "findMany",
+        {
+          select: {
+            _count: {
+              select: {
+                lessons: {
+                  where: {
+                    attendance: {
+                      some: { recordedBy: { memberships: { some: {} } } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    ];
+
+    it.each(leaks)(
+      "rejects %s.%s filtering through a User's relations",
+      (model, operation, args) => {
+        expect(() => scopeArgs(model, operation, args, SCHOOL)).toThrow(
+          CrossSchoolAccessError,
+        );
+      },
+    );
+
+    it("allows scalar User filters at any depth", () => {
+      for (const [model, args] of [
+        [
+          "User",
+          {
+            where: {
+              AND: [{ email: { contains: "a" } }],
+              NOT: { deletedAt: null },
+            },
+          },
+        ],
+        [
+          "Membership",
+          { where: { user: { email: "a@b.c", deletedAt: null } } },
+        ],
+        [
+          "Membership",
+          { where: { user: { is: { name: { startsWith: "A" } } } } },
+        ],
+        [
+          "Group",
+          {
+            where: {
+              memberships: {
+                some: { leftAt: null, student: { user: { deletedAt: null } } },
+              },
+            },
+          },
+        ],
+        [
+          "StudentProfile",
+          {
+            where: {
+              OR: [
+                { user: { name: { contains: "x", mode: "insensitive" } } },
+                { phone: { contains: "x" } },
+              ],
+              groupMemberships: { none: { leftAt: null } },
+            },
+          },
+        ],
+      ] as const) {
+        expect(() =>
+          scopeArgs(model, "findMany", args as Record<string, unknown>, SCHOOL),
+        ).not.toThrow();
+      }
+    });
+  });
+
   it("allows a User's scalar fields, directly and from the tenant side", () => {
     expect(
       scopeArgs(

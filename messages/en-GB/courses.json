@@ -1,0 +1,23 @@
+{
+  "new": "New course",
+  "newTitle": "New course",
+  "editTitle": "Edit course",
+  "create": "Create course",
+  "caption": "{count, plural, one {Courses, # course} other {Courses, # courses}}",
+  "field": {
+    "name": "Name",
+    "level": "Level",
+    "description": "Description",
+    "chooseLevel": "Choose a level"
+  },
+  "col": {
+    "name": "Name",
+    "level": "Level",
+    "groups": "Groups"
+  },
+  "blocked": {
+    "inUse": "{count, plural, one {# group uses this course.} other {# groups use this course.}} Move them to another course first.",
+    "groupItem": "{name}"
+  },
+  "empty": "No courses yet. Courses are optional — use them to name what a group teaches."
+}

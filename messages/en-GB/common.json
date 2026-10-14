@@ -4,5 +4,98 @@
   "loading": "Loading…",
   "retry": "Try again",
   "skipToContent": "Skip to content",
-  "close": "Close"
+  "close": "Close",
+  "save": "Save",
+  "saveChanges": "Save changes",
+  "saving": "Saving…",
+  "cancel": "Cancel",
+  "create": "Create",
+  "edit": "Edit",
+  "delete": "Delete",
+  "archive": "Archive",
+  "restore": "Restore",
+  "undo": "Undo",
+  "ok": "OK",
+  "back": "Back",
+  "none": "—",
+  "actionsFor": "Actions for {name}",
+  "search": "Search",
+  "filter": "Filter",
+  "clearFilters": "Clear filters",
+  "noResultsFor": "No {entities} match your filters.",
+  "noArchived": "No archived {entities}.",
+  "status": {
+    "label": "Status",
+    "active": "Active",
+    "archived": "Archived",
+    "all": "All"
+  },
+  "pagination": {
+    "summary": "Showing {from}–{to} of {total}",
+    "previous": "Previous",
+    "next": "Next",
+    "label": "Pagination"
+  },
+  "toast": {
+    "created": "{name} created",
+    "saved": "Changes saved",
+    "archived": "{name} archived",
+    "restored": "{name} restored",
+    "deleted": "{name} deleted",
+    "copied": "Copied"
+  },
+  "confirm": {
+    "archiveTitle": "Archive {name}?",
+    "deleteTitle": "Delete {name}?",
+    "irreversible": "This can't be undone.",
+    "restoreTitle": "Restore {name}?"
+  },
+  "blocked": {
+    "archiveTitle": "{name} can't be archived yet",
+    "deleteTitle": "{name} can't be deleted",
+    "more": "+{count} more"
+  },
+  "inUse": "In use by {count, plural, one {# record} other {# records}}",
+  "unsaved": {
+    "title": "Discard changes?",
+    "description": "You have unsaved changes on this page.",
+    "discard": "Discard",
+    "keepEditing": "Keep editing"
+  },
+  "error": {
+    "title": "Couldn't load this page",
+    "description": "Check your connection and try again.",
+    "network": "Couldn't save. Check your connection — your changes are still here.",
+    "staleData": "Someone else changed this record. Reload to see the latest version.",
+    "notFound": "This record no longer exists.",
+    "unexpected": "Something went wrong. Try again."
+  },
+  "reload": "Reload",
+  "archivedBadge": "Archived",
+  "archivedName": "{name} (archived)",
+  "you": "You",
+  "opensInNewTab": "(opens in new tab)",
+  "optional": "(optional)",
+  "required": "(required)",
+  "weekday": {
+    "1": "Monday",
+    "2": "Tuesday",
+    "3": "Wednesday",
+    "4": "Thursday",
+    "5": "Friday",
+    "6": "Saturday",
+    "7": "Sunday"
+  },
+  "weekdayShort": {
+    "1": "Mon",
+    "2": "Tue",
+    "3": "Wed",
+    "4": "Thu",
+    "5": "Fri",
+    "6": "Sat",
+    "7": "Sun"
+  },
+  "noSchool": "(no school)",
+  "timeRange": "{from}–{to}",
+  "dateRange": "{from} – {to}"
 }

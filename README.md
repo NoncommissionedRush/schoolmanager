@@ -46,7 +46,27 @@ Sign in at http://localhost:3000/login — every seeded user has the password
 
 All other users are `first.last@demo-school.test` without diacritics (see
 `prisma/seed/data.ts`). Passwords are set by admins in v1 — there is no
-"forgot password" flow yet.
+"forgot password" flow yet: an admin sets or resets them under _Teachers_,
+_Students_ or _Settings › Administrators_ (_Set new password_).
+
+### Admin screens
+
+Signed in as admin: _People › Teachers / Students_, _Academics › Courses &
+groups / Skill levels_ and _Settings_ (school, terms & holidays, rooms,
+administrators). Spec: `docs/design/admin-data.md`; server code in
+`src/server/admin/`.
+
+### Database tests
+
+Unit tests run without a database. The service tests that need Postgres
+(`*.db.test.ts`) are skipped unless `SCHEDULING_TEST_DATABASE_URL` points at a
+**separate**, migrated database — they create and delete their own schools:
+
+```bash
+docker compose exec db createdb -U schoolmanager schoolmanager_test
+DATABASE_URL=postgresql://schoolmanager:schoolmanager@localhost:5432/schoolmanager_test pnpm db:migrate:deploy
+SCHEDULING_TEST_DATABASE_URL=postgresql://schoolmanager:schoolmanager@localhost:5432/schoolmanager_test pnpm test
+```
 
 ## Scripts
 

@@ -52,15 +52,17 @@ export const COURSES: { key: string; name: string; level: LevelCode }[] = [
   { key: "business-b2", name: "Business English B2", level: "B2" },
 ];
 
+// Colours are the admin form's swatch palette (TEACHER_COLORS in
+// src/server/admin/people/schema.ts).
 export const TEACHERS = [
   { key: "t-novak", name: "Jana Nováková", color: "#2563eb" },
   { key: "t-smith", name: "Oliver Smith", color: "#16a34a" },
-  { key: "t-horvath", name: "Peter Horváth", color: "#d97706" },
-  { key: "t-kovac", name: "Lucia Kováčová", color: "#db2777" },
+  { key: "t-horvath", name: "Peter Horváth", color: "#ea580c" },
+  { key: "t-kovac", name: "Lucia Kováčová", color: "#e11d48" },
   { key: "t-brown", name: "Emily Brown", color: "#7c3aed" },
-  { key: "t-varga", name: "Martin Varga", color: "#0891b2" },
-  { key: "t-oconnor", name: "Siobhan O'Connor", color: "#65a30d" },
-  { key: "t-tothova", name: "Eva Tóthová", color: "#dc2626" },
+  { key: "t-varga", name: "Martin Varga", color: "#0d9488" },
+  { key: "t-oconnor", name: "Siobhan O'Connor", color: "#b45309" },
+  { key: "t-tothova", name: "Eva Tóthová", color: "#475569" },
 ] as const;
 
 export type TeacherKey = (typeof TEACHERS)[number]["key"];
