@@ -731,7 +731,7 @@ test.describe("phase 3 permissions", () => {
     expect(await absenceCount(lesson, rita)).toBe(1);
   });
 
-  test("only admins review, change settings and reschedule after the cutoff", async () => {
+  test("only admins review, change settings, spend credits for students and reschedule after the cutoff", async () => {
     const lateLesson = ids.lessons.lateOneOnOne;
     const review = [
       {
@@ -791,6 +791,39 @@ test.describe("phase 3 permissions", () => {
         name: "cancel a rescheduled lesson",
         action: [ADMIN, "cancelRescheduledLessonAction"],
         args: [lateLesson],
+      },
+      // Spending Rita's credit for her is the admin's (CARM-47).
+      {
+        name: "admin booking options",
+        action: [ADMIN, "loadAdminBookingOptionsAction"],
+        args: [ids.credits.available, true],
+      },
+      {
+        name: "admin books a replacement",
+        action: [ADMIN, "bookReplacementForStudentAction"],
+        args: [
+          {
+            creditId: ids.credits.available,
+            targetLessonId: ids.lessons.target,
+            acknowledgedKeys: [],
+            note: null,
+          },
+        ],
+      },
+      {
+        name: "admin books a 1-on-1 with a credit",
+        action: [ADMIN, "rescheduleFromCreditAction"],
+        args: [
+          {
+            creditId: ids.credits.available,
+            date: addDays(today, 8),
+            startMinute: 8 * 60,
+            durationMinutes: 45,
+            roomId: null,
+            acknowledgedKeys: [],
+            note: null,
+          },
+        ],
       },
     ] as const;
     const [school] = await sql<{ row: string }>(
