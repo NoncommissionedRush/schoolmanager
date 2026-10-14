@@ -67,6 +67,9 @@ export const TEACHERS = [
 
 export type TeacherKey = (typeof TEACHERS)[number]["key"];
 
+/** Teachers with a weekly maximum for the generator (generator.md §2.3). */
+export const TEACHERS_WITH_MAX_HOURS: TeacherKey[] = ["t-smith", "t-oconnor"];
+
 export const TEACHER_AVAILABILITY: {
   key: string;
   teacher: TeacherKey;
