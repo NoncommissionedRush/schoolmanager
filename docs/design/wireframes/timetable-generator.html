@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — Assign teachers (timetable generator, CARM-54)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .hatch {
+        background: repeating-linear-gradient(
+          135deg,
+          #fde68a55 0 4px,
+          transparent 4px 10px
+        );
+      }
+      .lg-group {
+        background: #eff6ff;
+        border-left: 3px solid #2563eb;
+        color: #1e3a8a;
+      }
+      .lg-one {
+        background: #f5f3ff;
+        border-left: 3px solid #7c3aed;
+        color: #4c1d95;
+      }
+      .draft-outline {
+        outline: 1px dashed #94a3b8;
+        outline-offset: -1px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Assign teachers</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* --------------------------------------------------------------- helpers */
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          destructive: "bg-destructive text-white",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const badge = (t, tone = "muted") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border ${c}">${t}</span>`;
+      };
+      const alert = (tone, title, body = "", actions = "") => {
+        const c = {
+          warning: "bg-amber-50 border-amber-300 text-amber-900",
+          danger: "bg-red-50 border-red-300 text-red-900",
+          info: "bg-blue-50 border-blue-300 text-blue-900",
+          success: "bg-green-50 border-green-300 text-green-900",
+        }[tone];
+        const icon = { warning: "⚠", danger: "⛔", info: "ℹ", success: "✓" }[
+          tone
+        ];
+        return `<div role="${tone === "danger" ? "alert" : "status"}" class="rounded-lg border p-3 flex gap-3 ${c}"><span aria-hidden="true">${icon}</span><div class="flex-1"><div class="font-medium">${title}</div>${body ? `<div class="mt-1">${body}</div>` : ""}${actions ? `<div class="mt-2 flex flex-wrap gap-2">${actions}</div>` : ""}</div></div>`;
+      };
+      const sel = (label, value, w = "w-full") =>
+        `<div class="space-y-1"><label class="block font-medium">${label}</label><button class="h-9 ${w} rounded-md border border-input bg-white px-3 text-left">${value} ▾</button></div>`;
+      const dialog = (title, body, footer, w = "max-w-lg") => `
+        <div class="absolute inset-0 bg-black/50 grid place-items-start justify-center p-10 z-30 overflow-auto">
+          <div role="dialog" aria-modal="true" aria-label="${title}" class="bg-white rounded-lg shadow-lg w-full ${w} p-6">
+            <div class="flex items-start justify-between mb-4"><h2 class="text-lg font-semibold">${title}</h2><button aria-label="Close" class="w-8 h-8 rounded-md hover:bg-muted">✕</button></div>
+            <div class="space-y-4">${body}</div>
+            <div class="flex justify-end gap-2 mt-6">${footer}</div>
+          </div>
+        </div>`;
+      const sheet = (title, body, footer = "", w = 480) => `
+        <div class="absolute inset-0 bg-black/50 z-30 flex justify-end">
+          <aside role="dialog" aria-modal="true" aria-label="${title}" class="bg-white h-full shadow-lg flex flex-col" style="width:${w}px">
+            <div class="flex items-center justify-between p-4 border-b border-border"><h2 class="text-lg font-semibold">${title}</h2><button aria-label="Close" class="w-8 h-8 rounded-md hover:bg-muted">✕</button></div>
+            <div class="flex-1 overflow-auto p-4 space-y-4">${body}</div>
+            ${footer ? `<div class="p-4 border-t border-border flex justify-end gap-2">${footer}</div>` : ""}
+          </aside>
+        </div>`;
+      const toast = (text, action = "") =>
+        `<div role="status" class="absolute bottom-4 right-4 z-40 bg-white border border-border shadow-lg rounded-lg px-4 py-3 flex items-center gap-4 max-w-md"><span>${text}</span>${action ? `<button class="font-medium text-primary underline">${action}</button>` : ""}</div>`;
+
+      /* --------------------------------------------------------------- app shell */
+      const shell = (content, overlay = "", active = "assign") => `
+        <div class="relative bg-muted w-[1280px] min-h-[820px] rounded-lg overflow-hidden border border-slate-300 flex">
+          <nav aria-label="Main" class="w-56 bg-white border-r border-border p-3 space-y-1 text-sm shrink-0">
+            <div class="font-semibold px-2 py-2">Lingua School</div>
+            <div class="px-2 pt-3 pb-1 text-xs text-muted-foreground uppercase">Schedule</div>
+            <div class="px-2 py-1.5 rounded-md">📅 Timetable</div>
+            <div class="px-2 py-1.5 rounded-md">🗓 Absences & replacements</div>
+            <div class="px-2 py-1.5 rounded-md ${active === "assign" ? "bg-accent text-accent-foreground font-medium" : ""}" ${active === "assign" ? 'aria-current="page"' : ""}>✨ Assign teachers</div>
+            <div class="px-2 pt-3 pb-1 text-xs text-muted-foreground uppercase">People</div>
+            <div class="px-2 py-1.5">🎓 Students</div>
+            <div class="px-2 py-1.5 rounded-md ${active === "teachers" ? "bg-accent text-accent-foreground font-medium" : ""}">🧑‍🏫 Teachers</div>
+            <div class="px-2 pt-3 pb-1 text-xs text-muted-foreground uppercase">Academics</div>
+            <div class="px-2 py-1.5 rounded-md ${active === "groups" ? "bg-accent text-accent-foreground font-medium" : ""}">📚 Courses & groups</div>
+          </nav>
+          <main class="flex-1 min-w-0 p-6 space-y-4">${content}</main>
+          ${overlay}
+        </div>`;
+
+      const header = (o = {}) => {
+        const termBadge = o.published
+          ? badge("Published 1 Sep", "success")
+          : badge("Draft term");
+        const primary = o.noPrimary
+          ? ""
+          : btn(o.hasDraft ? "Reassign…" : "✨ Assign teachers…");
+        return `
+        <div class="flex items-center gap-3 flex-wrap">
+          <h1 class="text-2xl font-semibold mr-4">Assign teachers</h1>
+          <button class="h-9 rounded-md border border-input bg-white px-3">Term: ${o.term || "Spring 2027"} ▾</button>${termBadge}
+          <div class="flex-1"></div>
+          <button aria-label="More actions" class="h-9 w-9 rounded-md border border-input bg-white">⋯</button>
+          ${primary}
+        </div>`;
+      };
+      const tabs = (active, o = {}) => {
+        const t = (k, n, label, status, tone = "text-muted-foreground") =>
+          `<button role="tab" aria-selected="${active === k}" class="px-4 py-2 -mb-px border-b-2 ${active === k ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground"}"><span class="font-medium">${n} ${label}</span> <span class="ml-2 text-xs ${tone}">${status}</span></button>`;
+        return `<div role="tablist" class="flex border-b border-slate-300">
+          ${t("groups", "①", "Groups", o.groups ?? "58 ready · 3 need attention")}
+          ${t("draft", "②", "Draft", o.draft ?? "52 of 58 assigned", o.draftTone)}
+        </div>`;
+      };
+
+      /* --------------------------------------------------------------- setup */
+      function setup(state) {
+        if (state <= 2) {
+          const clash = state === 1;
+          const changed = state === 2;
+          const row = (d, s, e, r, i) => `
+            <div class="flex items-end gap-2">
+              ${sel(i === 0 ? "Day" : `<span class="sr-only">Day</span>`, d, "w-36")}
+              ${sel(i === 0 ? "Start" : `<span class="sr-only">Start</span>`, s, "w-24")}
+              ${sel(i === 0 ? "End" : `<span class="sr-only">End</span>`, e, "w-24")}
+              ${sel(i === 0 ? "Room" : `<span class="sr-only">Room</span>`, r, "w-48")}
+              <span class="h-9 flex items-center text-muted-foreground tnum">90 min</span>
+              <button aria-label="Remove lesson time ${i + 1}" class="h-9 w-9 rounded-md hover:bg-muted">✕</button>
+            </div>`;
+          return shell(
+            `<div class="text-muted-foreground">Courses & groups › A1 Evening</div>
+            <h1 class="text-2xl font-semibold">A1 Evening ${badge("Group")} ${badge("A1", "info")}</h1>`,
+            dialog(
+              "Edit group",
+              `<div class="grid grid-cols-2 gap-3">${sel("Type", "Group lesson")}${sel("Level", "A1 Beginner")}
+                <div class="space-y-1"><label class="font-medium block">Name</label><input class="h-9 w-full rounded-md border border-input px-3" value="A1 Evening"/></div>
+                <div class="space-y-1"><label class="font-medium block">Capacity</label><input class="h-9 w-full rounded-md border border-input px-3" value="10"/></div></div>
+              <fieldset class="space-y-2 border-t border-border pt-4"><legend class="font-semibold text-base">Lesson times <span class="text-xs text-muted-foreground font-normal">(required)</span></legend>
+                ${row(clash ? "Wednesday" : "Tuesday", "17:00", "18:30", "Room 3 · 8 seats", 0)}
+                ${row("Thursday", "17:00", "18:30", "Room 3 · 8 seats", 1)}
+                <button class="text-primary underline">+ Add lesson time</button>
+                <p class="text-muted-foreground">Every week, in every term this group runs. 2 lessons · 3 h a week.</p>
+              </fieldset>
+              <section aria-live="polite" class="space-y-2">
+                ${
+                  clash
+                    ? alert(
+                        "danger",
+                        "Conflict",
+                        "Room 3 is already used by B2 Conversation on Wednesdays 17:00–18:30. Choose another room or time.",
+                      ) +
+                      alert(
+                        "warning",
+                        "Warning",
+                        "2 students of this group are in A1 Kids on Wednesdays at 17:30.",
+                        `<label class="flex gap-2"><input type="checkbox"/> I've checked this</label>`,
+                      )
+                    : `<div class="text-green-700">✓ No clashes.</div>`
+                }
+                ${changed ? alert("info", "These times are used the next time teachers are assigned.", "The current timetable of Autumn 2026 still has the old times.", btn("Change the current timetable too…", "outline")) : ""}
+              </section>`,
+              btn("Cancel", "outline") + btn("Save"),
+              "max-w-3xl",
+            ),
+            "groups",
+          );
+        }
+        // teacher levels
+        return shell(
+          `<div class="text-muted-foreground">Teachers › Tomas Horvat</div>
+          <h1 class="text-2xl font-semibold">Tomas Horvat</h1>
+          <div role="tablist" class="flex border-b border-slate-300"><button class="px-4 py-2 border-b-2 border-primary font-medium">Profile</button><button class="px-4 py-2 text-muted-foreground">Availability</button><button class="px-4 py-2 text-muted-foreground">Groups</button></div>
+          <div class="bg-white rounded-lg border border-border p-6 space-y-4 max-w-2xl">
+            <h2 class="text-lg font-semibold">Levels they teach</h2>
+            <div class="grid grid-cols-3 gap-2">
+              ${[
+                ["A1 Beginner", 1],
+                ["A2 Elementary", 1],
+                ["B1 Intermediate", 1],
+                ["B2 Upper-intermediate", 1],
+                ["C1 Advanced", 0],
+                ["C2 Proficient", 0],
+              ]
+                .map(
+                  ([l, c]) =>
+                    `<label class="flex gap-2 items-center"><input type="checkbox" ${c ? "checked" : ""}/> ${l}</label>`,
+                )
+                .join("")}
+            </div>
+            <div class="flex items-center gap-2"><span class="text-muted-foreground">Quick select:</span>${btn("Up to B2 ▾", "outline", "h-8")}${btn("All", "ghost", "h-8")}${btn("None", "ghost", "h-8")}</div>
+            <p class="text-muted-foreground">The generator only gives Tomas groups of these levels. You can still pick Tomas for any group by hand.</p>
+            <div class="border-t border-border pt-4 space-y-1">
+              <label class="font-medium block">Max hours a week <span class="text-xs text-muted-foreground font-normal">(optional · Q3)</span></label>
+              <input class="h-9 w-24 rounded-md border border-input px-3" value="20"/>
+              <p class="text-xs text-muted-foreground">Leave empty for no limit. The generator never assigns more.</p>
+            </div>
+            <div class="flex justify-end">${btn("Save changes")}</div>
+          </div>`,
+          "",
+          "teachers",
+        );
+      }
+
+      /* --------------------------------------------------------------- groups tab */
+      const GROUPS = [
+        // name, level, times, room, students, canTeach, status
+        ["A1 Evening", "A1", "Tue, Thu 17:00–18:30", "Room 3", 8, 5, "ready"],
+        ["A2 Morning", "A2", "Mon 08:00–09:30", "Room 1", 6, 4, "ready"],
+        ["B1 Evening", "B1", "Tue, Thu 17:00–18:30", "Room 2", 7, 4, "ready"],
+        [
+          "B1 Grammar 1-on-1",
+          "B1",
+          "Wed 10:00–11:00",
+          "Online 1",
+          1,
+          4,
+          "ready",
+        ],
+        ["C1 Business", "C1", "Wed 18:00–19:30", "Room 2", 6, 2, "ready"],
+        ["C2 Proficiency", "C2", "Wed 18:00–19:30", "Online 1", 4, 0, "level"],
+        ["B2 Exam prep", "B2", "—", "—", 5, 3, "times"],
+        ["B1 Summer club", "B1", "Sat 10:00–12:00", "Room 2", 0, 4, "skip"],
+      ];
+      const statusBadge = (s, lv) =>
+        ({
+          ready: badge("Ready", "success"),
+          level: badge(`⚠ Nobody teaches ${lv}`, "warning"),
+          times: badge("⛔ No lesson times", "danger"),
+          skip: badge("Skipped this term"),
+        })[s];
+      const readiness = (ok) =>
+        ok
+          ? alert("success", "Before you assign: Ready to assign teachers.")
+          : `<details open class="bg-white rounded-lg border border-border p-4"><summary class="font-medium cursor-pointer">Before you assign · 4 things to check</summary>
+              <ul class="mt-3 space-y-2">
+                <li class="flex gap-2 items-start"><span class="text-red-700" aria-hidden="true">⛔</span><span class="flex-1">2 groups have no lesson times or room and will be skipped.</span><button class="text-primary underline">Show</button></li>
+                <li class="flex gap-2 items-start"><span class="text-amber-700" aria-hidden="true">⚠</span><span class="flex-1">Nobody teaches C2. 1 group can't get a teacher.</span><button class="text-primary underline">Teachers</button></li>
+                <li class="flex gap-2 items-start"><span class="text-amber-700" aria-hidden="true">⚠</span><span class="flex-1">Tue 17:00–18:30: 6 groups at A1–B1, only 4 teachers who teach them are free.</span><button class="text-primary underline">Show</button></li>
+                <li class="flex gap-2 items-start"><span class="text-amber-700" aria-hidden="true">⚠</span><span class="flex-1">2 teachers have no levels yet and won't be assigned.</span><button class="text-primary underline">Teachers</button></li>
+              </ul></details>`;
+      const groupsTable = (o = {}) => `
+        <div class="bg-white rounded-lg border border-border">
+          <div class="flex items-center gap-2 p-3 border-b border-border flex-wrap">
+            <input placeholder="Search groups" class="h-9 w-56 rounded-md border border-input px-3"/>
+            <button class="h-9 rounded-md border border-input bg-white px-3">Level: Any ▾</button>
+            <button class="h-9 rounded-md border border-input bg-white px-3">Day: Any ▾</button>
+            <div role="group" aria-label="Show" class="inline-flex rounded-md border border-input overflow-hidden"><button class="px-3 h-9 bg-muted font-medium">All</button><button class="px-3 h-9 border-l border-input">Needs attention (3)</button><button class="px-3 h-9 border-l border-input">Skipped (1)</button></div>
+          </div>
+          <div class="relative">
+          ${
+            o.popover
+              ? `<div class="absolute left-[640px] top-24 z-20 bg-white border border-border shadow-lg rounded-lg p-4 w-80 space-y-2" role="dialog" aria-label="Who can teach B1 Evening">
+                  <div class="font-medium">4 teachers teach B1</div>
+                  <table class="w-full text-xs"><thead class="text-muted-foreground"><tr><th class="text-left">Teacher</th><th>Tue</th><th>Thu</th></tr></thead><tbody>
+                  ${[
+                    ["Ana Kral", "✓", "✓"],
+                    ["Tomas Horvat", "✓", "✓"],
+                    ["Eva Simon", "✓", "✗ unavailable"],
+                    ["Peter Varga", "✓", "✓"],
+                  ]
+                    .map(
+                      ([n, a, b]) =>
+                        `<tr class="border-t border-border"><td class="py-1">${n}</td><td class="text-center">${a}</td><td class="text-center">${b}</td></tr>`,
+                    )
+                    .join("")}
+                  </tbody></table>
+                  <p class="text-xs text-muted-foreground">Who's actually free also depends on the other groups at that time; the generator works that out.</p>
+                </div>`
+              : ""
+          }
+          <table class="w-full text-left">
+            <thead class="bg-muted text-xs text-muted-foreground"><tr>
+              <th class="px-3 py-2">Group ↑</th><th class="px-3 py-2">Level</th><th class="px-3 py-2">Lesson times</th><th class="px-3 py-2">Room</th><th class="px-3 py-2">Students</th><th class="px-3 py-2">Can teach</th><th class="px-3 py-2">Status</th><th class="px-3 py-2"><span class="sr-only">Actions</span></th>
+            </tr></thead>
+            <tbody>${GROUPS.map(
+              ([n, lv, t, r, st, ct, s]) =>
+                `<tr class="border-t border-border ${s === "skip" ? "text-muted-foreground" : s === "ready" ? "bg-white" : s === "times" ? "bg-red-50" : "bg-amber-50"}">
+                  <td class="px-3 py-2 font-medium">${s === "skip" ? "○ " : ""}<a href="#" class="underline decoration-slate-300">${n}</a></td>
+                  <td class="px-3 py-2">${lv}</td><td class="px-3 py-2 tnum">${t}</td><td class="px-3 py-2">${r}</td><td class="px-3 py-2 tnum">${st}</td>
+                  <td class="px-3 py-2"><button class="underline decoration-dotted">${ct === 0 ? "Nobody" : ct + " teachers"}</button></td>
+                  <td class="px-3 py-2">${statusBadge(s, lv)}</td>
+                  <td class="px-3 py-2">${s === "skip" ? `<button class="text-primary underline">Include</button>` : `<button aria-label="Actions, ${n}" class="w-8 h-8 rounded-md hover:bg-muted">⋯</button>`}</td>
+                </tr>`,
+            ).join("")}</tbody>
+          </table></div>
+          <div class="border-t border-border px-3 py-2 text-muted-foreground bg-muted tnum">58 groups · 104 lessons a week · 151 teaching hours · 20 teachers can give 168 h</div>
+        </div>`;
+      function groups(state) {
+        if (state === 2)
+          return shell(`${header({ noPrimary: true })}
+            <div class="bg-white rounded-lg border border-border p-12 text-center space-y-3 max-w-xl mx-auto mt-8">
+              <div class="text-4xl" aria-hidden="true">👥</div>
+              <h2 class="text-lg font-semibold">No groups yet</h2>
+              <p class="text-muted-foreground">Create groups with their lesson times first.</p>
+              ${btn("Go to Courses & groups")}
+            </div>`);
+        if (state === 3)
+          return shell(
+            `${header()}${tabs("groups", { groups: "58 ready · all set" })}${readiness(true)}${groupsTable()}`,
+          );
+        return shell(
+          `${header()}${tabs("groups")}${readiness(false)}${groupsTable({ popover: state === 1 })}`,
+        );
+      }
+
+      /* --------------------------------------------------------------- assign dialog */
+      function assign(state) {
+        const base = `${header()}${tabs("groups")}${readiness(false)}${groupsTable()}`;
+        if (state === 0)
+          return shell(
+            base,
+            dialog(
+              "Assign teachers for Spring 2027",
+              `<p><strong>58 groups, 20 teachers.</strong></p>
+              ${alert("warning", "2 groups aren't ready and are skipped.", "", `<button class="underline">Review</button>`)}
+              <fieldset class="space-y-2 border border-border rounded-md p-3"><legend class="px-1 font-medium">This term already has teachers on 12 slots.</legend>
+                <label class="flex gap-2"><input type="radio" name="e" checked/> Keep current teachers <span class="text-muted-foreground">(locked)</span></label>
+                <label class="flex gap-2"><input type="radio" name="e"/> Reassign everything</label>
+              </fieldset>
+              <p class="text-muted-foreground">When several teachers fit, workloads are kept as even as possible.</p>`,
+              btn("Cancel", "outline") + btn("Assign teachers"),
+            ),
+          );
+        if (state === 1)
+          return shell(
+            `${header({ published: true, term: "Autumn 2026" })}${tabs("groups")}${groupsTable()}`,
+            dialog(
+              "Assign teachers for Autumn 2026",
+              `<p><strong>61 groups, 20 teachers.</strong></p>
+              <div class="space-y-1"><label class="font-medium block">From</label><button class="h-9 w-48 rounded-md border border-input bg-white px-3 text-left">Mon 3 Nov 2026 📅</button><p class="text-xs text-muted-foreground">Lessons before this date are not touched.</p></div>
+              <fieldset class="space-y-2"><legend class="sr-only">Which groups</legend>
+                <label class="flex gap-2"><input type="radio" name="m" checked/> Only groups without a teacher <span class="text-muted-foreground">(3 new groups)</span></label>
+                <label class="flex gap-2"><input type="radio" name="m"/> Reconsider every group</label>
+              </fieldset>
+              <p class="text-muted-foreground">When several teachers fit, workloads are kept as even as possible.</p>`,
+              btn("Cancel", "outline") + btn("Assign teachers"),
+            ),
+          );
+        if (state === 2)
+          return shell(
+            base,
+            dialog(
+              "Assign teachers for Spring 2027",
+              `<p><strong>58 groups, 20 teachers.</strong></p>
+              <div class="space-y-2"><div class="flex items-center gap-2"><span class="animate-spin" aria-hidden="true">◌</span> Assigning teachers… 31 of 58 groups</div>
+              <div role="progressbar" aria-valuenow="53" aria-valuemin="0" aria-valuemax="100" class="h-2 rounded-full bg-muted overflow-hidden"><div class="h-full bg-primary" style="width:53%"></div></div></div>`,
+              btn("Cancel", "outline"),
+            ),
+          );
+        if (state === 3)
+          return shell(
+            base,
+            dialog(
+              "Assign teachers for Spring 2027",
+              alert(
+                "info",
+                "No group is ready yet. Add lesson times and a room to your groups.",
+              ),
+              btn("Cancel", "outline") + btn("Show groups"),
+            ),
+          );
+        if (state === 4)
+          return shell(
+            `${header()}${tabs("draft", { draft: "No draft yet" })}` +
+              alert(
+                "danger",
+                "Assigning failed. The previous draft is unchanged.",
+                "",
+                btn("Try again", "outline") + btn("Copy error ID", "ghost"),
+              ),
+          );
+      }
+
+      /* --------------------------------------------------------------- draft */
+      const summary = (o = {}) => `
+        <div class="rounded-lg border border-blue-300 bg-blue-50 text-blue-900 px-4 py-2 flex items-center gap-3">
+          <span aria-hidden="true">📝</span><strong>Draft · not visible to teachers or students</strong>
+          <span class="flex-1"></span><span class="text-xs">Assigned 14 Oct 10:42 by Anna Novak</span>
+        </div>
+        ${o.stale ? alert("warning", "Things changed since teachers were assigned:", "times of B1 Evening · Eva Simon's availability · levels of Peter Varga", btn("Check draft", "outline") + btn("Reassign…", "ghost")) : ""}
+        <div class="flex gap-3 items-stretch">
+          <div class="bg-white rounded-lg border border-border p-3 w-44"><div class="text-xs text-muted-foreground">Assigned</div><div class="text-xl font-semibold tnum">52 / 58</div><div class="text-xs">groups</div></div>
+          <div class="bg-white rounded-lg border border-red-300 p-3 w-44"><div class="text-xs text-muted-foreground">No teacher</div><div class="text-xl font-semibold tnum text-red-700">6 groups</div><button class="text-xs text-primary underline">Show</button></div>
+          <div class="bg-white rounded-lg border border-border p-3 w-56"><div class="text-xs text-muted-foreground">Workload</div><div class="text-xl font-semibold tnum">5–9 h a week</div><div class="text-xs">average 7.5 h · range was 4–10 h · <button class="text-primary underline">Details</button></div></div>
+          <div class="bg-white rounded-lg border border-border p-3 w-40"><div class="text-xs text-muted-foreground">Issues</div><div class="text-xl font-semibold tnum">0 · 2</div><div class="text-xs">conflicts · warnings · <button class="text-primary underline">Show</button></div></div>
+          <div class="flex-1"></div>
+          <div class="flex flex-col gap-2 justify-center">${o.compareBtn ? btn("Compare to current", "outline") : ""}${btn("Publish…")}</div>
+        </div>`;
+      const viewToggle = (v, o = {}) => `
+        <div class="flex items-center gap-2 flex-wrap">
+          <div role="group" aria-label="View" class="inline-flex rounded-md border border-input overflow-hidden">
+            ${["By group", "By teacher", "Week"].map((x, i) => `<button class="px-3 h-9 ${i ? "border-l border-input" : ""} ${x === v ? "bg-muted font-medium" : "bg-white"}">${x}</button>`).join("")}
+          </div>
+          ${v === "By group" ? `<button class="h-9 rounded-md border border-input bg-white px-3">Level: Any ▾</button><button class="h-9 rounded-md border border-input bg-white px-3">Teacher: Any ▾</button><label class="flex items-center gap-2 ml-2"><input type="checkbox"/> Only without teacher</label>` : ""}
+          <div class="flex-1"></div>
+          ${o.compareToggle ? `<div role="group" aria-label="Mode" class="inline-flex rounded-md border border-input overflow-hidden"><button class="px-3 h-9 ${o.compare ? "bg-white" : "bg-muted font-medium"}">Draft</button><button class="px-3 h-9 border-l border-input ${o.compare ? "bg-muted font-medium" : "bg-white"}">Compare</button></div>` : ""}
+          ${btn("🔒 Lock… ▾", "outline")}
+        </div>`;
+      const DRAFT = [
+        // group, level, times, room, teacher, locked, note, was
+        [
+          "C2 Proficiency",
+          "C2",
+          "Wed 18:00–19:30",
+          "Online 1",
+          "",
+          0,
+          "Nobody teaches C2",
+          "",
+        ],
+        [
+          "B1 Evening",
+          "B1",
+          "Tue, Thu 17:00–18:30",
+          "Room 2",
+          "",
+          0,
+          "All 4 B1 teachers busy or unavailable",
+          "",
+        ],
+        [
+          "A1 Evening",
+          "A1",
+          "Tue, Thu 17:00–18:30",
+          "Room 3",
+          "Ana Kral",
+          1,
+          "",
+          "",
+        ],
+        [
+          "A2 Morning",
+          "A2",
+          "Mon 08:00–09:30",
+          "Room 1",
+          "Eva Simon",
+          0,
+          "⚠ Eva is away on 12 Nov",
+          "Ana Kral",
+        ],
+        [
+          "B1 Grammar 1-on-1",
+          "B1",
+          "Wed 10:00–11:00",
+          "Online 1",
+          "Tomas Horvat",
+          0,
+          "",
+          "",
+        ],
+        [
+          "C1 Business",
+          "C1",
+          "Wed 18:00–19:30",
+          "Room 2",
+          "Tomas Horvat",
+          0,
+          "",
+          "Peter Varga",
+        ],
+        [
+          "B2 Conversation",
+          "B2",
+          "Mon, Wed 16:00–17:30",
+          "Room 4",
+          "Peter Varga",
+          1,
+          "",
+          "",
+        ],
+      ];
+      const byGroup = (o = {}) => `
+        <div class="bg-white rounded-lg border border-border relative">
+          ${o.compare ? `<div class="px-3 py-2 border-b border-border bg-muted flex items-center gap-3"><span class="tnum">9 groups change teacher · 7 teachers and 61 students affected</span><span class="flex-1"></span><button class="text-primary underline">List changes</button></div>` : ""}
+          <table class="w-full text-left">
+            <thead class="bg-muted text-xs text-muted-foreground"><tr>
+              <th class="px-3 py-2">Group</th><th class="px-3 py-2">Level</th><th class="px-3 py-2">Lesson times</th><th class="px-3 py-2">Room</th><th class="px-3 py-2">Teacher</th>${o.compare ? `<th class="px-3 py-2">Was</th>` : ""}<th class="px-3 py-2"><span class="sr-only">Lock</span>🔒</th><th class="px-3 py-2">Notes</th>
+            </tr></thead>
+            <tbody>${DRAFT.map(([g, lv, t, r, te, lk, note, was], i) => {
+              const none = !te;
+              const dim = o.compare && !was && !none ? "opacity-60" : "";
+              return `<tr class="border-t border-border ${none ? "bg-red-50" : "bg-white"} ${dim}">
+                <td class="px-3 py-2 font-medium">${none ? `<span class="text-red-700" aria-hidden="true">⛔</span> ` : ""}${g}</td>
+                <td class="px-3 py-2">${lv}</td><td class="px-3 py-2 tnum">${t}</td><td class="px-3 py-2">${r}</td>
+                <td class="px-3 py-2"><button aria-label="Teacher for ${g}" class="h-8 w-48 rounded-md border ${none ? "border-red-600 text-red-800 bg-white" : "border-input bg-white"} px-2 text-left truncate ${o.pickerRow === i ? "ring-2 ring-ring" : ""}">${none ? "No teacher — choose" : te} ▾</button></td>
+                ${o.compare ? `<td class="px-3 py-2">${was ? `${badge("Changed", "warning")} <span class="text-muted-foreground">${was}</span>` : ""}</td>` : ""}
+                <td class="px-3 py-2"><button aria-pressed="${lk ? "true" : "false"}" aria-label="Lock teacher for ${g}" class="w-8 h-8 rounded-md ${lk ? "bg-muted" : "hover:bg-muted text-slate-400"}">${lk ? "🔒" : "🔓"}</button></td>
+                <td class="px-3 py-2 ${none ? "text-red-800" : note ? "text-amber-800" : ""}">${note}${none ? ` · <button class="text-primary underline">Why?</button>` : ""}</td>
+              </tr>`;
+            }).join("")}</tbody>
+          </table>
+          ${
+            o.picker
+              ? `<div class="absolute left-[470px] top-[118px] z-20 bg-white border border-border shadow-lg rounded-lg w-[380px] py-2" role="listbox" aria-label="Teacher for B1 Evening">
+                  <div class="px-3 pb-2"><input placeholder="Search teachers" class="h-8 w-full rounded-md border border-input px-2"/></div>
+                  <div class="px-3 py-1 hover:bg-muted" role="option">No teacher</div>
+                  <div class="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase">Available</div>
+                  <div class="px-3 py-1.5 hover:bg-muted flex justify-between" role="option"><span>Lucia Benova</span><span class="text-muted-foreground tnum">5 h → 8 h a week</span></div>
+                  <div class="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase">Unavailable</div>
+                  <div class="px-3 py-1.5 hover:bg-muted flex justify-between" role="option"><span>Eva Simon <span class="text-amber-700">⚠</span></span><span class="text-muted-foreground">Unavailable Thu 16:00–20:00</span></div>
+                  <div class="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase">Doesn't teach B1</div>
+                  <div class="px-3 py-1.5 hover:bg-muted flex justify-between" role="option"><span>Marek Dvorak <span class="text-amber-700">⚠</span></span><span class="text-muted-foreground">Teaches A1–A2</span></div>
+                  <div class="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase">Over max hours</div>
+                  <div class="px-3 py-1.5 hover:bg-muted flex justify-between" role="option"><span>Peter Varga <span class="text-amber-700">⚠</span></span><span class="text-muted-foreground tnum">8 h → 11 h (max 9 h)</span></div>
+                  <div class="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase">Busy</div>
+                  <div class="px-3 py-1.5 flex justify-between text-slate-500" role="option" aria-disabled="true"><span>Ana Kral</span><span>Teaching A1 Evening, Tue 17:00</span></div>
+                  <div class="px-3 py-1.5 flex justify-between text-slate-500" role="option" aria-disabled="true"><span>Tomas Horvat</span><span>Teaching A2 Evening, Tue 17:00</span></div>
+                </div>`
+              : ""
+          }
+        </div>`;
+      const TEACHERS = [
+        ["Tomas Horvat", "A1–B2", 6, 9, "Mon, Tue, Wed, Thu", ""],
+        ["Ana Kral", "A1–B1", 5, 8, "Mon, Tue, Thu", ""],
+        ["Eva Simon", "A1–C1", 5, 7.5, "Mon, Tue, Wed", ""],
+        ["Peter Varga", "B1–C2", 4, 8, "Mon, Wed, Fri", "max 9 h"],
+        ["Lucia Benova", "A1–B2", 3, 5, "Wed, Fri", ""],
+        ["Marek Dvorak", "A1–A2", 0, 0, "—", ""],
+      ];
+      const byTeacher = () => `
+        <div class="bg-white rounded-lg border border-border">
+          <table class="w-full text-left">
+            <thead class="bg-muted text-xs text-muted-foreground"><tr><th class="px-3 py-2">Teacher</th><th class="px-3 py-2">Levels</th><th class="px-3 py-2">Groups</th><th class="px-3 py-2 w-80">Hours a week</th><th class="px-3 py-2">Days</th><th class="px-3 py-2">Max</th></tr></thead>
+            <tbody>${TEACHERS.map(
+              ([n, lv, g, h, d, m], i) => `<tr class="border-t border-border">
+                <td class="px-3 py-2 font-medium"><button class="underline decoration-slate-300">${i === 0 ? "▾" : "▸"} ${n}</button></td><td class="px-3 py-2">${lv}</td><td class="px-3 py-2 tnum">${g}</td>
+                <td class="px-3 py-2"><div class="flex items-center gap-2"><span class="tnum w-12">${h} h</span><div class="relative flex-1 h-2 bg-muted rounded-full" aria-hidden="true"><div class="h-full bg-blue-600 rounded-full" style="width:${(h / 12) * 100}%"></div><div class="absolute top-[-3px] h-3.5 w-0.5 bg-slate-500" style="left:${(7.5 / 12) * 100}%"></div></div></div></td>
+                <td class="px-3 py-2">${d}</td><td class="px-3 py-2 text-muted-foreground">${m}</td></tr>
+                ${i === 0 ? `<tr class="bg-muted/50"><td></td><td colspan="5" class="px-3 py-2 text-xs"><ul class="space-y-1">${["B1 Grammar 1-on-1 · Wed 10:00–11:00 · Online 1", "C1 Business · Wed 18:00–19:30 · Room 2", "A2 Evening · Tue, Thu 17:00–18:30 · Room 1", "…3 more"].map((x) => `<li class="flex justify-between"><span>${x}</span>${x.startsWith("…") ? "" : `<button class="text-primary underline">Give to…</button>`}</li>`).join("")}</ul></td></tr>` : ""}`,
+            ).join("")}</tbody>
+          </table>
+          <p class="px-3 py-2 text-xs text-muted-foreground border-t border-border">The line on each bar marks the average (7.5 h). Marek Dvorak has no groups — he could take an A1–A2 group without a teacher.</p>
+        </div>`;
+      const weekView = () => {
+        const HOUR = 40,
+          START = 8,
+          END = 21;
+        const y = (t) => {
+          const [h, m] = t.split(":").map(Number);
+          return ((h * 60 + m - START * 60) / 60) * HOUR;
+        };
+        const blocks = {
+          Mon: [["16:00", "17:30", "B2 Conversation", "Room 4", 0]],
+          Tue: [["17:00", "18:30", "A2 Evening", "Room 1", 1]],
+          Wed: [
+            ["10:00", "11:00", "B1 Grammar 1-on-1", "Online 1", 0],
+            ["18:00", "19:30", "C1 Business", "Room 2", 0],
+          ],
+          Thu: [["17:00", "18:30", "A2 Evening", "Room 1", 1]],
+          Fri: [],
+          Sat: [],
+        };
+        return `<div class="bg-white rounded-lg border border-border">
+          <div class="p-3 border-b border-border flex gap-2 items-center"><button class="h-9 rounded-md border border-input bg-white px-3">Teacher: Tomas Horvat ▾</button><span class="text-muted-foreground">9 h a week · Mon, Tue, Wed, Thu</span></div>
+          <div class="flex">
+            <div class="w-14 shrink-0 pt-8 relative" style="height:${(END - START) * HOUR + 32}px">${Array.from({ length: END - START }, (_, i) => `<div class="absolute right-2 text-xs text-muted-foreground tnum" style="top:${i * HOUR + 26}px">${String(START + i).padStart(2, "0")}:00</div>`).join("")}</div>
+            ${Object.entries(blocks)
+              .map(
+                ([d, bs]) => `<div class="flex-1 border-l border-border">
+              <h3 class="h-8 px-2 flex items-center text-xs font-semibold border-b border-border">${d}</h3>
+              <div class="relative ${d === "Thu" ? "" : ""}" style="height:${(END - START) * HOUR}px">
+                ${d === "Fri" ? `<div class="absolute inset-x-0 hatch" style="top:${y("12:00")}px;height:${y("21:00") - y("12:00")}px" aria-hidden="true"></div>` : ""}
+                ${bs.map(([a, b, g, r, lk]) => `<button class="absolute inset-x-1 rounded-sm px-2 py-1 text-left text-xs lg-group draft-outline" style="top:${y(a)}px;height:${y(b) - y(a)}px" aria-label="${g}, ${d} ${a} to ${b}, ${r}${lk ? ", locked" : ""}"><div class="tnum">${lk ? "🔒 " : ""}${a}–${b}</div><div class="font-semibold truncate">👥 ${g}</div><div class="truncate">${r}</div></button>`).join("")}
+              </div></div>`,
+              )
+              .join("")}
+          </div></div>`;
+      };
+      function draft(state) {
+        const h = `${header({ hasDraft: true })}${tabs("draft")}`;
+        switch (state) {
+          case 0:
+            return shell(h + summary() + viewToggle("By group") + byGroup());
+          case 1:
+            return shell(
+              h +
+                summary() +
+                viewToggle("By group") +
+                byGroup({ picker: true, pickerRow: 1 }),
+            );
+          case 2:
+            return shell(
+              h + summary() + viewToggle("By group") + byGroup(),
+              sheet(
+                "Groups without a teacher (6)",
+                [
+                  [
+                    "B1 Evening · Tue, Thu 17:00–18:30 · B1",
+                    "None of the 4 teachers who teach B1 can take all of these times:",
+                    [
+                      ["Tomas Horvat", "Tue — teaching A2 Evening"],
+                      ["Eva Simon", "Thu — unavailable (weekly, 16:00–20:00)"],
+                      ["Ana Kral", "Tue, Thu — teaching A1 Evening"],
+                      ["Peter Varga", "would be 11 h, max 9 h a week"],
+                    ],
+                    "Ana Kral could take it if A1 Evening goes to Lucia Benova.",
+                  ],
+                  [
+                    "C2 Proficiency · Wed 18:00–19:30 · C2",
+                    "Nobody teaches C2.",
+                    [],
+                    "",
+                  ],
+                ]
+                  .map(
+                    ([
+                      t,
+                      intro,
+                      rows,
+                      sug,
+                    ]) => `<article class="rounded-lg border border-border p-3 space-y-2">
+                    <h3 class="font-semibold">${t}</h3>
+                    <p>${intro}</p>
+                    ${rows.length ? `<table class="w-full text-xs"><tbody>${rows.map(([n, r]) => `<tr class="border-t border-border"><td class="py-1 pr-2 font-medium">${n}</td><td class="py-1 text-red-800">✗ ${r}</td></tr>`).join("")}</tbody></table>` : ""}
+                    ${sug ? `<div class="rounded-md bg-blue-50 border border-blue-300 p-2 text-blue-900 flex items-center gap-2"><span class="flex-1">💡 ${sug}</span>${btn("Apply", "outline", "h-8")}</div>` : ""}
+                    <div class="flex flex-wrap gap-2">${btn("Pick a teacher anyway ▾", "outline", "h-8 text-xs")}${rows.length ? btn("Edit group times", "outline", "h-8 text-xs") : ""}${btn("Teacher levels", "outline", "h-8 text-xs")}</div>
+                  </article>`,
+                  )
+                  .join("") +
+                  `<p class="text-muted-foreground">Fix the data, then reassign to try again.</p>`,
+                btn("Reassign…"),
+              ),
+            );
+          case 3:
+            return shell(
+              h + summary() + viewToggle("By teacher") + byTeacher(),
+            );
+          case 4:
+            return shell(h + summary() + viewToggle("Week") + weekView());
+          case 5:
+            return shell(
+              `${header({ hasDraft: true, published: true, term: "Autumn 2026" })}${tabs("draft")}` +
+                summary({ compareBtn: true }) +
+                viewToggle("By group", { compareToggle: true, compare: true }) +
+                byGroup({ compare: true }),
+            );
+          case 6:
+            return shell(
+              h + summary() + viewToggle("By group") + byGroup(),
+              toast("Lucia Benova now teaches B1 Evening (locked).", "Undo"),
+            );
+          case 7:
+            return shell(
+              `${header({ hasDraft: true })}${tabs("draft", { draft: "Out of date", draftTone: "text-amber-700 font-medium" })}` +
+                summary({ stale: true }) +
+                viewToggle("By group") +
+                byGroup(),
+            );
+          case 8:
+            return shell(
+              `${header({})}${tabs("draft", { draft: "No draft yet" })}
+              <div class="bg-white rounded-lg border border-border p-12 text-center space-y-3 max-w-xl mx-auto mt-8">
+                <div class="text-4xl" aria-hidden="true">✨</div>
+                <h2 class="text-lg font-semibold">No draft yet</h2>
+                <p class="text-muted-foreground">Check the groups, then assign teachers.</p>
+                ${btn("✨ Assign teachers…")}
+              </div>`,
+            );
+        }
+      }
+
+      /* --------------------------------------------------------------- publish */
+      function publish(state) {
+        const base = (o = {}) =>
+          `${header({ hasDraft: true, ...o })}${tabs("draft")}${summary()}${viewToggle("By group")}${byGroup()}`;
+        if (state === 0)
+          return shell(
+            base(),
+            dialog(
+              "Publish teacher assignments for Spring 2027?",
+              `<ul class="space-y-1 list-disc pl-5">
+                <li>52 groups, 94 weekly lessons.</li>
+                <li>Replaces the 12 slots in the timetable editor.</li>
+                <li>Lessons will be created from 2 Feb 2027 to 26 Jun 2027</li>
+                <li>2 warnings acknowledged · <button class="text-primary underline">Review</button></li>
+                <li class="text-amber-800">6 groups have no teacher and won't get lessons. · <button class="text-primary underline">Show</button></li>
+              </ul>
+              <p class="text-muted-foreground">Teachers and students will see their lessons right away. You can still change slots later; changes apply from a date you choose.</p>`,
+              btn("Cancel", "outline") +
+                btn("Save to the timetable editor only", "outline") +
+                btn("Publish timetable"),
+            ),
+          );
+        if (state === 1)
+          return shell(
+            base({ published: true, term: "Autumn 2026" }),
+            dialog(
+              "Publish teacher assignments for Autumn 2026?",
+              `${alert("info", "Changes apply from Mon 3 Nov 2026. Lessons before then are not touched.")}
+              <ul class="space-y-1 list-disc pl-5">
+                <li>9 groups get a different teacher; 3 groups start.</li>
+                <li>128 future lessons get the new teacher; 0 kept as cancelled.</li>
+                <li>7 teachers and 61 students are affected. · <button class="text-primary underline">List changes</button></li>
+              </ul>
+              <label class="flex gap-2 items-start rounded-md border border-border p-3"><input type="checkbox" class="mt-1"/> <span>I understand this changes the timetable for teachers and students from 3 Nov 2026.</span></label>`,
+              btn("Cancel", "outline") + btn("Apply changes"),
+              "max-w-xl",
+            ),
+          );
+        if (state === 2)
+          return shell(
+            base(),
+            dialog(
+              "Publish teacher assignments for Spring 2027?",
+              `${alert("danger", "Fix 1 conflict before publishing.", `<ul class="list-disc pl-5"><li>C1 Business · Wed 18:00 — Tomas Horvat already teaches B2 Writing then (added in the editor).</li></ul>`)}
+              ${alert("warning", "The timetable was changed in the editor after this draft was made. Review the new issues.")}`,
+              btn("Cancel", "outline") + btn("Show issues"),
+            ),
+          );
+        if (state === 3)
+          return shell(
+            `<div class="flex items-center gap-3"><h1 class="text-2xl font-semibold">Timetable editor</h1><button class="h-9 rounded-md border border-input bg-white px-3">Term: Spring 2027 ▾</button>${badge("Published 14 Oct", "success")}</div>
+            ${alert("info", "This timetable is published. Changes apply to future lessons from the date you choose and are visible to teachers and students right away.")}
+            <div class="bg-white rounded-lg border border-border h-[560px] grid place-items-center text-muted-foreground">(timetable editor grid — timetable.md §5)</div>`,
+            toast("Spring 2027 published. 1,880 lessons created."),
+          );
+      }
+
+      /* --------------------------------------------------------------- other */
+      function other(state) {
+        if (state === 0)
+          return `<div class="bg-white w-[1000px] min-h-[500px] rounded-lg border border-slate-300 grid place-items-center">
+            <div class="text-center space-y-3"><div class="text-5xl" aria-hidden="true">🔒</div><h1 class="text-2xl font-semibold">You don't have access to this page</h1><p class="text-muted-foreground">Teachers and students can't open Assign teachers.</p>${btn("Go to my dashboard")}</div></div>`;
+        if (state === 1)
+          return `<div class="bg-muted w-[390px] min-h-[700px] rounded-lg border border-slate-300 p-4 space-y-4">
+            <h1 class="text-2xl font-semibold">Assign teachers</h1>
+            ${alert("info", "This page works best on a larger screen", "Use a desktop or laptop to review and change assignments.")}
+            <div class="bg-white rounded-lg border border-border p-4 space-y-2">
+              <div class="font-medium">Spring 2027 ${badge("Draft term")}</div>
+              <div>Groups: 58 ready · 3 need attention</div>
+              <div>Draft: 52 of 58 assigned · 5–9 h a week</div>
+            </div></div>`;
+        if (state === 2)
+          return shell(`${header({ noPrimary: true })}${tabs("groups")}
+            <div class="space-y-3"><div class="skeleton h-24 w-full"></div>${Array.from({ length: 8 }, () => `<div class="skeleton h-8 w-full"></div>`).join("")}</div>`);
+        if (state === 3)
+          return shell(`${header({ noPrimary: true })}${tabs("groups")}
+            ${alert("danger", "Something went wrong", "We couldn't load this page.", btn("Try again", "outline"))}`);
+      }
+
+      /* --------------------------------------------------------------- router */
+      const SCREENS = [
+        {
+          k: "setup",
+          label: "Setup: group & teacher",
+          states: [
+            "group · lesson times",
+            "group · clash",
+            "group · changed (published term)",
+            "teacher · levels they teach",
+          ],
+          fn: setup,
+        },
+        {
+          k: "groups",
+          label: "① Groups",
+          states: [
+            "readiness + table",
+            "who can teach",
+            "no groups",
+            "all ready",
+          ],
+          fn: groups,
+        },
+        {
+          k: "assign",
+          label: "Assign dialog",
+          states: [
+            "draft term",
+            "published term · from date",
+            "running",
+            "nothing ready",
+            "failed",
+          ],
+          fn: assign,
+        },
+        {
+          k: "draft",
+          label: "② Draft",
+          states: [
+            "by group",
+            "teacher picker",
+            "why no teacher",
+            "by teacher (workload)",
+            "week (one teacher)",
+            "compare to current",
+            "changed by hand (toast)",
+            "out of date",
+            "no draft yet",
+          ],
+          fn: draft,
+        },
+        {
+          k: "publish",
+          label: "Publish",
+          states: [
+            "draft term",
+            "published term · from date",
+            "blocked · live changed",
+            "done → editor",
+          ],
+          fn: publish,
+        },
+        {
+          k: "other",
+          label: "Other states",
+          states: ["403 teacher/student", "< 1024 px", "loading", "load error"],
+          fn: other,
+        },
+      ];
+      let cur = { screen: "groups", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>

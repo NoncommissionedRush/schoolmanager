@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import {
   cancelRescheduledLessonAction,
+  rescheduleFromCreditAction,
   rescheduleLessonAction,
 } from "@/app/admin/absences/actions";
 import { ToneAlert } from "@/components/absences/tone";
@@ -41,6 +42,8 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { Message } from "@/server/admin/result";
 import type { AdminRescheduleResult } from "@/server/replacements/reschedule";
+// Pure rules, safe on the client: the dialog's "blocking" matches the server.
+import { ADMIN_OVERRIDABLE } from "@/server/scheduling/reschedule";
 
 export type AdminRescheduleInfo = {
   lessonId: string;
@@ -56,6 +59,14 @@ export type AdminRescheduleInfo = {
 };
 
 type Problems = Extract<AdminRescheduleResult, { status: "conflicts" }>;
+
+/** The student's AVAILABLE 1-on-1 credit an admin spends (CARM-47). */
+export type RescheduleCredit = {
+  id: string;
+  studentName: string;
+  sourceDate: string;
+  validUntil: string;
+};
 
 const toMinutes = (time: string) => {
   const [h, m] = time.split(":").map(Number);
@@ -100,11 +111,21 @@ export function AdminRescheduleActions({
   );
 }
 
-function RescheduleDialog({
+/**
+ * The date, time, length and room of the new lesson. With `credit` the
+ * admin spends the student's 1-on-1 credit on a new lesson instead of
+ * moving `info.lessonId` (replacements.md §7).
+ */
+export function RescheduleDialog({
   info,
+  credit,
   onClose,
 }: {
-  info: AdminRescheduleInfo;
+  info: Pick<
+    AdminRescheduleInfo,
+    "lessonId" | "date" | "startMinute" | "durationMinutes" | "roomId" | "rooms"
+  >;
+  credit?: RescheduleCredit;
   onClose: () => void;
 }) {
   const t = useTranslations("reschedule.admin");
@@ -148,7 +169,7 @@ function RescheduleDialog({
         })),
         ...problems.reasons.map((r) => ({
           key: r.key,
-          blocking: r.code !== "STUDENT_CLASH",
+          blocking: !ADMIN_OVERRIDABLE.has(r.code),
           text: reasonText(r),
         })),
       ]
@@ -161,15 +182,19 @@ function RescheduleDialog({
   function run() {
     setError(null);
     startTransition(async () => {
-      const result = await rescheduleLessonAction({
-        lessonId: info.lessonId,
+      const fields = {
         date,
         startMinute: toMinutes(time),
         durationMinutes: Number(duration),
         roomId: roomId || null,
         acknowledgedKeys: acknowledged,
         note,
-      }).catch(() => null);
+      };
+      const result = await (
+        credit
+          ? rescheduleFromCreditAction({ ...fields, creditId: credit.id })
+          : rescheduleLessonAction({ ...fields, lessonId: info.lessonId })
+      ).catch(() => null);
       if (!result) return setError({ key: "common.error.network" });
       if (!result.ok) {
         return setError(
@@ -184,7 +209,7 @@ function RescheduleDialog({
         return;
       }
       toast.success(
-        t("done", {
+        t(credit ? "doneCredit" : "done", {
           dateTime: format.dateTime(new Date(result.data.startsAt), {
             weekday: "short",
             day: "numeric",
@@ -203,8 +228,20 @@ function RescheduleDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t("title")}</DialogTitle>
-          <DialogDescription>{t("description")}</DialogDescription>
+          <DialogTitle>
+            {credit
+              ? t("titleCredit", { student: credit.studentName })
+              : t("title")}
+          </DialogTitle>
+          <DialogDescription>
+            {credit
+              ? t("descriptionCredit", {
+                  student: credit.studentName,
+                  sourceDate: formatDate(credit.sourceDate, "dayMonth"),
+                  validUntil: formatDate(credit.validUntil, "weekdayDate"),
+                })
+              : t("description")}
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="flex flex-col gap-1">
@@ -321,7 +358,7 @@ function RescheduleDialog({
             onClick={run}
           >
             {pending && <Loader2 aria-hidden="true" className="animate-spin" />}
-            {t("confirm")}
+            {credit ? t("confirmCredit") : t("confirm")}
           </Button>
         </DialogFooter>
       </DialogContent>

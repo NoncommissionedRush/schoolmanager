@@ -15,6 +15,13 @@ import type {
   TermInfo,
 } from "../types";
 
+/**
+ * Timeout for property tests on a realistic school. Each case takes about a
+ * second locally, but CI runners are several times slower and run the test
+ * files in parallel, so vitest's 5 s default is too tight.
+ */
+export const PROPERTY_TEST_TIMEOUT_MS = 30_000;
+
 /** mulberry32: tiny, fast, seedable PRNG. */
 export function prng(seed: number) {
   let a = seed >>> 0;

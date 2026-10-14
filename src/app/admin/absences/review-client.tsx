@@ -745,7 +745,7 @@ function OverrideDialog({
   );
 }
 
-function OptionRow({
+export function OptionRow({
   value,
   checked,
   onPick,

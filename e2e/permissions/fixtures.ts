@@ -113,6 +113,7 @@ export async function schoolIds(slug: string) {
     teacherNote: await first("teacher_notes"),
     absence: await first("absence_reports"),
     replacement: await first("replacement_requests"),
+    credit: await first("makeup_credits"),
   };
 }
 
