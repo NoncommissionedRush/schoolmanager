@@ -16,6 +16,7 @@ import {
 } from "@/server/replacements/release";
 import {
   addDays,
+  applyGroupTeacherChange,
   buildCalendar,
   checkLesson,
   checkSlot,
@@ -24,10 +25,12 @@ import {
   decideSave,
   type ExistingLesson,
   fromIsoDate,
+  type GroupTeacherChangePlan,
   holidaysOfTerm,
   type IsoDate,
   type LessonCandidate,
   type LessonSyncPlan,
+  planGroupTeacherChange,
   planLessonSync,
   planSlotCarryOver,
   planSlotEdit,
@@ -72,6 +75,8 @@ export type LessonChanges = {
   created: number;
   removed: number;
   cancelled: number;
+  /** Future lessons given another teacher by a teacher-only change. */
+  moved?: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -501,6 +506,125 @@ export async function syncSlots(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Teacher-only change of a group (generator.md §5.6), shared by the
+// generator's apply and the editor
+// ---------------------------------------------------------------------------
+
+/**
+ * What `planGroupTeacherChange` needs about a group: every lesson of
+ * `slotIds` and the group's ad-hoc lessons from `from` on.
+ */
+export async function loadGroupTeacherChangeLessons(
+  tx: Tx,
+  termId: string,
+  groupId: string,
+  slotIds: string[],
+  from: IsoDate,
+): Promise<ExistingLesson[]> {
+  return loadExistingLessons(tx, {
+    groupId,
+    termId,
+    OR: [
+      { timetableSlotId: { in: slotIds } },
+      // A day early: `from`'s local midnight is before its UTC midnight;
+      // the plan keeps only those on or after `from` in the school's zone.
+      {
+        timetableSlotId: null,
+        startsAt: { gte: fromIsoDate(addDays(from, -1)) },
+      },
+    ],
+  });
+}
+
+export type GroupTeacherChangeWrite = {
+  /** Old slot id → the slot its lessons from the date on now belong to. */
+  nextIds: Map<string, string>;
+  /** Changed, ended and created slots, for `syncSlots` from the date on. */
+  synced: SlotInfo[];
+  slotsCreated: number;
+  slotsEnded: number;
+  /** Lessons re-pointed or given the new teacher (ad-hoc ones included). */
+  repointed: number;
+};
+
+/**
+ * Writes a `planGroupTeacherChange` plan: slots updated in place or split,
+ * lessons re-pointed. Nothing is cancelled or deleted; the caller then runs
+ * `syncSlots` on `synced` to create the new slots' missing occurrences.
+ */
+export async function writeGroupTeacherChange(
+  tx: Tx,
+  schoolId: string,
+  plan: GroupTeacherChangePlan,
+  newTeacherId: string,
+): Promise<GroupTeacherChangeWrite> {
+  const out: GroupTeacherChangeWrite = {
+    nextIds: new Map(),
+    synced: [],
+    slotsCreated: 0,
+    slotsEnded: 0,
+    repointed: 0,
+  };
+  for (const change of plan.slots) {
+    if (change.kind === "update") {
+      await tx.timetableSlot.update({
+        where: { id: change.slot.id },
+        data: { teacherId: change.slot.teacherId },
+      });
+      out.nextIds.set(change.slot.id, change.slot.id);
+      out.synced.push(change.slot);
+      continue;
+    }
+    await tx.timetableSlot.update({
+      where: { id: change.ended.id },
+      data: { validUntil: fromIsoDate(change.ended.validUntil!) },
+    });
+    out.slotsEnded++;
+    const { next } = change;
+    const created = await tx.timetableSlot.create({
+      data: {
+        schoolId,
+        termId: next.termId,
+        groupId: next.groupId,
+        teacherId: next.teacherId,
+        roomId: next.roomId,
+        weekday: next.weekday,
+        startMinute: next.startMinute,
+        endMinute: next.endMinute,
+        validFrom: next.validFrom ? fromIsoDate(next.validFrom) : null,
+        validUntil: next.validUntil ? fromIsoDate(next.validUntil) : null,
+      },
+      select: { id: true },
+    });
+    out.slotsCreated++;
+    out.nextIds.set(change.ended.id, created.id);
+    out.synced.push(change.ended, { ...next, id: created.id });
+  }
+  for (const r of plan.repoint) {
+    await tx.lesson.update({
+      where: { id: r.lessonId },
+      data: {
+        timetableSlotId: out.nextIds.get(r.fromSlotId)!,
+        ...(r.setTeacher && { teacherId: newTeacherId }),
+        ...(r.clearSubstitute && { substituteTeacherId: null }),
+      },
+    });
+    out.repointed++;
+  }
+  for (const a of plan.adHoc) {
+    await tx.lesson.update({
+      where: { id: a.lessonId },
+      data: {
+        teacherId: newTeacherId,
+        ...(a.clearSubstitute && { substituteTeacherId: null }),
+      },
+    });
+    out.repointed++;
+  }
+  return out;
+}
+
 export const addChanges = (
   a: LessonChanges,
   b: LessonChanges,
@@ -632,6 +756,98 @@ async function resolveCandidate(
   };
 }
 
+type EditorTeacherChange = {
+  plan: GroupTeacherChangePlan;
+  /** `checkLesson` conflicts of lessons with their own time or room. */
+  conflicts: Conflict[];
+};
+
+/**
+ * An edit of a published slot that changes only its teacher from a date
+ * follows the generator's teacher change (generator.md §5.6, §10 Q3): the
+ * lessons from that date move to the new teacher and keep their absences,
+ * bookings, substitutes and cancellations; nothing is cancelled. Null for
+ * any other edit, which keeps the split path of `saveSlot`.
+ *
+ * Only this slot changes. The group's ad-hoc lessons the old teacher was
+ * going to give move too once every other slot of the group in effect from
+ * the date already has the new teacher, i.e. when the group as a whole
+ * changes teacher.
+ */
+async function planEditorTeacherChange(
+  tx: Tx,
+  loaded: Loaded,
+  existing: SlotInfo | undefined,
+  candidate: SlotInfo | Omit<SlotInfo, "id">,
+  effectiveFrom: IsoDate | null,
+  now: Date,
+): Promise<EditorTeacherChange | null> {
+  if (
+    !loaded.term.publishedAt ||
+    !existing ||
+    !effectiveFrom ||
+    candidate.teacherId === existing.teacherId ||
+    candidate.groupId !== existing.groupId ||
+    candidate.roomId !== existing.roomId ||
+    candidate.weekday !== existing.weekday ||
+    candidate.startMinute !== existing.startMinute ||
+    candidate.endMinute !== existing.endMinute
+  ) {
+    return null;
+  }
+  const { context } = loaded;
+  const others = context.slots.filter(
+    (s) =>
+      s.termId === existing.termId &&
+      s.groupId === existing.groupId &&
+      s.id !== existing.id &&
+      (!s.validUntil || s.validUntil >= effectiveFrom),
+  );
+  const wholeGroup = others.every((s) => s.teacherId === candidate.teacherId);
+  const plan = planGroupTeacherChange({
+    slots: [existing],
+    lessons: await loadGroupTeacherChangeLessons(
+      tx,
+      existing.termId,
+      existing.groupId,
+      [existing.id],
+      effectiveFrom,
+    ),
+    oldTeacherId: wholeGroup ? existing.teacherId : null,
+    newTeacherId: candidate.teacherId,
+    from: effectiveFrom,
+    now,
+    timeZone: context.school.timeZone,
+  });
+  // The would-be calendar: the slot with the new teacher from the date (its
+  // lessons before it are stored, so the ended part needs no template).
+  const lessons = applyGroupTeacherChange(
+    context.lessons,
+    plan,
+    candidate.teacherId,
+    () => existing.id,
+  );
+  const calendar = buildCalendar({
+    ...context,
+    slots: context.slots.map((s) =>
+      s.id === existing.id ? { ...existing, ...candidate } : s,
+    ),
+    lessons,
+  });
+  const byId = new Map(lessons.map((l) => [l.id, l]));
+  const conflicts = plan.checkLessons.flatMap((lessonId) => {
+    const lesson = byId.get(lessonId);
+    if (!lesson || lesson.status !== "SCHEDULED") return [];
+    // Keyed by lesson, so acknowledging one lesson's warning doesn't cover
+    // the same warning of another or of the slot.
+    return checkLesson(calendar, lesson).map((c) => ({
+      ...c,
+      key: `lesson:${lessonId}|${c.key}`,
+    }));
+  });
+  return { plan, conflicts };
+}
+
 /** Conflicts of a new or edited slot, for live display in the editor. */
 export async function validateSlot(
   db: SchoolDb,
@@ -640,8 +856,22 @@ export async function validateSlot(
 ): Promise<Conflict[]> {
   return db.$transaction(async (tx) => {
     const loaded = await load(tx, request.slot.termId, now);
-    const { candidate } = await resolveCandidate(loaded, request);
-    return checkSlot(buildCalendar(loaded.context), candidate);
+    const { candidate, existing, effectiveFrom } = await resolveCandidate(
+      loaded,
+      request,
+    );
+    const teacherChange = await planEditorTeacherChange(
+      tx,
+      loaded,
+      existing,
+      candidate,
+      effectiveFrom,
+      now,
+    );
+    return [
+      ...checkSlot(buildCalendar(loaded.context), candidate),
+      ...(teacherChange?.conflicts ?? []),
+    ];
   });
 }
 
@@ -682,7 +912,18 @@ export async function saveSlot(
       loaded,
       request,
     );
-    const conflicts = checkSlot(buildCalendar(loaded.context), candidate);
+    const teacherChange = await planEditorTeacherChange(
+      tx,
+      loaded,
+      existing,
+      candidate,
+      effectiveFrom,
+      now,
+    );
+    const conflicts = [
+      ...checkSlot(buildCalendar(loaded.context), candidate),
+      ...(teacherChange?.conflicts ?? []),
+    ];
     const decision = decideSave(
       conflicts,
       request.acknowledgedConflictKeys ?? [],
@@ -733,6 +974,55 @@ export async function saveSlot(
       return {
         ok: true,
         slotId: created.id,
+        overridden: decision.overridden,
+        lessons,
+      };
+    }
+
+    // A teacher-only change re-points the lessons instead of replacing them.
+    if (teacherChange) {
+      const write = await writeGroupTeacherChange(
+        tx,
+        schoolId,
+        teacherChange.plan,
+        request.slot.teacherId,
+      );
+      const lessons: LessonChanges = {
+        ...(await syncSlots(
+          tx,
+          loaded,
+          write.synced,
+          maxDate(effectiveFrom!, loaded.today),
+          now,
+          "slots",
+        )),
+        moved:
+          teacherChange.plan.repoint.filter((r) => r.setTeacher).length +
+          teacherChange.plan.adHoc.length,
+      };
+      const [change] = teacherChange.plan.slots;
+      const slotId = write.nextIds.get(existing.id) ?? existing.id;
+      await audit(
+        tx,
+        schoolId,
+        actor,
+        "timetable_slot.updated",
+        "TimetableSlot",
+        existing.id,
+        {
+          ...auditData,
+          mode: "teacherChange",
+          previousTeacherId: existing.teacherId,
+          newSlotId: change?.kind === "split" ? slotId : undefined,
+          lessons,
+          repointed: teacherChange.plan.repoint.map((r) => r.lessonId),
+          adHoc: teacherChange.plan.adHoc.map((a) => a.lessonId),
+        },
+      );
+      return {
+        ok: true,
+        slotId,
+        endedSlotId: change?.kind === "split" ? existing.id : undefined,
         overridden: decision.overridden,
         lessons,
       };

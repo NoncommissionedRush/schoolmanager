@@ -499,3 +499,37 @@ export function planGroupTeacherChange({
   }
   return plan;
 }
+
+/**
+ * `lessons` as they are after `plan`: re-pointed lessons carry the id
+ * `slotIdOf` gives their new slot, SCHEDULED ones and the ad-hoc ones get
+ * `newTeacherId`, and a substitute who is the new teacher is cleared. For
+ * the would-be calendar that `checkLesson` runs on before anything is
+ * written. Lessons the plan doesn't touch are returned as they are.
+ */
+export function applyGroupTeacherChange<
+  L extends Pick<
+    LessonInfo,
+    "id" | "timetableSlotId" | "teacherId" | "substituteTeacherId"
+  >,
+>(
+  lessons: readonly L[],
+  plan: GroupTeacherChangePlan,
+  newTeacherId: string,
+  slotIdOf: (fromSlotId: string) => string,
+): L[] {
+  const repoint = new Map(plan.repoint.map((r) => [r.lessonId, r]));
+  const adHoc = new Map(plan.adHoc.map((a) => [a.lessonId, a]));
+  return lessons.map((l) => {
+    const r = repoint.get(l.id);
+    const a = adHoc.get(l.id);
+    if (!r && !a) return l;
+    const clear = r?.clearSubstitute || a?.clearSubstitute;
+    return {
+      ...l,
+      timetableSlotId: r ? slotIdOf(r.fromSlotId) : l.timetableSlotId,
+      teacherId: !r || r.setTeacher ? newTeacherId : l.teacherId,
+      substituteTeacherId: clear ? null : l.substituteTeacherId,
+    };
+  });
+}

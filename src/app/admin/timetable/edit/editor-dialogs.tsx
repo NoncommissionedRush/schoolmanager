@@ -53,9 +53,9 @@ export function useLessonResult() {
   const t = useTranslations("timetable.result");
   const format = useFormatter();
   return (changes: LessonChanges) => {
-    const parts = (["created", "removed", "cancelled"] as const)
-      .filter((part) => changes[part] > 0)
-      .map((part) => t(part, { count: changes[part] }));
+    const parts = (["moved", "created", "removed", "cancelled"] as const)
+      .filter((part) => (changes[part] ?? 0) > 0)
+      .map((part) => t(part, { count: changes[part] ?? 0 }));
     if (parts.length === 0) return t("none");
     const joined = format.list(parts, { type: "unit" });
     return `${joined.charAt(0).toUpperCase()}${joined.slice(1)}.`;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { generateLessonOccurrences } from "./generate-lessons";
 import {
+  applyGroupTeacherChange,
   type ExistingLesson,
   isEmptyPlan,
   type LessonSyncInput,
@@ -453,28 +454,12 @@ describe("planGroupTeacherChange (generator.md §5.6)", () => {
         nextId.set(change.ended.id, `${change.ended.id}-next`);
       }
     }
-    const repoint = new Map(plan.repoint.map((r) => [r.lessonId, r]));
-    const adHocs = new Map(plan.adHoc.map((a) => [a.lessonId, a]));
-    const outLessons = existing.map((l) => {
-      const r = repoint.get(l.id);
-      if (r) {
-        return {
-          ...l,
-          timetableSlotId: nextId.get(r.fromSlotId) ?? r.fromSlotId,
-          teacherId: r.setTeacher ? "t2" : l.teacherId,
-          substituteTeacherId: r.clearSubstitute ? null : l.substituteTeacherId,
-        };
-      }
-      const a = adHocs.get(l.id);
-      if (a) {
-        return {
-          ...l,
-          teacherId: "t2",
-          substituteTeacherId: a.clearSubstitute ? null : l.substituteTeacherId,
-        };
-      }
-      return l;
-    });
+    const outLessons = applyGroupTeacherChange(
+      existing,
+      plan,
+      "t2",
+      (id) => nextId.get(id) ?? id,
+    );
     return { slots: outSlots, lessons: outLessons };
   }
 
@@ -642,5 +627,35 @@ describe("planGroupTeacherChange (generator.md §5.6)", () => {
       }),
     );
     expect(plan.slots).toEqual([]);
+  });
+
+  it("applyGroupTeacherChange maps the lessons for the would-be calendar", () => {
+    const before = input();
+    const plan = planGroupTeacherChange(before);
+    const after = applyGroupTeacherChange(
+      before.lessons,
+      plan,
+      "t2",
+      (id) => `${id}-next`,
+    );
+    const byId = new Map(after.map((l) => [l.id, l]));
+    expect(byId.get("mon@2026-11-02")).toMatchObject({
+      timetableSlotId: "mon-next",
+      teacherId: "t2",
+      substituteTeacherId: null,
+    });
+    // Cancelled lessons move but keep their teacher.
+    expect(byId.get("tue@2026-10-27")).toMatchObject({
+      timetableSlotId: "tue-next",
+      teacherId: "t1",
+    });
+    expect(byId.get("adhoc-mine")).toMatchObject({
+      timetableSlotId: null,
+      teacherId: "t2",
+    });
+    // Untouched lessons are the same objects.
+    for (const id of ["mon@2026-10-19", "adhoc-other", "adhoc-before"]) {
+      expect(byId.get(id)).toBe(before.lessons.find((l) => l.id === id));
+    }
   });
 });
