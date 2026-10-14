@@ -409,6 +409,114 @@ describe("scopeArgs — User relations span schools", () => {
     });
   });
 
+  describe("orderBy follows the same rule (CARM-29)", () => {
+    const leaks: [string, string, Record<string, unknown>][] = [
+      // Ranks users by how many schools they belong to.
+      ["User", "findMany", { orderBy: { memberships: { _count: "desc" } } }],
+      [
+        "User",
+        "findFirst",
+        { orderBy: [{ name: "asc" }, { teacherProfiles: { _count: "asc" } }] },
+      ],
+      [
+        "Membership",
+        "findMany",
+        { orderBy: { user: { memberships: { _count: "desc" } } } },
+      ],
+      [
+        "Attendance",
+        "findMany",
+        { orderBy: { recordedBy: { studentProfiles: { _count: "asc" } } } },
+      ],
+      [
+        "Group",
+        "findMany",
+        {
+          include: {
+            memberships: {
+              orderBy: {
+                student: { user: { memberships: { _count: "asc" } } },
+              },
+            },
+          },
+        },
+      ],
+      [
+        "Membership",
+        "findMany",
+        {
+          include: {
+            user: { orderBy: { accounts: { _count: "desc" } } },
+          },
+        },
+      ],
+      [
+        "User",
+        "groupBy",
+        { by: ["name"], orderBy: { _count: { memberships: "desc" } } },
+      ],
+    ];
+
+    it.each(leaks)(
+      "rejects %s.%s ordering through a User's relations",
+      (model, operation, args) => {
+        expect(() => scopeArgs(model, operation, args, SCHOOL)).toThrow(
+          CrossSchoolAccessError,
+        );
+      },
+    );
+
+    it("allows ordering by User scalars and by tenant relations", () => {
+      for (const [model, operation, args] of [
+        ["User", "findMany", { orderBy: { name: "asc" } }],
+        [
+          "User",
+          "findMany",
+          {
+            orderBy: [
+              { deletedAt: { sort: "desc", nulls: "last" } },
+              { email: "asc" },
+            ],
+          },
+        ],
+        [
+          "User",
+          "groupBy",
+          { by: ["name"], orderBy: { _count: { id: "desc" } } },
+        ],
+        ["Membership", "findMany", { orderBy: { user: { name: "asc" } } }],
+        [
+          "StudentProfile",
+          "findMany",
+          {
+            orderBy: [
+              { user: { name: { sort: "asc", nulls: "first" } } },
+              { groupMemberships: { _count: "desc" } },
+            ],
+          },
+        ],
+        [
+          "Group",
+          "findMany",
+          {
+            include: {
+              memberships: { orderBy: { student: { user: { name: "asc" } } } },
+            },
+          },
+        ],
+      ] as const) {
+        expect(() =>
+          scopeArgs(
+            model,
+            operation,
+            args as unknown as Record<string, unknown>,
+            SCHOOL,
+          ),
+        ).not.toThrow();
+      }
+    });
+  });
+
   it("allows a User's scalar fields, directly and from the tenant side", () => {
     expect(
       scopeArgs(

@@ -22,6 +22,11 @@ import { Prisma, type PrismaClient } from "@/generated/prisma/client";
  * the user's scalar fields. Otherwise a filter such as
  * `{ user: { memberships: { some: { schoolId: B } } } }` would answer a
  * yes/no question about another school.
+ *
+ * `orderBy` follows the same rule, for the same reason: wherever it reaches a
+ * `User` it may only sort by the user's scalar fields. Otherwise
+ * `{ memberships: { _count: "desc" } }` on User (or `{ user: { … } }` from
+ * the tenant side) would rank users by data from other schools.
  */
 
 export class CrossSchoolAccessError extends Error {
@@ -131,10 +136,64 @@ function assertSafeRelationFilter(
   }
 }
 
+/** groupBy's aggregate orderings: `{ _count: { field: "asc" } }`, … */
+const AGGREGATE_ORDERINGS: ReadonlySet<string> = new Set([
+  "_count",
+  "_avg",
+  "_sum",
+  "_min",
+  "_max",
+]);
+
+/**
+ * Throws if an `orderBy` reaches into a `User` (the query root when
+ * `isUser`, or any User relation further down) and sorts by anything but the
+ * user's own scalar fields. Accepts a single ordering or a list; recurses
+ * through relation orderings (`{ group: { name: "asc" } }`).
+ */
+function assertSafeOrderBy(
+  orderBy: unknown,
+  isUser: boolean,
+  model: string,
+  operation: string,
+  path: string,
+) {
+  for (const node of asList(orderBy)) {
+    if (!isObject(node)) continue;
+    for (const [key, value] of Object.entries(node)) {
+      const keyPath = `${path}.${key}`;
+      if (isUser) {
+        // `{ email: "asc" }`, `{ email: { sort, nulls } }`, `_relevance`
+        // (whose `fields` must be scalars), and groupBy's aggregates.
+        if (USER_SCALARS.has(key) || key === "_relevance") continue;
+        if (
+          AGGREGATE_ORDERINGS.has(key) &&
+          isObject(value) &&
+          Object.keys(value).every((field) => USER_SCALARS.has(field))
+        ) {
+          continue;
+        }
+        throw new CrossSchoolAccessError(
+          model,
+          operation,
+          `(${keyPath}: ordering by User relations is not allowed)`,
+        );
+      }
+      if (USER_RELATION_FIELDS.has(key)) {
+        assertSafeOrderBy(value, true, model, operation, keyPath);
+      } else if (isObject(value)) {
+        // Another relation, `{ sort, nulls }` or an aggregate: none of them
+        // has a User relation key unless it reaches one.
+        assertSafeOrderBy(value, false, model, operation, keyPath);
+      }
+    }
+  }
+}
+
 /**
  * Throws if a `User` node — the query root when `isUser`, or any nested
- * `User` relation — reads a relation, or if any `where` along the way
- * filters through a User's relations. Walks `include`, `select` and
+ * `User` relation — reads a relation, or if any `where` or `orderBy` along
+ * the way filters or sorts through a User's relations. Walks `include`, `select` and
  * `_count` trees.
  */
 function assertNoUserRelationReads(
@@ -147,6 +206,15 @@ function assertNoUserRelationReads(
   if (!isObject(node)) return;
   if ("where" in node) {
     assertSafeWhere(node.where, isUser, model, operation, `${path}.where`);
+  }
+  if ("orderBy" in node) {
+    assertSafeOrderBy(
+      node.orderBy,
+      isUser,
+      model,
+      operation,
+      `${path}.orderBy`,
+    );
   }
   for (const key of ["include", "select"] as const) {
     const fields = node[key];
