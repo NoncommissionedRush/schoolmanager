@@ -176,7 +176,7 @@
             : f === "block"
               ? `<span class="absolute top-0.5 right-1 text-red-700">⛔<span class="sr-only">1 conflict</span></span>`
               : f === "over"
-                ? `<span title="Warning overridden by Anna Novak on 2 Oct" class="absolute top-0.5 right-1 text-slate-500 text-xs">🛡<span class="sr-only">Warning overridden</span></span>`
+                ? `<span title="Warning acknowledged by Anna Novak on 2 Oct" class="absolute top-0.5 right-1 text-slate-500 text-xs">🛡<span class="sr-only">Warning acknowledged</span></span>`
                 : "";
         return `<button data-slot="${i}" class="absolute inset-x-1 rounded-sm px-2 py-1 text-left text-xs overflow-hidden ${k === "g" ? "lg-group" : "lg-one"} ${selected ? "ring-2 ring-ring shadow-sm" : ""} ${cur.dim && !g.includes("Tomas") && t !== "Tomas Horvat" ? "opacity-40" : ""}" style="top:${yOf(a)}px;height:${height(a, b)}px" aria-label="${g}, Monday ${a} to ${b}, ${t}">
           ${flag}<div class="tnum">${a}–${b}</div><div class="font-semibold truncate">${k === "g" ? "👥" : "👤"} ${g}</div><div class="truncate">${t}</div>${f === "until" ? `<div class="italic">Until 14 Nov</div>` : ""}
@@ -241,21 +241,19 @@
         const rows = {
           clean: `<p class="text-green-700 flex items-center gap-2">✓ No conflicts.</p>`,
           warn: `<p class="font-medium">0 conflicts · 2 warnings</p>
-            <h3 class="font-semibold mt-2">Warnings</h3>
+            <h3 class="font-semibold mt-2">Warnings <span class="font-normal text-muted-foreground">· Can be overridden</span></h3>
             <ul class="space-y-2">
-              <li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>Room 3 fits 8; A2 Kids has 10 students. <a href="#" class="underline">Members</a></li>
-              <li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>Ana Kral is unavailable on 2 dates this term: 4 Nov, 11 Nov. <a href="#" class="underline">Availability</a></li>
+              <li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>Room 3 holds 8 students, but the group has 10. <a href="#" class="underline">Room</a> · <a href="#" class="underline">Show dates</a><label class="flex items-center gap-2 mt-2 font-medium"><input type="checkbox" ${cur.state === 4 ? "checked" : ""} /> I've checked this</label></li>
+              <li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>Ana Kral is not available all day on this weekday (2 dates, first on Mon 2 Nov 2026). <a href="#" class="underline">Availability</a> · <a href="#" class="underline">Show dates</a><label class="flex items-center gap-2 mt-2 font-medium"><input type="checkbox" ${cur.state === 4 ? "checked" : ""} /> I've checked this</label></li>
             </ul>
-            <h3 class="font-semibold mt-2">Notes</h3>
-            <ul><li class="border border-blue-300 bg-blue-50 rounded-md p-3 text-blue-900">ℹ No lessons on 2 dates because of holidays: 29 Oct, 30 Oct.</li></ul>
-            <label class="flex items-start gap-2 mt-3 font-medium"><input type="checkbox" class="mt-1" ${cur.state === 4 ? "checked" : ""} /> Save anyway — I've checked these 2 warnings</label>
             <div class="space-y-1"><label class="block font-medium">Reason <span class="font-normal text-muted-foreground">(optional)</span></label><textarea class="w-full rounded-md border border-input p-2" rows="2">${cur.state === 4 ? "Only class time that works for the kids; Ana confirmed." : ""}</textarea></div>`,
           block: `<p class="font-medium">1 conflict · 1 warning</p>
             <div role="alert" class="text-red-700 font-medium">Fix the conflicts before saving.</div>
-            <h3 class="font-semibold mt-2">Conflicts</h3>
-            <ul><li class="border border-red-300 bg-red-50 rounded-md p-3 text-red-900"><div class="font-medium">⛔ Conflict</div>Tomas Horvat already teaches B1 Evening on Monday 17:00–18:30. <a href="#" class="underline">Show slot</a></li></ul>
-            <h3 class="font-semibold mt-2">Warnings</h3>
-            <ul><li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>2 students are also in B1 Evening at this time: Mia Kovac, Jan Novak.</li></ul>`,
+            <h3 class="font-semibold mt-2">Conflicts <span class="font-normal text-muted-foreground">· Cannot be saved</span></h3>
+            <ul><li class="border border-red-300 bg-red-50 rounded-md p-3 text-red-900"><div class="font-medium">⛔ Conflict</div>Tomas Horvat is already teaching B1 Evening (17:00–18:30) on 15 dates, first on Mon 7 Sep 2026. <a href="#" class="underline">Show slot</a> · <a href="#" class="underline">Show dates</a></li></ul>
+            <h3 class="font-semibold mt-2">Warnings <span class="font-normal text-muted-foreground">· Can be overridden</span></h3>
+            <ul><li class="border border-amber-300 bg-amber-50 rounded-md p-3 text-amber-900"><div class="font-medium">⚠ Warning</div>2 students (Mia Kovac, Jan Novak) also attend B1 Evening (17:00–18:30) on 15 dates, first on Mon 7 Sep 2026.</li></ul>
+            <p class="text-xs text-muted-foreground">Warnings can be acknowledged once the conflict is fixed.</p>`,
         }[kind];
         return `<section aria-live="polite" class="border-t border-border pt-4 space-y-2"><h3 class="text-base font-semibold">Check</h3>${rows}</section>`;
       };
@@ -269,16 +267,16 @@
            <div class="flex gap-2 items-center text-muted-foreground"><span class="tnum">${kind === "block" ? "45" : "90"} min</span>${["45", "60", "90"].map((m) => `<button class="h-7 px-2 rounded-md border border-input text-xs">${m} min</button>`).join("")}</div>
            ${
              published
-               ? `<div class="space-y-1"><label class="block font-medium">Apply from</label><button class="h-9 w-full rounded-md border border-input px-3 text-left">Mon 20 Oct 2026 📅</button><p class="text-xs text-muted-foreground">Lessons before this date stay as they are.</p></div>
-                  <div class="rounded-md bg-muted p-3"><strong>Impact:</strong> 9 future lessons from 20 Oct will change. 7 past lessons stay as they were.</div>`
-               : `<p class="text-muted-foreground">Every Monday, 1 Sep – 20 Dec 2026 (15 lessons) · <a href="#" class="text-primary underline">More options</a></p>`
+               ? `<div class="space-y-1"><label class="block font-medium">Effective from</label><button class="h-9 w-full rounded-md border border-input px-3 text-left">Wed 14 Oct 2026 (today) 📅</button><p class="text-xs text-muted-foreground">Lessons before this date stay as they are.</p></div>
+                  <div class="rounded-md border border-blue-300 bg-blue-50 text-blue-900 p-3">From Wed 14 Oct this continues as a changed slot. Lessons before Wed 14 Oct stay as they were.</div>`
+               : `<p class="text-muted-foreground">Every Monday, 1 Sep – 20 Dec 2026 · 15 lessons · 1 date skipped for holidays · <a href="#" class="text-primary underline">More options</a></p>`
            }
            ${issuesList(kind)}`,
-          `<div class="mr-auto">${btn("⋯", "ghost")}</div>${btn("Cancel", "outline")}${btn("Save slot")}`,
+          `<div class="mr-auto">${btn("⋯", "ghost")}</div>${btn("Cancel", "outline")}${btn(kind === "warn" && cur.state === 4 ? "Save anyway" : "Save slot")}`,
         );
 
       function editor(st) {
-        const published = st >= 7 && st <= 9;
+        const published = (st >= 7 && st <= 9) || st === 12;
         const rooms = [
           "Room 1",
           "Room 2",
@@ -322,8 +320,8 @@
         if (st === 6)
           overlay = dialog(
             "Publish Autumn 2026?",
-            `<ul class="space-y-1 tnum"><li>24 slots</li><li>352 lessons will be created from 1 Sep to 20 Dec 2026</li><li>3 dates skipped for holidays</li><li>1 warning was overridden · <a href="#" class="text-primary underline">Review</a></li></ul>
-             <div role="alert" class="border border-red-300 bg-red-50 text-red-800 rounded-md p-3 flex justify-between items-center"><span class="font-medium">Fix 1 conflict before publishing.</span></div>
+            `<ul class="space-y-1 tnum"><li>24 slots</li><li>Lessons will be created from 14 Oct to 20 Dec 2026</li><li>1 warning acknowledged · <a href="#" class="text-primary underline">Review</a></li></ul>
+             <div role="alert" class="border border-red-300 bg-red-50 text-red-800 rounded-md p-3 flex justify-between items-center"><div><p class="font-medium">Fix 1 conflict before publishing.</p><p>A2 Kids · Mon 15:00 — Room 3 is already used by B1 Grammar 1-on-1.</p></div></div>
              <p class="text-muted-foreground">Teachers and students will see their lessons right away. You can still change slots later; changes apply from a date you choose.</p>`,
             btn("Cancel", "outline") + btn("Show issues"),
           );
@@ -332,23 +330,23 @@
           overlay = dialog(
             "End B1 Evening on Mondays?",
             `<div class="space-y-1"><label class="block font-medium">Last lesson</label><button class="h-9 w-full rounded-md border border-input px-3 text-left tnum">Mon 10 Nov 2026 ▾</button></div>
-             <div class="rounded-md bg-muted p-3">6 future lessons after 10 Nov will be removed. 7 past lessons stay.</div>
+             <div class="rounded-md bg-muted p-3">Lessons after 10 Nov are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled ("Timetable changed"), so no one loses information.</div>
              <p class="text-muted-foreground">Want to change the teacher, room or time instead? Edit the slot and choose from which date.</p>`,
             btn("Cancel", "outline") + btn("End slot", "destructive"),
           );
         if (st === 9)
           overlay = sheet(
             "Issues in Autumn 2026",
-            `<label class="flex items-center gap-2 text-muted-foreground"><input type="checkbox" /> Include overridden</label>
+            `<label class="flex items-center gap-2 text-muted-foreground"><input type="checkbox" /> Include acknowledged warnings</label>
              <h3 class="font-semibold">Warnings (2)</h3>
              ${[
                [
                  "A2 Kids · Mon 15:00",
-                 "Room 3 fits 8; A2 Kids has 10 students.",
+                 "Room 3 holds 8 students, but the group has 10.",
                ],
                [
                  "B1 Evening · Thu 17:00",
-                 "Tomas Horvat is unavailable on 1 date this term: 4 Nov.",
+                 "Tomas Horvat is not available on Tue 4 Nov 2026.",
                ],
              ]
                .map(
@@ -358,6 +356,8 @@
                .join("")}`,
             btn("Close", "outline"),
           );
+        if (st === 12)
+          overlay = `<div role="status" class="absolute bottom-6 right-6 z-30 w-[420px] bg-white border border-border rounded-lg shadow-lg p-4 flex items-start gap-3"><span class="text-green-700">✓</span><p class="flex-1">Slot saved. 9 lessons created, 8 future lessons removed, 1 cancelled because it has history.</p><a href="#" class="text-primary underline font-medium">View</a></div>`;
         if (st === 11)
           return shell(
             `<div class="max-w-md mx-auto mt-6"></div>` +
@@ -513,7 +513,7 @@
             "loading",
             "new slot · ok",
             "slot · warnings",
-            "slot · override ticked",
+            "slot · warnings acknowledged",
             "slot · conflict",
             "publish blocked",
             "published · edit from date",
@@ -521,6 +521,7 @@
             "issues panel",
             "empty term",
             "< 1024 px",
+            "saved · result toast",
           ],
           fn: editor,
         },

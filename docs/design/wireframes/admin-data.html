@@ -535,11 +535,11 @@
               );
         const hol = `<section class="mt-6"><div class="flex justify-between items-center mb-3"><h2 class="text-lg font-semibold">Holidays</h2><div class="flex gap-2"><button class="h-9 px-3 rounded-md border border-input bg-white">Show: All ▾</button>${btn("+ Add holiday", "outline")}</div></div>
           ${table(
-            ["Name", "Dates", "Applies to", "Lessons affected"],
+            ["Name", "Dates", "Applies to"],
             [
-              ["Christmas break", "21 Dec 2026 – 6 Jan 2027", "All terms", "—"],
-              ["Autumn break", "29 – 30 Oct 2026", "Autumn 2026", 14],
-              ["National holiday", "17 Nov 2026", "All terms", 9],
+              ["Christmas break", "21 Dec 2026 – 6 Jan 2027", "All terms"],
+              ["Autumn break", "29 – 30 Oct 2026", "Autumn 2026"],
+              ["National holiday", "17 Nov 2026", "All terms"],
             ],
           )}</section>`;
         let overlay = "";
@@ -559,7 +559,7 @@
             field("Name", "National holiday", { req: true }) +
               `<div class="grid grid-cols-2 gap-3">${field("First day", "17 Nov 2026", { req: true })}${field("Last day", "17 Nov 2026", { req: true })}</div>
                <fieldset><legend class="font-medium mb-2">Applies to</legend><label class="flex gap-2 items-center"><input type="radio" checked /> All terms (school-wide)</label><label class="flex gap-2 items-center"><input type="radio" /> Only Autumn 2026</label></fieldset>
-               <div class="border border-amber-300 bg-amber-50 text-amber-800 rounded-md p-3">9 scheduled lessons fall on these dates and will be cancelled.</div>`,
+               <div class="border border-amber-300 bg-amber-50 text-amber-800 rounded-md p-3">Lessons on these dates from today on are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled ("Holiday").</div>`,
             btn("Cancel", "outline") + btn("Add holiday"),
           );
         return shell(

@@ -377,25 +377,34 @@ timetable_, _Delete_).
 Term dialog: Name (required, unique), Start date, End date (required, end ≥
 start → `terms.error.endBeforeStart`). Overlapping another term → warning,
 not error (`terms.warning.overlap` "Overlaps with {term}. Lessons of both
-terms will run in parallel."). Editing dates of a **published** term shows
-impact text: "Lessons outside the new dates will be removed; new dates get
-lessons generated." (calls the scheduling service; see `timetable.md` §7).
-Shortening a published term so that it would remove past lessons is
-blocked (`terms.error.cannotRemovePast`).
+terms will run in parallel."). Editing dates of a **published** term:
+the dialog states `terms.impact.datesChanged` "Lessons outside the new dates
+are removed (or cancelled if they have history); new dates get lessons." On
+save the UI calls `regenerateLessons` and shows the result toast
+(`timetable.md` §5.10). The date pickers don't allow moving the start or end
+of a published term before today (`terms.error.cannotRemovePast`), because
+the module never touches past lessons.
+
+Delete term (only before publishing; the server refuses with
+`scheduling.errors.TERM_HAS_LESSONS` otherwise): confirm lists what goes with
+it — `terms.delete.cascade` "Its {slots} slots and {holidays} term holidays
+are deleted too. School-wide holidays stay."
 
 Holidays — a card under the table, **Holidays** with a `Select` scope
 filter (_All_, _School-wide_, each term):
 
-- Table: Name · Dates · Applies to (_All terms_ or term name) · Lessons
-  affected (published terms only) · actions.
+- Table: Name · Dates · Applies to (_All terms_ or term name) · actions.
 - Dialog: Name (required, e.g. "Christmas break"), Start, End (inclusive;
   single-day = same date), Applies to `RadioGroup`: _All terms
   (school-wide)_ / _Only {term}_ `Select`.
-- Adding/editing/deleting a holiday that touches a **published** term:
-  confirm `AlertDialog` with the impact: "{n} scheduled lessons fall on these
-  dates and will be cancelled." / "{n} lessons will be added back." The
-  exact behaviour is the scheduling service's (CARM-23); the UI only shows the
-  count it returns and the result.
+- Adding/editing/deleting a holiday that touches a **published** term
+  (`saveHoliday` / `deleteHoliday`, CARM-23): a confirm `AlertDialog` states
+  the rule — add/edit: `holidays.confirm.add` "Lessons on these dates from
+  today on are removed. Lessons with attendance, absences, homework or a
+  substitute are kept as cancelled ('Holiday')."; delete:
+  `holidays.confirm.delete` "Lessons on these dates come back from today
+  on." After saving, the shared result toast (`timetable.md` §5.10). Past
+  dates are never changed.
 - Empty: "No holidays yet." + _Add holiday_.
 
 ### 6.9 Rooms (`/admin/settings/rooms`)
@@ -476,8 +485,10 @@ Form (`max-w-2xl`): School name (required) · Timezone (`Combobox` of IANA
 names, read-only once any lesson exists — changing it would shift every
 lesson; tooltip explains) · **School week**: day checkboxes Mon–Sun (default
 Mon–Sat) · **School hours**: from / to (default 07:00–21:00). These feed the
-timetable grid range and the "outside school hours" check. The fields are
-designed here; storing them is part of CARM-23 ("per school").
+timetable grid range and the `OUTSIDE_SCHOOL_DAYS` / `OUTSIDE_SCHOOL_HOURS`
+checks. Stored as `School.teachingWeekdays`, `dayStartMinute`,
+`dayEndMinute` (CARM-23). Changing them doesn't move any slot; slots outside
+the new range get the warning in the editor.
 
 ### 6.12 Settings › Administrators (`/admin/settings/admins`)
 
@@ -693,41 +704,41 @@ Namespaces map to files under `messages/en-GB/` (new: `people`, `teachers`,
 
 ### terms / holidays
 
-| Key                              | Copy                                                                                                                   |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `terms.title`                    | Terms & holidays                                                                                                       |
-| `terms.new`                      | New term                                                                                                               |
-| `terms.field.name`               | Name                                                                                                                   |
-| `terms.field.namePlaceholder`    | e.g. Autumn 2026                                                                                                       |
-| `terms.field.start`              | First day                                                                                                              |
-| `terms.field.end`                | Last day                                                                                                               |
-| `terms.col.dates`                | Dates                                                                                                                  |
-| `terms.col.slots`                | Slots                                                                                                                  |
-| `terms.col.holidays`             | Holidays                                                                                                               |
-| `terms.status.draft`             | Draft                                                                                                                  |
-| `terms.status.published`         | Published                                                                                                              |
-| `terms.status.current`           | Current                                                                                                                |
-| `terms.openTimetable`            | Open timetable                                                                                                         |
-| `terms.error.endBeforeStart`     | The last day must be on or after the first day.                                                                        |
-| `terms.error.cannotRemovePast`   | These dates would remove lessons that already took place. Keep {date} inside the term.                                 |
-| `terms.warning.overlap`          | Overlaps with {term}. Lessons of both terms will run in parallel.                                                      |
-| `terms.impact.datesChanged`      | Lessons outside the new dates will be removed; new dates get lessons.                                                  |
-| `terms.empty.title`              | No terms yet                                                                                                           |
-| `terms.empty.description`        | A term sets the dates your timetable runs. Start with the current one.                                                 |
-| `terms.empty.action`             | Add term                                                                                                               |
-| `holidays.title`                 | Holidays                                                                                                               |
-| `holidays.new`                   | Add holiday                                                                                                            |
-| `holidays.field.name`            | Name                                                                                                                   |
-| `holidays.field.namePlaceholder` | e.g. Christmas break                                                                                                   |
-| `holidays.field.start`           | First day                                                                                                              |
-| `holidays.field.end`             | Last day                                                                                                               |
-| `holidays.field.scope`           | Applies to                                                                                                             |
-| `holidays.scope.school`          | All terms (school-wide)                                                                                                |
-| `holidays.scope.term`            | Only {term}                                                                                                            |
-| `holidays.col.affected`          | Lessons affected                                                                                                       |
-| `holidays.impact.cancel`         | {count, plural, one {# scheduled lesson falls} other {# scheduled lessons fall}} on these dates and will be cancelled. |
-| `holidays.impact.restore`        | {count, plural, one {# lesson} other {# lessons}} will be added back.                                                  |
-| `holidays.empty`                 | No holidays yet.                                                                                                       |
+| Key                              | Copy                                                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `terms.title`                    | Terms & holidays                                                                                                                                                   |
+| `terms.new`                      | New term                                                                                                                                                           |
+| `terms.field.name`               | Name                                                                                                                                                               |
+| `terms.field.namePlaceholder`    | e.g. Autumn 2026                                                                                                                                                   |
+| `terms.field.start`              | First day                                                                                                                                                          |
+| `terms.field.end`                | Last day                                                                                                                                                           |
+| `terms.col.dates`                | Dates                                                                                                                                                              |
+| `terms.col.slots`                | Slots                                                                                                                                                              |
+| `terms.col.holidays`             | Holidays                                                                                                                                                           |
+| `terms.status.draft`             | Draft                                                                                                                                                              |
+| `terms.status.published`         | Published                                                                                                                                                          |
+| `terms.status.current`           | Current                                                                                                                                                            |
+| `terms.openTimetable`            | Open timetable                                                                                                                                                     |
+| `terms.error.endBeforeStart`     | The last day must be on or after the first day.                                                                                                                    |
+| `terms.error.cannotRemovePast`   | A published term can't start or end before today.                                                                                                                  |
+| `terms.warning.overlap`          | Overlaps with {term}. Lessons of both terms will run in parallel.                                                                                                  |
+| `terms.impact.datesChanged`      | Lessons outside the new dates are removed (or cancelled if they have history); new dates get lessons.                                                              |
+| `terms.delete.cascade`           | Its {slots, plural, one {# slot} other {# slots}} and {holidays, plural, one {# term holiday} other {# term holidays}} are deleted too. School-wide holidays stay. |
+| `terms.empty.title`              | No terms yet                                                                                                                                                       |
+| `terms.empty.description`        | A term sets the dates your timetable runs. Start with the current one.                                                                                             |
+| `terms.empty.action`             | Add term                                                                                                                                                           |
+| `holidays.title`                 | Holidays                                                                                                                                                           |
+| `holidays.new`                   | Add holiday                                                                                                                                                        |
+| `holidays.field.name`            | Name                                                                                                                                                               |
+| `holidays.field.namePlaceholder` | e.g. Christmas break                                                                                                                                               |
+| `holidays.field.start`           | First day                                                                                                                                                          |
+| `holidays.field.end`             | Last day                                                                                                                                                           |
+| `holidays.field.scope`           | Applies to                                                                                                                                                         |
+| `holidays.scope.school`          | All terms (school-wide)                                                                                                                                            |
+| `holidays.scope.term`            | Only {term}                                                                                                                                                        |
+| `holidays.confirm.add`           | Lessons on these dates from today on are removed. Lessons with attendance, absences, homework or a substitute are kept as cancelled ("Holiday").                   |
+| `holidays.confirm.delete`        | Lessons on these dates come back from today on.                                                                                                                    |
+| `holidays.empty`                 | No holidays yet.                                                                                                                                                   |
 
 ### rooms
 
@@ -879,6 +890,3 @@ Namespaces map to files under `messages/en-GB/` (new: `people`, `teachers`,
   stateless JWTs, so a reset doesn't end an open session (archiving does,
   because membership/`deletedAt` are re-read on every request). Acceptable
   for v1?
-- **Q4 — School week & hours storage.** The settings form is designed here;
-  the fields (`School.weekdays`, `dayStartMinute`, `dayEndMinute` or a
-  settings JSON) belong to CARM-23. Confirm they land there.
