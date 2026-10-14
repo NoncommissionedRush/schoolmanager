@@ -27,7 +27,7 @@ and how dated lessons follow them. The data model is in
 ad-hoc); `checkTimetable(calendar, termId)` every slot of a term.
 `buildCalendar(context)` indexes everything once, so the generator can check
 thousands of candidates cheaply. How the Phase 4 generator uses the checker
-is in [timetable-generator.md](timetable-generator.md).
+is in [generator.md](generator.md).
 
 **What a slot is compared against.** Every date the slot would produce a
 lesson on (its weekday, inside the term and its `validFrom`/`validUntil`,
