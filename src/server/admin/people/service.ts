@@ -54,6 +54,7 @@ export async function assertEmailFree(
   scope: Scope,
   email: string,
   exceptUserId?: string,
+  users: Users = globalDb,
 ) {
   const existing = await scope.db.membership.findFirst({
     where: {
@@ -70,7 +71,7 @@ export async function assertEmailFree(
   }
   if (existing) throw new AdminError(msg("people.error.emailTaken"), "email");
   // Used in another school (User is global, Q2): same message in v1.
-  const elsewhere = await globalDb.user.count({
+  const elsewhere = await users.user.count({
     where: { email, ...(exceptUserId ? { id: { not: exceptUserId } } : {}) },
   });
   if (elsewhere > 0)
@@ -91,7 +92,7 @@ export async function createPerson(
   ) => Promise<unknown>,
   users: Users = globalDb,
 ) {
-  await assertEmailFree(scope, person.email);
+  await assertEmailFree(scope, person.email, undefined, users);
   const passwordHash = await hashPassword(person.password);
   try {
     const userId = await users.$transaction(async (tx) => {
@@ -125,7 +126,7 @@ export async function updatePersonIdentity(
 ) {
   const member = await findMember(scope, userId);
   if (identity.email !== member.user.email) {
-    await assertEmailFree(scope, identity.email, userId);
+    await assertEmailFree(scope, identity.email, userId, users);
   }
   try {
     await users.user.update({ where: { id: userId }, data: identity });
