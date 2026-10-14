@@ -14,7 +14,7 @@ Prerequisites: Node.js 22+, pnpm 10 (`corepack enable`), Docker.
 
 ```bash
 pnpm install                 # also generates the Prisma client
-cp .env.example .env         # DATABASE_URL for the docker compose Postgres
+cp .env.example .env         # DATABASE_URL + AUTH_SECRET for local dev
 docker compose up -d --wait  # Postgres 16 on localhost:5432
 pnpm db:migrate              # apply migrations
 pnpm db:seed                 # demo data
@@ -23,13 +23,30 @@ pnpm dev                     # http://localhost:3000
 
 Stop the database with `docker compose down` (add `-v` to wipe its data).
 
+Upgrading an existing local database: databases created before the CARM-17
+schema (PR #4) need `pnpm db:reset`; otherwise `pnpm db:migrate && pnpm db:seed`
+picks up new migrations and demo passwords. `.env` files from before CARM-19
+need an `AUTH_SECRET` line (copy it from `.env.example`).
+
 ### Demo data
 
-`pnpm db:seed` is idempotent and creates "Demo Language School": 1 admin
-(`admin@demo-school.test`), 8 teachers, 40 students, levels A1–C1, group and
-1-on-1 lessons, rooms, the "Autumn 2026" term with holidays and a published
-timetable with generated lessons. Other users are `first.last@demo-school.test`
-(see `prisma/seed/data.ts`). Data model: `docs/architecture/data-model.md`.
+`pnpm db:seed` is idempotent and creates "Demo Language School": 1 admin,
+8 teachers, 40 students, levels A1–C1, group and 1-on-1 lessons, rooms, the
+"Autumn 2026" term with holidays and a published timetable with generated
+lessons. Data model: `docs/architecture/data-model.md`.
+
+Sign in at http://localhost:3000/login — every seeded user has the password
+**`demo-password`**:
+
+| Role    | Email                            | Lands on   |
+| ------- | -------------------------------- | ---------- |
+| Admin   | `admin@demo-school.test`         | `/admin`   |
+| Teacher | `jana.novakova@demo-school.test` | `/teacher` |
+| Student | `adam.kollar@demo-school.test`   | `/student` |
+
+All other users are `first.last@demo-school.test` without diacritics (see
+`prisma/seed/data.ts`). Passwords are set by admins in v1 — there is no
+"forgot password" flow yet.
 
 ## Scripts
 
@@ -64,6 +81,21 @@ src/generated   Generated Prisma client (git-ignored)
 prisma/         Schema, migrations, seed
 e2e/            Playwright tests
 docs/           Project docs and design specs
+```
+
+## Authentication & roles
+
+Auth.js (email + password, JWT session cookie). Each user has one role per
+school — admin, teacher or student — with its own area: `/admin`, `/teacher`,
+`/student`. `src/proxy.ts` sends signed-out users to `/login` and answers other
+roles' areas with the 403 page; every page, route handler and server action
+still checks the role itself:
+
+```ts
+import { getSchoolScopedDb, requireRole } from "@/server/auth/session";
+
+const viewer = await requireRole("ADMIN", "TEACHER"); // login / 403 otherwise
+const db = await getSchoolScopedDb(); // every query scoped to viewer.school.id
 ```
 
 ## Conventions
