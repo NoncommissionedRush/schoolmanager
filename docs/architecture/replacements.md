@@ -83,9 +83,10 @@ admin of the student's school; a teacher (or anyone else) gets
 (§9), so the student's view can say "The school office cancelled this
 lesson for you" and the teacher's roster "via office". On a lesson the
 student attends as a replacement the admin uses Reject (§6) instead, as
-the student would cancel the replacement. Admins don't use the reschedule
-flow (§7); an admin report on a 1-on-1 before the cutoff gives the student
-a credit to reschedule later. Audit: `absence.reported` with the actor.
+the student would cancel the replacement. An admin report on a 1-on-1
+before the cutoff gives the student a credit to reschedule later. To move
+a 1-on-1 lesson directly, at any time including after the cutoff, the admin
+uses the admin reschedule (§7). Audit: `absence.reported` with the actor.
 
 | Lesson type | Before the cutoff                                                                                                                                     | After the cutoff (until the lesson starts)                                                  |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -448,10 +449,41 @@ ordered by: the missed lesson's weekday and time first, then nearest date,
 then earliest time. `buildCalendar` is built once per request, so this stays
 cheap (≈ 30 days × 56 starts). Deterministic for the same input.
 
-**Admin.** Admins don't use this flow; they move lessons with the existing
-lesson tools (`validateLesson`, with overrides). An admin can cancel a
-rescheduled lesson, which releases the credit with grace (§4). Audit:
-`lesson.rescheduled` (student, credit, from, to, room).
+**Admin reschedule** (owner decision 2026-10-14). After the cutoff the
+student gets no credit and cannot reschedule. An admin can still move the
+lesson, for example after talking to the student offline.
+`rescheduleByAdmin` uses the same representation as the student flow: the
+source is cancelled and a new ad-hoc lesson is created with
+`rescheduledFromId` set. The rules are:
+
+- **Source:** any `SCHEDULED` 1-on-1 lesson that hasn't started. That
+  includes one past the cutoff, one the student has already reported a
+  late absence for, and one that is itself a reschedule. The source is
+  cancelled with the new `cancelReason` `RESCHEDULED` ("Rescheduled"). A
+  late absence report stays on the cancelled source as history, so the
+  student attends the new lesson as normal.
+- **No credit is created or spent.** If the source is itself a reschedule,
+  the credit spent on it stays `USED` and its `rescheduledLessonId` moves
+  to the new lesson. Separately, an admin can spend a student's
+  `AVAILABLE` 1-on-1 credit on their behalf. That is the student flow run
+  by the admin, with the admin rules below.
+- **Checks:** the same checks as `checkReschedule`, without the
+  student-only time limits (`TOO_SOON`, `CREDIT_EXPIRES_FIRST`).
+  - Blocking `checkLesson` conflicts and `OUTSIDE_TERM` refuse the move.
+  - Overridable conflicts (unavailability, holiday, school hours, shared
+    online room, and `STUDENT_CLASH`) can be saved once the admin
+    acknowledges each one. This is the `decideSave` pattern from the
+    timetable editor.
+  - `DURATION_CHANGED` doesn't apply: the admin may change the length.
+- **What the admin picks:** the date, time and room. The teacher stays the
+  group's regular teacher; substitutes are a P5 workflow.
+  `rescheduleOptions` can still suggest conflict-free times.
+- **Admin cancels:** an admin can cancel a rescheduled lesson, which
+  releases its credit with grace (§4).
+- **Audit:** `lesson.rescheduled` records the actor, student, credit if
+  any, source and new lesson, from and to, room, every acknowledged
+  conflict and the admin's optional note (e.g. "agreed by phone").
+- It takes the same lock as every other write here (§8).
 
 ## 8. Concurrency
 
@@ -545,8 +577,10 @@ absence and credit parts; CARM-43 the replacement and reschedule parts).
   the lesson this one replaces after a 1-on-1 reschedule. CHECK:
   `rescheduled_from_id IS NULL OR timetable_slot_id IS NULL` (only ad-hoc
   lessons are reschedules).
-- New `cancelReason` value `STUDENT_CANCELLED`
-  (`scheduling.cancelReasons.STUDENT_CANCELLED` "Cancelled by student").
+- New `cancelReason` values `STUDENT_CANCELLED`
+  (`scheduling.cancelReasons.STUDENT_CANCELLED` "Cancelled by student") and
+  `RESCHEDULED` (`scheduling.cancelReasons.RESCHEDULED` "Rescheduled",
+  used by the admin reschedule, §7).
 
 **`AuditLog`** — new actions: `school.settings.updated`, `absence.reported`,
 `absence.deleted`, `replacement.booked | cancelled | approved | rejected |
@@ -609,11 +643,15 @@ replacement students`, replacement students marked. _Not coming_ = the
   an override, no credit backs two active replacements, no student is ever
   booked into overlapping lessons, every `rescheduleOptions` result passes
   `checkLesson` with no conflicts, and results don't depend on input order.
+- Unit, admin reschedule: allowed after the cutoff and on a lesson with a
+  late absence; no credit created or spent; credit link moved when the
+  source is itself a reschedule; blocking conflicts refused; overridable
+  conflicts and `STUDENT_CLASH` only with acknowledgement.
 - DB (opt-in, like `service.db.test.ts`): two concurrent bookings for the
   last seat → exactly one succeeds; one credit spent from two transactions
   → exactly one succeeds.
 
-## Open questions for the owner
+## Owner decisions
 
 Answered on CARM-39 (2026-10-14): admins may report absences for
 students; credit validity counts from the missed lesson; a booking
@@ -621,11 +659,15 @@ cancelled after its cutoff spends the credit; the release grace is a fixed
 7 days; 1-on-1 "cancel now, reschedule later" is allowed; no cap on
 credits or bookings.
 
-1. **Late 1-on-1 cancellation** (§3): after the cutoff the 1-on-1 lesson
-   stays scheduled and the student loses it. Confirm.
-2. **Physical rooms without a capacity** (§5): treated as unlimited.
-   Alternatively make `capacity` required for physical rooms in the admin
-   form.
+Answered on CARM-40 (2026-10-14):
+
+1. **Late 1-on-1 cancellation** (§3): after the cutoff there is no credit
+   and the student cannot reschedule. The lesson stays scheduled. An admin
+   can still reschedule it, e.g. after an offline discussion with the
+   student (§7, _Admin reschedule_).
+2. **Rooms without a capacity** (§5): no limit on replacement students.
+   Capacity stays optional in the admin form.
 3. **Booking until the start** (§6): replacements can be booked until the
-   target starts. Should there be a minimum notice for the teacher, like the
-   cutoff?
+   target lesson begins, with no minimum notice for now.
+
+No open questions remain.
