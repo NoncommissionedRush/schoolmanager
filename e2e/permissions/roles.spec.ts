@@ -47,6 +47,10 @@ const adminPages = (ids: SchoolIds) => [
   "/admin/settings/rooms",
   "/admin/settings/terms",
   "/admin/settings/school",
+  "/admin/settings/absences",
+  "/admin/absences",
+  "/admin/absences?tab=review",
+  "/admin/absences?tab=replacements",
   `/admin/timetable?week=${WEEK}`,
   `/admin/timetable/edit?term=${ids.term}`,
 ];
@@ -195,6 +199,8 @@ async function snapshot(ids: SchoolIds) {
     ["courses", ids.course],
     ["holidays", ids.holiday],
     ["teacher_availability", ids.availability],
+    ["absence_reports", ids.absence],
+    ["replacement_requests", ids.replacement],
     ["schools", ids.school],
   ];
   for (const [table, id] of tables) {
@@ -212,9 +218,11 @@ async function snapshot(ids: SchoolIds) {
        (SELECT count(*) FROM rooms WHERE name LIKE 'Role Leak%'),
        (SELECT count(*) FROM terms WHERE name LIKE 'Role Leak%'),
        (SELECT count(*) FROM levels WHERE school_id = $1 AND code NOT LIKE 'E2E-%'),
-       (SELECT md5(string_agg(l::text, '|' ORDER BY l.id)) FROM lessons l WHERE term_id = $2)
+       (SELECT md5(string_agg(l::text, '|' ORDER BY l.id)) FROM lessons l WHERE term_id = $2),
+       (SELECT count(*) FROM absence_reports WHERE lesson_id = $3),
+       (SELECT md5(string_agg(c::text, '|' ORDER BY c.id)) FROM makeup_credits c WHERE student_id = $4)
      )::text AS row`,
-    [ids.school, ids.term],
+    [ids.school, ids.term, ids.lesson, ids.student],
   );
   rows.counts = counts.row;
   return rows;
