@@ -29,6 +29,7 @@ import {
   TERM,
 } from "./seed/data";
 import { seedId } from "./seed/ids";
+import { seedSecondSchool } from "./seed/second-school";
 
 // Idempotent demo seed: every row has a deterministic id (`seedId`) and is
 // upserted, so re-running `pnpm db:seed` converges to the same state.
@@ -628,6 +629,9 @@ async function main() {
       `${GROUPS.length} groups, ${slots.length} slots, ${lessons.length} lessons ` +
       `(${TERM.startDate} → ${LESSON_GENERATION_END}).`,
   );
+
+  // A second tenant for the e2e permission suite (e2e/permissions/).
+  await seedSecondSchool(db, await passwordHash);
 }
 
 main()
