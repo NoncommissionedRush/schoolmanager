@@ -39,6 +39,8 @@ const adminPages = (ids: SchoolIds) => [
   `/admin/students/${ids.student}`,
   "/admin/groups",
   `/admin/groups/${ids.group}`,
+  "/admin/lessons",
+  `/admin/lessons/${ids.lesson}`,
   "/admin/levels",
   "/admin/settings",
   "/admin/settings/admins",
