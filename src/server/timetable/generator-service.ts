@@ -20,6 +20,7 @@ import {
   fromIsoDate,
   type IsoDate,
   isoWeekday,
+  applyGroupTeacherChange,
   type LessonInfo,
   planGroupTeacherChange,
   type SlotInfo,
@@ -49,13 +50,14 @@ import {
   inTransaction,
   type LessonChanges,
   load,
-  loadExistingLessons,
+  loadGroupTeacherChangeLessons,
   type Loaded,
   publishTermIn,
   SchedulingError,
   type SchoolDb,
   syncSlots,
   type Tx,
+  writeGroupTeacherChange,
 } from "./service";
 
 export type GeneratorErrorCode =
@@ -1460,19 +1462,13 @@ async function applyIn(
       continue;
     }
     if (!group.mixedTeachers && group.currentTeacherId === teacherId) continue;
-    const groupLessons = await loadExistingLessons(tx, {
-      groupId: group.groupId,
+    const groupLessons = await loadGroupTeacherChangeLessons(
+      tx,
       termId,
-      OR: [
-        { timetableSlotId: { in: groupSlots.map((s) => s.id) } },
-        // A day early: D's local midnight is before its UTC midnight; the
-        // plan keeps only those on or after D in the school's time zone.
-        {
-          timetableSlotId: null,
-          startsAt: { gte: fromIsoDate(addDays(D!, -1)) },
-        },
-      ],
-    });
+      group.groupId,
+      groupSlots.map((s) => s.id),
+      D!,
+    );
     const plan = planGroupTeacherChange({
       slots: groupSlots,
       lessons: groupLessons,
@@ -1502,20 +1498,9 @@ async function applyIn(
       slots.push({ ...next, id });
       touched.set(id, { groupId: group.groupId });
     }
-    const repoint = new Map(plan.repoint.map((r) => [r.lessonId, r]));
-    const adHoc = new Map(plan.adHoc.map((a) => [a.lessonId, a]));
-    lessons = lessons.map((l) => {
-      const r = repoint.get(l.id);
-      const a = adHoc.get(l.id);
-      if (!r && !a) return l;
-      const clear = r?.clearSubstitute || a?.clearSubstitute;
-      return {
-        ...l,
-        timetableSlotId: r ? nextId.get(r.fromSlotId)! : l.timetableSlotId,
-        teacherId: !r || r.setTeacher ? teacherId : l.teacherId,
-        substituteTeacherId: clear ? null : l.substituteTeacherId,
-      };
-    });
+    lessons = applyGroupTeacherChange(lessons, plan, teacherId, (id) =>
+      nextId.get(id)!,
+    );
     for (const id of plan.checkLessons)
       checkLessonIds.push({ lessonId: id, teacherId });
   }
@@ -1654,47 +1639,16 @@ async function applyIn(
           synced.push(slot);
         }
       } else {
-        const nextIds = new Map<string, string>();
-        for (const change of plan.plan.slots) {
-          if (change.kind === "update") {
-            await tx.timetableSlot.update({
-              where: { id: change.slot.id },
-              data: { teacherId: change.slot.teacherId },
-            });
-            nextIds.set(change.slot.id, change.slot.id);
-            synced.push(change.slot);
-          } else {
-            await tx.timetableSlot.update({
-              where: { id: change.ended.id },
-              data: { validUntil: fromIsoDate(change.ended.validUntil!) },
-            });
-            counts.slots.ended++;
-            const next = await createSlot({ ...change.next, id: "" });
-            nextIds.set(change.ended.id, next.id);
-            synced.push(change.ended, next);
-          }
-        }
-        for (const r of plan.plan.repoint) {
-          await tx.lesson.update({
-            where: { id: r.lessonId },
-            data: {
-              timetableSlotId: nextIds.get(r.fromSlotId)!,
-              ...(r.setTeacher && { teacherId: plan.teacherId }),
-              ...(r.clearSubstitute && { substituteTeacherId: null }),
-            },
-          });
-          counts.lessons.repointed++;
-        }
-        for (const a of plan.plan.adHoc) {
-          await tx.lesson.update({
-            where: { id: a.lessonId },
-            data: {
-              teacherId: plan.teacherId,
-              ...(a.clearSubstitute && { substituteTeacherId: null }),
-            },
-          });
-          counts.lessons.repointed++;
-        }
+        const write = await writeGroupTeacherChange(
+          tx,
+          schoolId,
+          plan.plan,
+          plan.teacherId,
+        );
+        synced.push(...write.synced);
+        counts.slots.created += write.slotsCreated;
+        counts.slots.ended += write.slotsEnded;
+        counts.lessons.repointed += write.repointed;
       }
     }
     if (synced.length > 0) {
