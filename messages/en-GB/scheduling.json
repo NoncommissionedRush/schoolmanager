@@ -18,6 +18,7 @@
     "ONE_ON_ONE_STUDENT_COUNT": "{group} is a 1-on-1 but has {studentCount, plural, =0 {no students} one {# student} other {# students}}.",
     "TEACHER_UNAVAILABLE_WEEKLY": "{teacher} is not available {allDay, select, yes {all day} other {{time}}} on this weekday ({dateCount, plural, one {# date} other {# dates}}, first on {firstDate}).",
     "TEACHER_UNAVAILABLE_ON_DATE": "{teacher} is not available on {firstDate}{allDay, select, yes {} other { ({time})}}.",
+    "TEACHER_LEVEL_NOT_TAUGHT": "{teacher} doesn't teach {level}.",
     "LESSON_ON_HOLIDAY": "{firstDate} is a holiday ({holiday}).",
     "OUTSIDE_SCHOOL_DAYS": "{weekday, select, 1 {Monday} 2 {Tuesday} 3 {Wednesday} 4 {Thursday} 5 {Friday} 6 {Saturday} other {Sunday}} is not a school day.",
     "OUTSIDE_SCHOOL_HOURS": "{time} is outside school hours ({schoolHours}).",

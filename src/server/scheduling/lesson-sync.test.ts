@@ -6,6 +6,7 @@ import {
   isEmptyPlan,
   type LessonSyncInput,
   type LessonSyncPlan,
+  planGroupTeacherChange,
   planLessonSync,
   planSlotCarryOver,
   planSlotEdit,
@@ -377,5 +378,238 @@ describe("planSlotCarryOver", () => {
   it("ignores lessons the split doesn't cancel and the old slot's past", () => {
     expect(carry({}, { cancelling: [] })).toEqual([]);
     expect(carry({}, { cancelling: ["mon@2026-10-19"] })).toEqual([]);
+  });
+});
+
+describe("planGroupTeacherChange (generator.md §5.6)", () => {
+  const D = "2026-10-26";
+  const NOW = new Date("2026-10-20T10:00:00Z");
+  const tuesday = slot("tue", { weekday: 2 });
+
+  /** The term's lessons with some history after D. */
+  function lessons(): ExistingLesson[] {
+    return stored([monday, tuesday]).map((l) => {
+      if (l.id === "mon@2026-10-26") return { ...l, hasDependents: true };
+      if (l.id === "tue@2026-10-27") {
+        return {
+          ...l,
+          status: "CANCELLED" as const,
+          cancelReason: "STUDENT_CANCELLED",
+        };
+      }
+      if (l.id === "mon@2026-11-02") return { ...l, substituteTeacherId: "t2" };
+      if (l.id === "tue@2026-11-03") {
+        // Moved by hand to 11:00.
+        return {
+          ...l,
+          startsAt: new Date(l.startsAt.getTime() + 2 * 3600_000),
+          endsAt: new Date(l.endsAt.getTime() + 2 * 3600_000),
+        };
+      }
+      return l;
+    });
+  }
+  const adHoc = (id: string, teacherId: string, day: string) => ({
+    ...stored([monday])[0],
+    id,
+    timetableSlotId: null,
+    occurrenceDate: null,
+    teacherId,
+    startsAt: new Date(`${day}T15:00:00Z`),
+    endsAt: new Date(`${day}T16:00:00Z`),
+  });
+  const input = (extra = {}) => ({
+    slots: [monday, tuesday],
+    lessons: [
+      ...lessons(),
+      adHoc("adhoc-mine", "t1", "2026-10-29"),
+      adHoc("adhoc-other", "t3", "2026-10-29"),
+      adHoc("adhoc-before", "t1", "2026-10-22"),
+    ],
+    oldTeacherId: "t1",
+    newTeacherId: "t2",
+    from: D,
+    now: NOW,
+    timeZone: TZ,
+    ...extra,
+  });
+
+  /** Applies the plan in memory, the new slots with ids `<old>-next`. */
+  function applyChange(
+    slots: SlotInfo[],
+    existing: ExistingLesson[],
+    plan: ReturnType<typeof planGroupTeacherChange>,
+  ) {
+    const nextId = new Map<string, string>();
+    const outSlots = [...slots];
+    for (const change of plan.slots) {
+      if (change.kind === "update") {
+        outSlots[outSlots.findIndex((s) => s.id === change.slot.id)] =
+          change.slot;
+      } else {
+        outSlots[outSlots.findIndex((s) => s.id === change.ended.id)] =
+          change.ended;
+        outSlots.push({ ...change.next, id: `${change.ended.id}-next` });
+        nextId.set(change.ended.id, `${change.ended.id}-next`);
+      }
+    }
+    const repoint = new Map(plan.repoint.map((r) => [r.lessonId, r]));
+    const adHocs = new Map(plan.adHoc.map((a) => [a.lessonId, a]));
+    const outLessons = existing.map((l) => {
+      const r = repoint.get(l.id);
+      if (r) {
+        return {
+          ...l,
+          timetableSlotId: nextId.get(r.fromSlotId) ?? r.fromSlotId,
+          teacherId: r.setTeacher ? "t2" : l.teacherId,
+          substituteTeacherId: r.clearSubstitute ? null : l.substituteTeacherId,
+        };
+      }
+      const a = adHocs.get(l.id);
+      if (a) {
+        return {
+          ...l,
+          teacherId: "t2",
+          substituteTeacherId: a.clearSubstitute ? null : l.substituteTeacherId,
+        };
+      }
+      return l;
+    });
+    return { slots: outSlots, lessons: outLessons };
+  }
+
+  it("splits the slots on D and re-points every lesson from D", () => {
+    const plan = planGroupTeacherChange(input());
+    // (`toEqual` ignores the copies' `id: undefined`.)
+    expect(plan.slots).toEqual([
+      {
+        kind: "split",
+        ended: { ...monday, validUntil: "2026-10-25" },
+        next: { ...monday, id: undefined, teacherId: "t2", validFrom: D },
+      },
+      {
+        kind: "split",
+        ended: { ...tuesday, validUntil: "2026-10-25" },
+        next: { ...tuesday, id: undefined, teacherId: "t2", validFrom: D },
+      },
+    ]);
+    expect(plan.repoint).toEqual([
+      {
+        lessonId: "mon@2026-10-26",
+        fromSlotId: "mon",
+        setTeacher: true,
+        clearSubstitute: false,
+      },
+      {
+        lessonId: "mon@2026-11-02",
+        fromSlotId: "mon",
+        setTeacher: true,
+        clearSubstitute: true,
+      },
+      {
+        lessonId: "tue@2026-10-27",
+        fromSlotId: "tue",
+        setTeacher: false,
+        clearSubstitute: false,
+      },
+      {
+        lessonId: "tue@2026-11-03",
+        fromSlotId: "tue",
+        setTeacher: true,
+        clearSubstitute: false,
+      },
+    ]);
+    expect(plan.adHoc).toEqual([
+      { lessonId: "adhoc-mine", clearSubstitute: false },
+    ]);
+    expect(plan.checkLessons).toEqual(["tue@2026-11-03", "adhoc-mine"]);
+  });
+
+  it("deletes and cancels nothing, and is idempotent with planLessonSync", () => {
+    const before = input();
+    const plan = planGroupTeacherChange(before);
+    const after = applyChange(before.slots, before.lessons, plan);
+    const generated = after.lessons.filter((l) => l.timetableSlotId);
+    const sync = planLessonSync(
+      base({ slots: after.slots, lessons: generated, from: D, now: NOW }),
+    );
+    // Every date from D is taken on the new slots: nothing to create, and
+    // the cancelled 1-on-1 does not come back.
+    expect(sync).toEqual({ create: [], remove: [], cancel: [] });
+    const cancelled = after.lessons.find((l) => l.id === "tue@2026-10-27")!;
+    expect(cancelled).toMatchObject({
+      status: "CANCELLED",
+      cancelReason: "STUDENT_CANCELLED",
+      timetableSlotId: "tue-next",
+      teacherId: "t1",
+    });
+    // History stays on the same row; lessons before D are untouched.
+    expect(after.lessons.find((l) => l.id === "mon@2026-10-26")).toMatchObject({
+      hasDependents: true,
+      teacherId: "t2",
+      timetableSlotId: "mon-next",
+    });
+    for (const l of after.lessons.filter(
+      (x) => x.occurrenceDate && x.occurrenceDate < D,
+    )) {
+      expect(before.lessons.find((x) => x.id === l.id)).toEqual(l);
+    }
+    expect(after.lessons.find((l) => l.id === "adhoc-other")!.teacherId).toBe(
+      "t3",
+    );
+    expect(after.lessons.find((l) => l.id === "adhoc-before")!.teacherId).toBe(
+      "t1",
+    );
+    expect(planGroupTeacherChange({ ...before, ...after }).repoint).toEqual([]);
+  });
+
+  it("creates the occurrences that were not generated yet", () => {
+    const before = input({
+      lessons: lessons().filter((l) => l.id !== "mon@2026-11-02"),
+    });
+    const after = applyChange(
+      before.slots,
+      before.lessons,
+      planGroupTeacherChange(before),
+    );
+    const sync = planLessonSync(
+      base({ slots: after.slots, lessons: after.lessons, from: D, now: NOW }),
+    );
+    expect(
+      sync.create.map((o) => [o.timetableSlotId, o.date, o.teacherId]),
+    ).toEqual([["mon-next", "2026-11-02", "t2"]]);
+    expect(sync.remove).toEqual([]);
+    expect(sync.cancel).toEqual([]);
+  });
+
+  it("changes a slot that starts on or after D in place", () => {
+    const later = slot("later", { validFrom: "2026-11-02" });
+    const plan = planGroupTeacherChange(
+      input({ slots: [later], lessons: stored([later]) }),
+    );
+    expect(plan.slots).toEqual([
+      { kind: "update", slot: { ...later, teacherId: "t2" } },
+    ]);
+    expect(plan.repoint).toEqual([
+      {
+        lessonId: "later@2026-11-02",
+        fromSlotId: "later",
+        setTeacher: true,
+        clearSubstitute: false,
+      },
+    ]);
+  });
+
+  it("leaves slots that already have the new teacher or ended before D", () => {
+    const plan = planGroupTeacherChange(
+      input({
+        slots: [
+          slot("theirs", { teacherId: "t2" }),
+          slot("old", { validUntil: "2026-10-20" }),
+        ],
+        lessons: [],
+      }),
+    );
+    expect(plan.slots).toEqual([]);
   });
 });

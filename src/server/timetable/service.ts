@@ -198,6 +198,8 @@ async function loadContext(tx: Tx, from: Date, to: Date) {
     rules,
     absences,
     replacements,
+    teacherLevels,
+    levels,
   ] = await Promise.all([
     tx.holiday.findMany({
       where: { OR: [{ termId: { in: termIds } }, { termId: null }] },
@@ -226,6 +228,7 @@ async function loadContext(tx: Tx, from: Date, to: Date) {
         type: true,
         capacity: true,
         deletedAt: true,
+        levelId: true,
         memberships: { where: { leftAt: null }, select: { studentId: true } },
       },
     }),
@@ -256,6 +259,8 @@ async function loadContext(tx: Tx, from: Date, to: Date) {
       },
       select: { targetLessonId: true, studentId: true },
     }),
+    tx.teacherLevel.findMany({ select: { teacherId: true, levelId: true } }),
+    tx.level.findMany({ select: { id: true, name: true } }),
   ]);
 
   return {
@@ -293,6 +298,7 @@ async function loadContext(tx: Tx, from: Date, to: Date) {
         capacity: g.capacity,
         studentIds: g.memberships.map((m) => m.studentId),
         archived: g.deletedAt !== null,
+        levelId: g.levelId,
       })),
       rooms: rooms.map(({ archivedAt, ...r }) => ({
         ...r,
@@ -314,6 +320,8 @@ async function loadContext(tx: Tx, from: Date, to: Date) {
         lessonId: r.targetLessonId,
         studentId: r.studentId,
       })),
+      teacherLevels,
+      levels,
     },
   };
 }
