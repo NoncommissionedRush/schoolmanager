@@ -5,11 +5,14 @@ rules that are not obvious from the schema alone.
 
 ## Tenancy
 
-- `School` is the tenant. Every other table except `User` carries `school_id`
+- `School` is the tenant. Every other table except `User` and the Auth.js
+  tables (`Account`, `VerificationToken`) carries `school_id`
   (indexed via `@@unique([schoolId, id])` and further composite indexes).
 - `User` is global so one person can belong to several schools. What a user
   may do in a school comes from `Membership` (`ADMIN` / `TEACHER` / `STUDENT`;
-  one row per role, so an admin can also teach).
+  **one role per user and school** — unique `(school_id, user_id)`, decision
+  2026-10-14). Authorization reads this row, never the existence of a
+  Teacher/StudentProfile.
 - **Cross-school references are impossible at the DB level.** Each
   tenant-owned table has a unique `(school_id, id)` and every relation between
   tenant-owned tables is a composite foreign key `(school_id, x_id) →
@@ -19,7 +22,20 @@ x(school_id, id)`. A `Lesson` of school A cannot point at a `Group` of
 - References to `User` (`recordedBy`, `reportedBy`, `reviewedBy`, audit
   `actor`) are plain FKs; membership in the school is checked server-side.
 - Queries must still always filter by `schoolId` (the FK only guarantees
-  consistency, not scoping).
+  consistency, not scoping). Use `getSchoolScopedDb()`
+  (`src/server/auth/session.ts`), which adds the signed-in school to every
+  query and throws on attempts to touch another school.
+
+## Authentication
+
+- `User.email` is stored lower-cased (CHECK constraint); `User.passwordHash`
+  is a bcrypt hash (null = no password sign-in). A soft-deleted user
+  (`deletedAt`) cannot sign in.
+- Sessions are stateless JWT cookies (Auth.js) holding user id, school id and
+  role; every request re-reads the `Membership`, so role changes and removals
+  apply immediately.
+- `Account` and `VerificationToken` follow the `@auth/prisma-adapter` shape
+  so OAuth / magic-link providers can be added later; unused for now.
 
 ## Time
 
@@ -105,6 +121,7 @@ hard-deleted; `onDelete` is `Restrict` wherever a delete would lose history.
 erDiagram
   School ||--o{ Membership : has
   User ||--o{ Membership : "belongs via"
+  User ||--o{ Account : "signs in with"
   User ||--o{ TeacherProfile : ""
   User ||--o{ StudentProfile : ""
   School ||--o{ TeacherProfile : ""
@@ -152,7 +169,8 @@ erDiagram
   User |o--o{ AuditLog : actor
 ```
 
-Every box except `User` also has `School ||--o{ X` — omitted for readability.
+Every box except `User` and `Account` also has `School ||--o{ X` — omitted
+for readability. (`VerificationToken` stands alone.)
 
 ## Demo seed
 

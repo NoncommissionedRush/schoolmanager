@@ -3,12 +3,14 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { hashPassword } from "../src/server/auth/password";
 import { toSchoolSlug } from "../src/server/schools";
 import { generateLessonOccurrences } from "../src/server/timetable/generate-lessons";
 import { fromIsoDate } from "../src/server/timetable/time";
 import {
   ADMIN,
   COURSES,
+  DEMO_PASSWORD,
   DEMO_TODAY,
   EMAIL_DOMAIN,
   GROUPS,
@@ -35,8 +37,16 @@ const db = new PrismaClient({
 const emailFor = (name: string) =>
   `${toSchoolSlug(name).replace(/-/g, ".")}@${EMAIL_DOMAIN}`;
 
+// Every demo user shares one password, so hash it once.
+const passwordHash = hashPassword(DEMO_PASSWORD);
+
 async function upsertUser(key: string, name: string, email = emailFor(name)) {
-  const data = { name, email, deletedAt: null };
+  const data = {
+    name,
+    email,
+    passwordHash: await passwordHash,
+    deletedAt: null,
+  };
   return db.user.upsert({
     where: { email },
     update: data,
@@ -84,8 +94,8 @@ async function main() {
     role: "ADMIN" | "TEACHER" | "STUDENT",
   ) {
     await db.membership.upsert({
-      where: { schoolId_userId_role: { schoolId, userId, role } },
-      update: {},
+      where: { schoolId_userId: { schoolId, userId } },
+      update: { role },
       create: { id: id("membership", userId, role), schoolId, userId, role },
     });
   }

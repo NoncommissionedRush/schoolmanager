@@ -15,6 +15,19 @@ export const DEMO_TODAY = "2026-10-14";
 
 export const ADMIN = { key: "admin", name: "Alexandra Admin" };
 
+/**
+ * Password of every seeded user (documented in the README). Demo only — never
+ * seed a real deployment with it.
+ */
+export const DEMO_PASSWORD = "demo-password";
+
+/** One sign-in per role, shown on the dev login page and used by e2e tests. */
+export const DEMO_LOGINS = {
+  admin: "admin@demo-school.test",
+  teacher: "jana.novakova@demo-school.test",
+  student: "adam.kollar@demo-school.test",
+} as const;
+
 export const LEVELS = [
   { code: "A1", name: "Beginner", rank: 1 },
   { code: "A2", name: "Elementary", rank: 2 },

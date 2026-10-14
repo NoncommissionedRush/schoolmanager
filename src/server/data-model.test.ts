@@ -8,7 +8,12 @@ import { describe, expect, it } from "vitest";
 // models go through the composite `[schoolId, id]` key so rows can never
 // reference another school's data.
 
-const GLOBAL_MODELS = new Set(["School", "User"]);
+const GLOBAL_MODELS = new Set([
+  "School",
+  "User",
+  "Account",
+  "VerificationToken",
+]);
 
 const schema = readFileSync(
   join(process.cwd(), "prisma/schema.prisma"),
