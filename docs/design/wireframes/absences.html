@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — Absences, makeup credits & replacements (CARM-39)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .l-group {
+        background: #eff6ff;
+        border-left: 3px solid #2563eb;
+        color: #1e3a8a;
+      }
+      .l-individual {
+        background: #f5f3ff;
+        border-left: 3px solid #7c3aed;
+        color: #4c1d95;
+      }
+      .l-replacement {
+        background: #fffbeb;
+        border-left: 3px solid #d97706;
+        color: #78350f;
+      }
+      .l-notattending {
+        background: #f8fafc;
+        border: 1px dashed #94a3b8;
+        border-left-width: 3px;
+        color: #475569;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Absences & replacements</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* --------------------------------------------------------------- helpers */
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          destructive: "bg-destructive text-white",
+          link: "text-primary underline-offset-2 hover:underline px-0",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center justify-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const mbtn = (label, v = "primary") =>
+        btn(label, v, "h-11 w-full text-base");
+      const badge = (t, tone = "muted") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+          repl: "bg-amber-50 text-amber-900 border-amber-600",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border ${c}">${t}</span>`;
+      };
+      const alert = (t, tone = "info") => {
+        const c = {
+          info: "bg-blue-50 text-blue-800 border-blue-300",
+          success: "bg-green-50 text-green-800 border-green-300",
+          warning: "bg-amber-50 text-amber-800 border-amber-300",
+          danger: "bg-red-50 text-red-800 border-red-300",
+        }[tone];
+        return `<div role="${tone === "danger" || tone === "warning" ? "alert" : "status"}" class="rounded-md border px-3 py-2 ${c}">${t}</div>`;
+      };
+      const card = (inner, extra = "") =>
+        `<section class="rounded-lg border border-border bg-white p-6 ${extra}">${inner}</section>`;
+      const toast = (t, action = "") =>
+        `<div role="status" class="mt-3 flex items-center justify-between gap-3 rounded-md bg-slate-900 px-4 py-3 text-white shadow-lg"><span>${t}</span>${action ? `<button class="font-medium text-blue-300">${action}</button>` : ""}</div>`;
+
+      // Phone frame with bottom tabs
+      function phone(inner, { tab = "Absences", overlay = "" } = {}) {
+        const tabs = ["Home", "Timetable", "Homework", "Absences"]
+          .map(
+            (t) =>
+              `<a href="#" class="flex-1 py-2 text-center text-xs ${t === tab ? "text-primary font-semibold" : "text-muted-foreground"}">${t === "Absences" ? "Absences<span class='ml-0.5 inline-block h-2 w-2 rounded-full bg-amber-500 align-top' aria-hidden='true'></span>" : t}</a>`,
+          )
+          .join("");
+        return `<div class="relative w-[390px] h-[780px] overflow-hidden rounded-[2rem] border-8 border-slate-800 bg-white text-base shadow-xl">
+          <div class="h-full overflow-y-auto pb-20 px-4 pt-4 space-y-4">${inner}</div>
+          <nav class="absolute bottom-0 inset-x-0 flex border-t border-border bg-white">${tabs}</nav>
+          ${overlay ? `<div class="absolute inset-0 bg-black/40 flex items-end"><div class="w-full max-h-[92%] overflow-y-auto rounded-t-xl bg-white p-4 space-y-4">${overlay}</div></div>` : ""}
+        </div>`;
+      }
+      const sheetHead = (title, sub = "") =>
+        `<div class="flex items-start justify-between"><div><h2 class="text-lg font-semibold">${title}</h2>${sub ? `<p class="text-muted-foreground tnum">${sub}</p>` : ""}</div><button aria-label="Close" class="h-11 w-11 -mr-2 -mt-2 rounded-md hover:bg-muted">✕</button></div>`;
+
+      // Desktop frame
+      function desktop(title, inner, nav = "Absences & replacements") {
+        const items = [
+          "Dashboard",
+          "Timetable",
+          "Lesson log",
+          "Absences & replacements",
+          "Students",
+          "Teachers",
+          "Courses & groups",
+          "Settings",
+        ];
+        return `<div class="w-[1200px] flex rounded-lg overflow-hidden border border-border bg-muted shadow">
+          <aside class="w-56 shrink-0 bg-white border-r border-border p-3 space-y-1">
+            <div class="font-semibold px-2 py-2">Lingua School</div>
+            ${items.map((i) => `<a href="#" class="block rounded-md px-2 py-1.5 ${i === nav ? "bg-accent text-accent-foreground font-medium" : "hover:bg-muted"}">${i}${i === "Absences & replacements" ? ` <span class="ml-1 rounded-full bg-blue-600 px-1.5 text-xs text-white">3</span>` : ""}</a>`).join("")}
+          </aside>
+          <main class="flex-1 p-6 space-y-4"><h1 class="text-2xl font-semibold">${title}</h1>${inner}</main>
+        </div>`;
+      }
+
+      /* --------------------------------------------------------- 1 Timetable sheet */
+      function ttSheet(st) {
+        // before | after | cancelled | booking | 1-on-1
+        const day = `<h1 class="text-2xl font-semibold">Timetable</h1>
+          <p class="text-muted-foreground">‹ 20 – 26 Oct ›</p>
+          <h2 class="font-semibold">Monday 20 October</h2>
+          <div class="${st === "cancelled" ? "l-notattending" : st === "booking" ? "l-replacement" : st === "1-on-1" ? "l-individual" : "l-group"} rounded-md p-3">
+            <div class="tnum font-medium">17:00–18:30</div><div>B1 Evening</div><div class="text-sm">Room 3</div></div>`;
+        const rows = (extra) =>
+          `<dl class="space-y-2">
+            <div><dt class="text-muted-foreground text-sm">When</dt><dd class="tnum">Monday 20 October 2026, 17:00–18:30</dd></div>
+            <div><dt class="text-muted-foreground text-sm">Type, level</dt><dd>${st === "1-on-1" ? "1-on-1 · B1" : "Group lesson · B1"}</dd></div>
+            <div><dt class="text-muted-foreground text-sm">Teacher</dt><dd>Tomas Horvat</dd></div>
+            <div><dt class="text-muted-foreground text-sm">Room</dt><dd>Room 3</dd></div>${extra}</dl>`;
+        let body;
+        if (st === "before" || st === "1-on-1")
+          body = `${sheetHead(st === "1-on-1" ? "1-on-1 with Tomas Horvat" : "B1 Evening")}
+            ${rows("")}
+            ${mbtn("Can't attend?", "outline")}
+            <p class="text-blue-800">ⓘ Cancel by <strong class="tnum">Sun 19 Oct, 17:00</strong> to get a makeup credit.</p>`;
+        else if (st === "after")
+          body = `${sheetHead("B1 Evening")}${rows("")}
+            ${mbtn("Can't attend?", "outline")}
+            <p class="text-amber-800">⚠ It's after the cutoff (Sun 19 Oct, 17:00). You can still cancel, but you won't get a credit.</p>`;
+        else if (st === "cancelled")
+          body = `${sheetHead("B1 Evening")}<div>${badge("📅✕ Not attending")}</div>${rows("")}
+            <p>You cancelled this lesson on 17 Oct.<br/>🎟 You got a makeup credit.</p>
+            ${mbtn("Undo", "outline")}`;
+        else
+          body = `${sheetHead("B1 Morning")}<div>${badge("⟳ Replacement", "repl")}</div>
+            ${rows(`<div><dt class="text-muted-foreground text-sm">Booking</dt><dd>Replacement for your lesson on Mon 13 Oct</dd></div>`)}
+            ${mbtn("Cancel booking", "outline")}
+            <p class="text-blue-800">ⓘ Cancel by <strong class="tnum">Sun 19 Oct, 17:00</strong> to keep your credit.</p>`;
+        return phone(day, { tab: "Timetable", overlay: body });
+      }
+
+      /* ---------------------------------------------------------- 2 Cancel dialog */
+      function cancelDialog(st) {
+        // before | after | cutoff passed | started | error | done
+        const bg = `<h1 class="text-2xl font-semibold">Timetable</h1>`;
+        if (st === "done")
+          return phone(
+            bg +
+              `<div class="l-notattending rounded-md p-3"><div class="tnum">17:00–18:30</div><div>B1 Evening</div>${badge("Not attending")}</div>` +
+              toast(
+                "Lesson cancelled. You have a makeup credit until Wed 19 Nov.",
+                "Book a replacement",
+              ),
+            { tab: "Timetable" },
+          );
+        const msg = {
+          before: alert(
+            "🎟 You'll get a makeup credit, valid until <strong>Wed 19 Nov</strong>. Use it to join another B1 lesson.",
+            "success",
+          ),
+          after: alert(
+            "⚠ It's less than 24 hours before the lesson, so you won't get a makeup credit. Your teacher will still know you're not coming.",
+            "warning",
+          ),
+          "cutoff passed": alert(
+            "⚠ The cutoff passed while you were deciding. You can still cancel, but without a credit.",
+            "warning",
+          ),
+          started: alert(
+            "This lesson has already started, so it can't be cancelled.",
+            "danger",
+          ),
+          error: alert(
+            "Something went wrong. Check your connection and try again.",
+            "danger",
+          ),
+        }[st];
+        const noCredit = st === "after" || st === "cutoff passed";
+        const form =
+          st === "started"
+            ? mbtn("Close", "outline")
+            : `<label class="block"><span class="font-medium">Reason (optional)</span>
+                <textarea class="mt-1 w-full rounded-md border border-input p-2" rows="2" placeholder="e.g. Doctor's appointment">${st === "error" ? "Doctor's appointment" : ""}</textarea>
+                <span class="text-sm text-muted-foreground">Your teacher sees the reason.</span></label>
+              ${mbtn(st === "error" ? "Try again" : noCredit ? "Cancel without credit" : "Cancel my lesson")}
+              ${mbtn("Keep my lesson", "outline")}`;
+        return phone(bg, {
+          tab: "Timetable",
+          overlay: `${sheetHead("Cancel B1 Evening?", "Mon 20 Oct · 17:00–18:30")}${msg}${form}`,
+        });
+      }
+
+      /* -------------------------------------------------------- 3 Reschedule sheet */
+      function reschedule(st) {
+        // pick | picked | taken | no times | done
+        if (st === "done")
+          return phone(
+            `<h1 class="text-2xl font-semibold">Timetable</h1>
+            <h2 class="font-semibold">Wednesday 22 October</h2>
+            <div class="l-replacement rounded-md p-3"><div class="tnum font-medium">16:00–16:45</div><div>1-on-1 with Tomas Horvat</div>${badge("⟳ Rescheduled", "repl")}</div>
+            ${toast("Lesson moved to Wed 22 Oct, 16:00.")}`,
+            { tab: "Timetable" },
+          );
+        const chips = (times, sel) =>
+          times.length
+            ? `<div role="radiogroup" class="flex flex-wrap gap-2">${times.map((t) => `<button role="radio" aria-checked="${t === sel}" class="h-11 px-4 rounded-md border tnum ${t === sel ? "bg-primary text-white border-primary" : "border-input"}">${t}</button>`).join("")}</div>`
+            : `<p class="text-muted-foreground">No free times</p>`;
+        const sel = st === "picked" ? "16:00" : null;
+        const days =
+          st === "no times"
+            ? `<div class="text-center space-y-3 py-6"><p>No free times with Tomas Horvat before 20 Nov. Cancel now to keep your credit and try again later, or contact the school office.</p>${mbtn("Cancel and reschedule later")}</div>`
+            : `<p class="flex items-center justify-between"><button class="h-11 w-11" aria-label="Previous week">‹</button><span class="tnum font-medium">20 – 26 Oct</span><button class="h-11 w-11" aria-label="Next week">›</button></p>
+              ${st === "taken" ? alert("That time was just taken. Pick another one.", "warning") : ""}
+              <h3 class="font-semibold">Wed 22 Oct</h3>${chips(st === "taken" ? ["16:30", "19:00"] : ["16:00", "16:30", "19:00"], sel)}
+              <h3 class="font-semibold">Thu 23 Oct</h3>${chips(["17:00", "17:30"])}
+              <h3 class="font-semibold">Fri 24 Oct</h3>${chips([])}
+              <hr/>
+              <p aria-live="polite" class="tnum ${sel ? "font-medium" : "text-muted-foreground"}">${sel ? "New time: Wed 22 Oct, 16:00–16:45 · Room 2" : "No time picked yet"}</p>
+              ${mbtn("Reschedule")}
+              <p class="text-center text-muted-foreground">Can't pick a time now?</p>${mbtn("Cancel and reschedule later", "outline")}`;
+        return phone(`<h1 class="text-2xl font-semibold">Timetable</h1>`, {
+          tab: "Timetable",
+          overlay: `${sheetHead("Reschedule your lesson", "1-on-1 with Tomas Horvat")}
+            <p class="tnum ${sel ? "line-through text-muted-foreground" : ""}">Now: Tue 21 Oct · 18:00–18:45</p>
+            <p class="font-medium">Pick a new time (until 20 Nov)</p>${days}`,
+        });
+      }
+
+      /* ------------------------------------------------------------- 4 Absences tab */
+      function absencesTab(st) {
+        // filled | no credits | empty | loading | error | undo dialog | cancel booking
+        const head = `<h1 class="text-2xl font-semibold">Absences & credits</h1>
+          <p class="text-muted-foreground">Cancel at least 24 hours before a lesson to get a makeup credit. Credits are valid for 30 days.</p>`;
+        if (st === "loading")
+          return phone(
+            head +
+              `<div class="skeleton h-6 w-40"></div><div class="skeleton h-32"></div><div class="skeleton h-32"></div>`,
+          );
+        if (st === "error")
+          return phone(
+            head +
+              alert(
+                "<strong>Couldn't load this page.</strong><br/>Check your connection and try again.<br/>" +
+                  btn("Try again", "outline", "mt-2"),
+                "danger",
+              ),
+          );
+        if (st === "empty")
+          return phone(
+            `<h1 class="text-2xl font-semibold">Absences & credits</h1>
+            <div class="text-center py-12 space-y-2"><div class="text-4xl text-muted-foreground" aria-hidden="true">📅</div>
+            <h2 class="text-lg font-semibold">No absences</h2>
+            <p class="text-muted-foreground">If you can't come to a lesson, tap <em>Can't attend?</em> on it in your timetable. Cancel in time and you'll get a credit to make it up.</p></div>`,
+          );
+        const credit = (src, what, b, action) =>
+          `<div class="rounded-lg border border-border p-4 space-y-2"><div class="font-medium">🎟 From ${src}</div><div class="text-muted-foreground">${what}</div><div>${b}</div>${mbtn(action)}</div>`;
+        const credits =
+          st === "no credits"
+            ? `<h2 class="text-lg font-semibold">Makeup credits (0)</h2><p class="text-muted-foreground">No credits right now.</p>`
+            : `<h2 class="text-lg font-semibold">Makeup credits (2)</h2>
+              ${credit("Mon 13 Oct", "B1 Evening · Group lesson", badge("Valid until 12 Nov", "success"), "Book a replacement")}
+              ${credit("Tue 14 Oct", "1-on-1 with Tomas Horvat", badge("⏰ Expires in 3 days", "warning"), "Reschedule")}`;
+        const rest = `<h2 class="text-lg font-semibold">Upcoming bookings (1)</h2>
+          <div class="l-replacement rounded-md p-3 space-y-1"><div class="tnum font-medium">Thu 23 Oct · 18:00–19:30</div><div>B1 Morning ${badge("⟳ Replacement", "repl")}</div><div class="text-sm">For your lesson on 13 Oct</div>${btn("Cancel booking", "outline", "h-11 mt-1")}</div>
+          <h2 class="text-lg font-semibold">Upcoming cancellations (1)</h2>
+          <div class="l-notattending rounded-md p-3 space-y-1"><div class="tnum font-medium">Mon 27 Oct · 17:00 · B1 Evening</div><div>${badge("Credit earned", "success")}</div>${btn("Undo", "outline", "h-11 mt-1")}</div>
+          <details class="rounded-lg border border-border p-3"><summary class="font-semibold cursor-pointer min-h-[44px] flex items-center">History (4)</summary>
+            <ul class="mt-2 space-y-2 text-sm">
+              <li>Credit from Mon 6 Oct — used for B1 Morning, Thu 9 Oct ${badge("Used")}</li>
+              <li>Credit from Mon 15 Sep — expired on Wed 15 Oct ${badge("Expired")}</li>
+              <li>Mon 29 Sep · B1 Evening — cancelled, no credit</li>
+              <li>Booking for Wed 1 Oct — ${badge("Removed by school", "danger")}: Group moved to a smaller room.</li>
+            </ul></details>`;
+        let overlay = "";
+        if (st === "undo dialog")
+          overlay = `${sheetHead("Attend B1 Evening on Mon 27 Oct after all?")}<p>Your makeup credit from this lesson will be removed.</p>${mbtn("Yes, I'll attend")}${mbtn("Back", "outline")}`;
+        if (st === "cancel booking")
+          overlay = `${sheetHead("Cancel your booking for B1 Morning on Thu 23 Oct?")}${alert("🎟 Your credit from Mon 13 Oct comes back, valid until 12 Nov.", "success")}${mbtn("Cancel booking")}${mbtn("Keep booking", "outline")}`;
+        return phone(head + credits + rest, { overlay });
+      }
+
+      /* ------------------------------------------------------------ 5 Book replacement */
+      function book(st) {
+        // list | confirm | seat taken | credit expired | empty week | nothing until expiry | no level | done
+        if (st === "done")
+          return phone(
+            `<h1 class="text-2xl font-semibold">Absences & credits</h1><h2 class="text-lg font-semibold">Upcoming bookings (1)</h2>
+            <div class="l-replacement rounded-md p-3"><div class="tnum font-medium">Wed 22 Oct · 10:00–11:30</div><div>B1 Morning ${badge("⟳ Replacement", "repl")}</div></div>
+            ${toast("Replacement booked for Wed 22 Oct, 10:00.", "View in timetable")}`,
+          );
+        const head = `<a href="#" class="text-primary">‹ Absences</a><h1 class="text-2xl font-semibold">Book a replacement</h1>
+          <p class="text-muted-foreground">Using your credit from Mon 13 Oct · valid until 12 Nov</p>`;
+        if (st === "credit expired")
+          return phone(
+            head +
+              alert(
+                "This credit expired on Wed 12 Nov.<br/>" +
+                  btn("Back to Absences", "outline", "mt-2"),
+                "danger",
+              ),
+          );
+        if (st === "no level")
+          return phone(
+            head +
+              alert(
+                "Your level isn't set yet, so we can't find replacement lessons. Ask the school office.",
+                "warning",
+              ),
+          );
+        const lesson = (t, g, r, seats) =>
+          `<div class="l-group rounded-md p-3 space-y-1"><div class="flex justify-between"><span class="tnum font-medium">${t}</span><span>👥 ${g}</span></div><div class="text-sm">${r}</div>
+            <div class="text-sm ${seats === 1 ? "text-amber-800 font-medium" : ""}">${seats === null ? "" : seats === 1 ? "1 seat left" : `${seats} seats left`}</div>${btn("Book", "primary", "h-11 w-full mt-1")}</div>`;
+        const nav = `<p class="flex items-center justify-between"><button class="h-11 w-11" aria-label="Previous week">‹</button><span class="tnum font-medium">20 – 26 Oct</span><button class="h-11 w-11" aria-label="Next week">›</button></p>`;
+        let list;
+        if (st === "empty week")
+          list =
+            nav +
+            `<p class="text-muted-foreground py-6 text-center">No B1 lessons with free seats this week.</p>${btn("Next week", "outline", "h-11 w-full")}`;
+        else if (st === "nothing until expiry")
+          list = `<p class="text-muted-foreground py-6 text-center">No B1 lessons with free seats before 12 Nov. New seats free up when other students cancel, so check again later, or ask the school office.</p>`;
+        else
+          list =
+            nav +
+            `${st === "seat taken" ? alert("Someone just took the last seat. Pick another lesson.", "warning") : ""}
+            <h3 class="font-semibold">Wed 22 Oct</h3>${lesson("10:00–11:30", "B1 Morning", "Room 1 · Eva Kováčová", 3)}
+            ${st === "seat taken" ? "" : lesson("18:00–19:30", "B1 Evening 2", "Online · Peter Novák", null)}
+            <h3 class="font-semibold">Thu 23 Oct</h3>${lesson("18:00–19:30", "B1 Afternoon", "Room 4 · Eva Kováčová", 1)}
+            <p class="text-sm text-muted-foreground">Lessons that clash with your timetable aren't shown.</p>`;
+        const overlay =
+          st === "confirm"
+            ? `${sheetHead("Book B1 Morning on Wed 22 Oct, 10:00?")}<p>This uses your makeup credit from Mon 13 Oct. You can cancel the booking until Tue 21 Oct, 10:00 and keep the credit.</p>${mbtn("Book")}${mbtn("Back", "outline")}`
+            : "";
+        return phone(
+          head +
+            `<h2 class="text-lg font-semibold">B1 lessons with free seats</h2>` +
+            list,
+          { overlay },
+        );
+      }
+
+      /* ------------------------------------------------------------ 6 Teacher lesson */
+      function teacherLesson(st) {
+        // group | over capacity | nobody cancelled | 1-on-1 rescheduled | loading
+        const header = `<a href="#" class="text-primary">‹ My timetable</a>
+          <h1 class="text-2xl font-semibold">${st === "1-on-1 rescheduled" ? "1-on-1 · Jana Malá" : "B1 Evening"}</h1>
+          <p class="text-muted-foreground tnum">${st === "1-on-1 rescheduled" ? "Wed 22 Oct 2026 · 16:00–16:45 · Room 2 · 👤 1-on-1 · B1" : "Mon 20 Oct 2026 · 17:00–18:30 · Room 3 · 👥 Group lesson · B1"}</p>`;
+        let students;
+        if (st === "loading")
+          students = card(
+            `<div class="skeleton h-6 w-32 mb-3"></div><div class="skeleton h-4 mb-2"></div><div class="skeleton h-4 mb-2"></div><div class="skeleton h-4"></div>`,
+          );
+        else if (st === "1-on-1 rescheduled")
+          students = alert(
+            "ⓘ Rescheduled by Jana Malá from Tue 21 Oct, 18:00.",
+            "info",
+          );
+        else {
+          const over = st === "over capacity";
+          const coming = [
+            ["Anna Kováč"],
+            ["Ben Novák"],
+            ["Jana Malá", "B1 Morning"],
+            ["Marek Šimko"],
+            ["Zuzana Hudák", "B1 Afternoon"],
+            ...(over ? [["Ivan Polák", "B1 Morning"]] : []),
+          ];
+          const notComing =
+            st === "nobody cancelled"
+              ? `<p class="text-muted-foreground">Everyone in the group is coming.</p>`
+              : `<h3 class="font-semibold mt-4">Not coming (2)</h3>
+                <ul class="divide-y divide-border">
+                  <li class="py-2 flex flex-wrap gap-2 items-center"><span>Peter Horák</span><span class="text-muted-foreground">cancelled 2 days ago · “Doctor's appointment”</span></li>
+                  <li class="py-2 flex flex-wrap gap-2 items-center"><span>Lucia Bielik</span><span class="text-muted-foreground">cancelled today, 15:10</span>${badge("Late", "warning")}</li>
+                </ul>`;
+          students =
+            card(`<div class="flex items-center justify-between mb-2"><h2 class="text-lg font-semibold">Students</h2>
+              <span class="tnum ${over ? "text-amber-800 font-medium" : "text-muted-foreground"}">${over ? "⚠ Room 3 · 15 of 14 seats — over capacity" : "Room 3 · 13 of 14 seats"}</span></div>
+            <h3 class="font-semibold">Coming (${over ? 14 : 13})</h3>
+            <ul class="divide-y divide-border">${coming.map(([n, from]) => `<li class="py-2 flex items-center gap-2"><span>${n}</span>${from ? badge(`⟳ Replacement · from ${from}`, "repl") : ""}</li>`).join("")}<li class="py-2 text-muted-foreground">… 8 more</li></ul>
+            ${notComing}`);
+        }
+        return `<div class="w-[1100px] rounded-lg border border-border bg-muted p-6 space-y-4">${header}
+          <div class="grid grid-cols-12 gap-4"><div class="col-span-8 space-y-4">${students}
+          ${card(`<h2 class="text-lg font-semibold">Lesson log</h2><p class="text-muted-foreground">(unchanged — lessons.md §5.2)</p>`)}</div>
+          <div class="col-span-4">${card(`<div class="-m-6 mb-3 rounded-t-lg bg-slate-800 px-4 py-2 text-white">🔒 Internal — only teachers and admins see this</div><p class="text-muted-foreground">Internal notes (unchanged)</p>`)}</div></div></div>`;
+      }
+
+      /* ------------------------------------------------------------ 7 Admin settings */
+      function adminSettings(st) {
+        // default | validation error | saved
+        const subnav = [
+          "School",
+          "Absences & credits",
+          "Terms & holidays",
+          "Rooms",
+          "Administrators",
+        ]
+          .map(
+            (s) =>
+              `<a href="#" class="block rounded-md px-2 py-1.5 ${s === "Absences & credits" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-muted"}">${s}</a>`,
+          )
+          .join("");
+        const err = st === "validation error";
+        const form = `<div class="flex gap-6"><nav class="w-48 space-y-1">${subnav}</nav>
+          <div class="max-w-2xl flex-1">${card(`
+            <h2 class="font-semibold">Cancellation cutoff</h2>
+            <p class="mt-2">Students who cancel at least <input aria-label="Cancellation cutoff, in hours before the lesson" class="w-16 h-9 rounded-md border ${err ? "border-destructive" : "border-input"} px-2 text-center tnum" value="${err ? "200" : "24"}"/> hours before a lesson get a makeup credit.</p>
+            ${err ? `<p class="text-sm text-red-700 mt-1">Enter a whole number from 0 to 168.</p>` : ""}
+            <p class="text-sm text-muted-foreground mt-1" aria-live="polite">Example: for a lesson on Mon 20 Oct, 17:00, cancel by Sun 19 Oct, 17:00.</p>
+            <h2 class="font-semibold mt-6">Credit validity</h2>
+            <p class="mt-2">A makeup credit is valid for <input aria-label="Credit validity, in days after the missed lesson" class="w-16 h-9 rounded-md border border-input px-2 text-center tnum" value="30"/> days after the missed lesson.</p>
+            <p class="text-sm text-muted-foreground mt-1" aria-live="polite">Example: a credit for Mon 20 Oct is valid until Wed 19 Nov.</p>
+            <div class="mt-6">${alert("ⓘ Changes apply to new cancellations. Existing credits keep their dates.")}</div>
+            <div class="mt-4 flex justify-end">${btn("Save")}</div>`)}
+            ${st === "saved" ? toast("Settings saved.") : ""}</div></div>`;
+        return desktop("Absences & credits", form, "Settings");
+      }
+
+      /* ------------------------------------------------------------ 8 Admin list */
+      function adminList(st) {
+        // review | review empty | replacements | absences | reject dialog | override dialog
+        const tab =
+          st === "replacements"
+            ? "Replacements"
+            : st === "absences"
+              ? "Absences"
+              : "Review";
+        const tabs = ["Review (3)", "Replacements", "Absences"]
+          .map(
+            (t) =>
+              `<button class="px-3 py-1.5 rounded-md ${t.startsWith(tab) ? "bg-white shadow font-medium" : "text-muted-foreground"}">${st === "review empty" && t.startsWith("Review") ? "Review (0)" : t}</button>`,
+          )
+          .join("");
+        const filters = `<div class="flex flex-wrap gap-2 items-center">
+          ${btn("📅 " + (tab === "Review" ? "Upcoming" : tab === "Absences" ? "13 Oct – 3 Nov" : "Next 14 days") + " ▾", "outline")}
+          ${["Student", "Group", "Teacher", "Level", ...(tab === "Review" ? [] : ["Status"])].map((f) => btn(f + " ▾", "outline")).join("")}
+          <a href="#" class="text-primary ml-2">Clear filters</a></div>`;
+        const th = (cols) =>
+          `<thead class="bg-muted text-left"><tr>${cols.map((c) => `<th class="px-3 py-2 font-medium">${c}</th>`).join("")}</tr></thead>`;
+        const td = (cells) =>
+          `<tr class="border-t border-border">${cells.map((c) => `<td class="px-3 py-2 align-top">${c}</td>`).join("")}</tr>`;
+        const menu = `<button aria-label="Actions" class="h-8 w-8 rounded-md hover:bg-muted">⋯</button>`;
+        let table;
+        if (st === "review empty")
+          table = `<div class="text-center py-16 space-y-2"><div class="text-4xl" aria-hidden="true">✓</div><h2 class="text-lg font-semibold">Nothing to review</h2><p class="text-muted-foreground">Replacements are approved automatically. Ones you haven't checked yet appear here.</p></div>`;
+        else if (tab === "Review")
+          table = `<div class="flex items-center gap-3 px-3 py-2 bg-accent text-accent-foreground"><span>2 selected</span>${btn("Approve selected (2)")}</div>
+            <table class="w-full">${th(["<input type=checkbox aria-label='Select all'/>", "Booked", "Student", "From", "To", "Seats", ""])}<tbody class="tnum">
+            ${td(["<input type=checkbox checked aria-label='Select Jana Malá'/>", "2 h ago", "Jana Malá", "<a class='text-primary' href='#'>Mon 13 Oct, 17:00 · B1 Evening</a>", "<a class='text-primary' href='#'>Wed 22 Oct, 10:00 · B1 Morning</a>", "12 / 14 · Room 1", `<div class="flex gap-1">${btn("Approve", "outline", "h-8")}${menu}</div>`])}
+            ${td(["<input type=checkbox checked aria-label='Select Ivan Polák'/>", "5 h ago", "Ivan Polák", "<a class='text-primary' href='#'>Tue 14 Oct, 18:00 · B1 Afternoon</a>", "<a class='text-primary' href='#'>Thu 23 Oct, 18:00 · B1 Evening</a>", "14 / 14 · Room 3", `<div class="flex gap-1">${btn("Approve", "outline", "h-8")}${menu}</div>`])}
+            ${td(["<input type=checkbox aria-label='Select Jana Malá'/>", "yesterday", "Jana Malá " + badge("Rescheduled", "repl"), "<a class='text-primary' href='#'>Tue 21 Oct, 18:00 · 1-on-1 Tomas</a>", "<a class='text-primary' href='#'>Wed 22 Oct, 16:00 · 1-on-1 Tomas</a>", "—", `<div class="flex gap-1">${btn("Approve", "outline", "h-8")}${menu}</div>`])}
+            </tbody></table>`;
+        else if (tab === "Replacements")
+          table = `<table class="w-full">${th(["Student", "Type", "From", "To", "Status", "Reviewed by", "Booked at", ""])}<tbody class="tnum">
+            ${td(["Jana Malá", "Replacement", "Mon 13 Oct · B1 Evening", "Wed 22 Oct · B1 Morning", badge("Needs review", "info"), "—", "20 Oct, 09:12", menu])}
+            ${td(["Marek Šimko", "Replacement", "Mon 6 Oct · B1 Evening", "Thu 16 Oct · B1 Afternoon", badge("Approved", "success"), "Eva Admin, 15 Oct", "14 Oct, 18:40", menu])}
+            ${td(["Lucia Bielik", "Replacement", "Wed 8 Oct · A2 Morning", "Fri 17 Oct · A2 Evening", badge("Rejected", "danger") + "<div class='text-xs text-muted-foreground'>Group moved to a smaller room.</div>", "Eva Admin, 16 Oct", "15 Oct, 07:02", menu])}
+            ${td(["Ben Novák", "Replacement", "Mon 13 Oct · B1 Evening", "Tue 21 Oct · B1 Morning → Wed 22 Oct · B1 Evening 2", badge("Overridden", "warning"), "Eva Admin, 18 Oct", "17 Oct, 11:30", menu])}
+            ${td(["Anna Kováč", "Rescheduled", "Thu 9 Oct · 1-on-1 Peter", "Fri 10 Oct · 1-on-1 Peter", badge("Cancelled by student"), "—", "8 Oct, 12:00", menu])}
+            </tbody></table>`;
+        else
+          table = `<table class="w-full">${th(["Lesson", "Student", "Cancelled at", "Reason", "Credit", "Credit status", ""])}<tbody class="tnum">
+            ${td(["Mon 20 Oct, 17:00 · B1 Evening", "Peter Horák", "18 Oct, 09:00", "Doctor's appointment", badge("Credit earned", "success"), "Available until 19 Nov", menu])}
+            ${td(["Mon 20 Oct, 17:00 · B1 Evening", "Lucia Bielik", "20 Oct, 15:10", "—", badge("Late — no credit", "warning"), "—", menu])}
+            ${td(["Mon 13 Oct, 17:00 · B1 Evening", "Jana Malá", "12 Oct, 20:41", "Business trip", badge("Credit earned", "success"), "<a class='text-primary' href='#'>Used → Wed 22 Oct · B1 Morning</a>", menu])}
+            ${td(["Mon 15 Sep, 17:00 · B1 Evening", "Ben Novák", "14 Sep, 10:00", "—", badge("Credit earned", "success"), "Expired 15 Oct", menu])}
+            </tbody></table>`;
+        let overlay = "";
+        if (st === "reject dialog")
+          overlay = `<div class="w-[520px] rounded-lg bg-white p-6 space-y-4" role="alertdialog" aria-labelledby="rj">
+            <h2 id="rj" class="text-lg font-semibold">Reject Jana Malá's replacement on Wed 22 Oct?</h2>
+            <p>The booking is removed and the credit goes back to the student, valid until 12 Nov.</p>
+            <label class="block"><span class="font-medium">Reason (required)</span><textarea class="mt-1 w-full rounded-md border border-input p-2" rows="3">B1 Morning is reserved for the placement test that day.</textarea>
+            <span class="text-sm text-muted-foreground">The student sees this reason.</span></label>
+            <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Reject", "destructive")}</div></div>`;
+        if (st === "override dialog")
+          overlay = `<div class="w-[720px] rounded-lg bg-white p-6 space-y-4" role="dialog" aria-labelledby="ov">
+            <h2 id="ov" class="text-lg font-semibold">Move Ivan Polák's booking</h2>
+            <p class="text-muted-foreground">Current booking: Thu 23 Oct, 18:00 · B1 Evening</p>
+            <label class="flex items-center gap-2"><span class="inline-block h-5 w-9 rounded-full bg-primary relative"><span class="absolute right-0.5 top-0.5 h-4 w-4 rounded-full bg-white"></span></span>Show all lessons</label>
+            <div role="radiogroup" class="divide-y divide-border rounded-md border border-border tnum">
+              <label class="flex items-center gap-3 p-3"><input type="radio" name="t"/>Fri 24 Oct, 10:00 · B1 Morning · Room 1 · 9/14</label>
+              <label class="flex items-center gap-3 p-3 bg-accent"><input type="radio" name="t" checked/>Fri 24 Oct, 18:00 · B2 Evening · Room 3 ${badge("⚠ Different level (B2)", "warning")}</label>
+              <label class="flex items-center gap-3 p-3"><input type="radio" name="t"/>Sat 25 Oct, 09:00 · B1 Weekend · Room 2 ${badge("⚠ Room full (10/10)", "warning")}</label>
+            </div>
+            <label class="flex items-center gap-2"><input type="checkbox" checked/> I'm making an exception to the rules</label>
+            <label class="block"><span class="font-medium">Reason (required)</span><textarea class="mt-1 w-full rounded-md border border-input p-2" rows="2">Ivan is moving up to B2 next month; agreed with his teacher.</textarea>
+            <span class="text-sm text-muted-foreground">The student sees this reason.</span></label>
+            <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Move booking")}</div></div>`;
+        const page = desktop(
+          "Absences & replacements",
+          `<div class="inline-flex rounded-lg bg-slate-200 p-1">${tabs}</div>${st === "review empty" ? "" : filters}
+          <div class="rounded-lg border border-border bg-white overflow-hidden">${table}</div>
+          ${st === "review empty" ? "" : `<p class="text-muted-foreground text-right">1–${tab === "Replacements" ? 5 : tab === "Absences" ? 4 : 3} of ${tab === "Replacements" ? 5 : tab === "Absences" ? 4 : 3}</p>`}`,
+        );
+        return `<div class="relative">${page}${overlay ? `<div class="absolute inset-0 bg-black/40 flex items-start justify-center pt-24 rounded-lg">${overlay}</div>` : ""}</div>`;
+      }
+
+      /* ---------------------------------------------------------------- screens */
+      const SCREENS = [
+        {
+          k: "sheet",
+          label: "Student: lesson sheet",
+          states: [
+            "before cutoff",
+            "after cutoff",
+            "cancelled",
+            "booking",
+            "1-on-1",
+          ],
+          fn: (i) =>
+            ttSheet(["before", "after", "cancelled", "booking", "1-on-1"][i]),
+        },
+        {
+          k: "cancel",
+          label: "Student: cancel",
+          states: [
+            "before cutoff",
+            "after cutoff",
+            "cutoff passed",
+            "started",
+            "error",
+            "done",
+          ],
+          fn: (i) =>
+            cancelDialog(
+              ["before", "after", "cutoff passed", "started", "error", "done"][
+                i
+              ],
+            ),
+        },
+        {
+          k: "resched",
+          label: "Student: reschedule 1-on-1",
+          states: ["pick", "picked", "taken", "no times", "done"],
+          fn: (i) =>
+            reschedule(["pick", "picked", "taken", "no times", "done"][i]),
+        },
+        {
+          k: "tab",
+          label: "Student: Absences tab",
+          states: [
+            "filled",
+            "no credits",
+            "empty",
+            "loading",
+            "error",
+            "undo dialog",
+            "cancel booking",
+          ],
+          fn: (i) =>
+            absencesTab(
+              [
+                "filled",
+                "no credits",
+                "empty",
+                "loading",
+                "error",
+                "undo dialog",
+                "cancel booking",
+              ][i],
+            ),
+        },
+        {
+          k: "book",
+          label: "Student: book replacement",
+          states: [
+            "list",
+            "confirm",
+            "seat taken",
+            "credit expired",
+            "empty week",
+            "nothing until expiry",
+            "no level",
+            "done",
+          ],
+          fn: (i) =>
+            book(
+              [
+                "list",
+                "confirm",
+                "seat taken",
+                "credit expired",
+                "empty week",
+                "nothing until expiry",
+                "no level",
+                "done",
+              ][i],
+            ),
+        },
+        {
+          k: "teacher",
+          label: "Teacher: lesson page",
+          states: [
+            "group",
+            "over capacity",
+            "nobody cancelled",
+            "1-on-1 rescheduled",
+            "loading",
+          ],
+          fn: (i) =>
+            teacherLesson(
+              [
+                "group",
+                "over capacity",
+                "nobody cancelled",
+                "1-on-1 rescheduled",
+                "loading",
+              ][i],
+            ),
+        },
+        {
+          k: "settings",
+          label: "Admin: settings",
+          states: ["default", "validation error", "saved"],
+          fn: (i) => adminSettings(["default", "validation error", "saved"][i]),
+        },
+        {
+          k: "admin",
+          label: "Admin: absences & replacements",
+          states: [
+            "review",
+            "review empty",
+            "replacements",
+            "absences",
+            "reject dialog",
+            "override dialog",
+          ],
+          fn: (i) =>
+            adminList(
+              [
+                "review",
+                "review empty",
+                "replacements",
+                "absences",
+                "reject dialog",
+                "override dialog",
+              ][i],
+            ),
+        },
+      ];
+      let cur = { screen: "sheet", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>
