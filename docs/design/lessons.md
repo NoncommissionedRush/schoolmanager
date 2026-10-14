@@ -1,80 +1,79 @@
-# Lessons: detail, attendance, lesson log, internal notes & history (Phase 2)
+# Lessons: lesson log, homework & internal notes (Phase 2)
 
-Spec for what happens **inside a dated lesson**: the teacher's lesson page
-(attendance, lesson log, internal TeacherNotes, homework entry point), the
-student's lesson history, and the admin's read access plus attendance
-overview. Homework is specified in `docs/design/homework.md`. Builds on
+Spec for what a teacher writes down **inside a dated lesson** and what
+students and admins can read: the lesson log ("what we covered"), the
+homework for the next lesson, and internal TeacherNotes. Builds on
 `docs/design/tokens.md`, `docs/design/app-layout.md` and
-`docs/design/timetable.md` (§6.3 lesson details sheet). Clickable wireframe:
-`docs/design/wireframes/lessons.html`.
+`docs/design/timetable.md` (§6.3 lesson details sheet). Clickable
+wireframe: `docs/design/wireframes/lessons.html`.
 
-Owner decisions this spec follows (CARM-33, 2026-10-14): attendance is
-**present / absent / excused** per student and lesson, with no "late"
-(`LATE` is removed from `AttendanceStatus`). Homework answers are text only.
+## Owner decisions this spec follows (2026-10-14, CARM-34 review)
+
+1. **No attendance tracking.** Teachers don't record present / absent /
+   late. Whether a student is late or doesn't show up doesn't matter.
+   A student **cancelling** a lesson matters only because it lets them
+   book a replacement lesson in another group. That is Phase 3 (absences
+   and replacements), not this spec.
+2. **Homework is one text field per lesson.** The teacher writes e.g. "One
+   page essay about your favourite movie". There are no due dates, no
+   student answers, no review and no deadline rules. Its purpose is that a
+   student who missed the lesson knows what to prepare for the next one.
+
+Earlier owner decisions still apply: TeacherNotes are visible to teachers
+and admins only, enforced server-side. All UI strings go through next-intl.
 
 ## 1. Goal
 
-- A teacher records a lesson in **under a minute** right after teaching it:
-  attendance with one tap per student (or _Mark all present_), a few lines
-  of "what we covered", and an optional private note.
-- Nobody can confuse what students can see with what they can't. Internal
-  notes look internal everywhere they appear.
-- A student sees on their phone what was covered in a lesson they missed,
-  whether they were marked present, and which homework belongs to it.
-- An admin can open any lesson in the school and see per group or per
-  student who attended.
+- Right after the lesson, a teacher writes two short texts in under a
+  minute: **What we covered** and **Homework**. Optionally they add an
+  internal note.
+- A student, especially one who missed the lesson, sees on their phone
+  what was covered and what to prepare.
+- Nobody can confuse what students see with what they don't. Internal
+  notes look internal everywhere.
+- Admins can read all of it for any lesson in the school.
 
 ## 2. Roles and access
 
-| Role               | Screens                                                                                                                                         | Can read                                                                                      | Can write                                                                                    |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Teacher            | Lesson page `/teacher/lessons/[id]` · lesson list `/teacher/lessons` (nav _Lesson log_) · dashboard _To do_                                     | Lessons where they are `teacherId` **or** `substituteTeacherId`; everything on those lessons  | Attendance, lesson log, own TeacherNotes, homework (homework.md) on those lessons            |
-| Substitute teacher | Same as teacher, for the substituted lesson only                                                                                                | Same as the regular teacher **for that lesson**, including earlier notes about the group      | Same as the regular teacher for that lesson                                                  |
-| Student            | Lesson history `/student/lessons` · lesson page `/student/lessons/[id]`                                                                         | Lessons of groups they were a member of on the lesson date: log, **own** attendance, homework | Nothing on the lesson (homework answers: homework.md)                                        |
-| Admin              | Lesson page `/admin/lessons/[id]` (read-only) · _Attendance_ tab on group detail and student detail · lesson list `/admin/lessons` (P2 minimal) | Every lesson of the school, including all TeacherNotes                                        | Nothing in P2 (read-only; see Q1). Admins keep cancelling/moving lessons in the editor (P1). |
+| Role               | Screens                                                                                 | Can read                                                                                     | Can write                                               |
+| ------------------ | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Teacher            | Lesson page `/teacher/lessons/[id]` · lesson list `/teacher/lessons` (nav _Lesson log_) | Lessons where they are `teacherId` **or** `substituteTeacherId`, including all notes on them | Lesson log, homework and their own TeacherNotes on them |
+| Substitute teacher | The same, for the substituted lesson                                                    | The same as the regular teacher **for that lesson**, including earlier notes about the group | The same as the regular teacher for that lesson         |
+| Student            | Homework tab `/student/homework` · lesson page `/student/lessons/[id]` · home card      | Lessons of groups they were a member of on the lesson date: the log and the homework         | Nothing                                                 |
+| Admin              | Lesson page `/admin/lessons/[id]` (read-only) · lesson list `/admin/lessons`            | Every lesson of the school, including all TeacherNotes                                       | Nothing in P2 (Q1)                                      |
 
-Both the regular teacher and the substitute keep full rights on a
-substituted lesson: the regular teacher still owns the group and may fill in
-what the substitute forgot.
+The regular teacher and the substitute both keep full rights on a
+substituted lesson.
 
-**Server-side rules** (the UI only mirrors them; QA covers them in CARM-37):
+**Server-side rules.** The UI only mirrors these. QA covers them in
+CARM-37.
 
-- Every lesson query is scoped by `schoolId` and, for teachers, by
-  `teacherId = me OR substituteTeacherId = me`; for students, by an active
-  `GroupMembership` on the lesson's `occurrenceDate`/`startsAt` (and, from P3,
-  by an approved replacement into the lesson).
-- A lesson the signed-in user may not see returns **404 Not found**, not 403,
-  so lesson ids don't leak (same as CARM-32).
-- Student responses are built from a **separate, student-safe DTO** that has
-  no field for TeacherNotes and contains only the student's own Attendance
-  row. Never filter a teacher DTO down in the client.
-- `Attendance.note` is visible to the student it belongs to (labelled so in
-  the UI, §5.3). Anything private goes into a TeacherNote.
+- Every lesson query is scoped by `schoolId`.
+  - Teachers: also by `teacherId = me OR substituteTeacherId = me`.
+  - Students: also by a `GroupMembership` that is active on the lesson
+    date. From P3, an approved replacement into the lesson counts too.
+- A lesson the user may not see returns **404 Not found**, not 403, so
+  lesson ids don't leak (as in CARM-32).
+- Student responses come from a **separate, student-safe DTO** with no
+  field for TeacherNotes. Never filter a teacher DTO down in the client.
+- Students only see lessons that have **started**, except the "next
+  lesson" link in the timetable, which shows only the lesson's date, time,
+  room and teacher.
 
 ## 3. Concepts shown in the UI
 
-| Concept            | UI word (key)                                          | Visible to students? | Notes                                                                                                                                                                                                |
-| ------------------ | ------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Lesson`           | **Lesson** (`lessons.lesson`)                          | yes (own groups)     | One dated occurrence, as in the timetable.                                                                                                                                                           |
-| `Attendance`       | **Attendance** (`attendance.title`)                    | own row only         | Present / Absent / Excused. "Not recorded" = no row yet.                                                                                                                                             |
-| `Attendance.note`  | **Note for the student** (`attendance.note`)           | yes, own             | Optional, short (≤ 200 chars), e.g. "Arrived 20 minutes late". Replaces the removed "late" status.                                                                                                   |
-| `LessonLog`        | **Lesson log** / "What we covered" (`lessonLog.title`) | yes                  | One per lesson, plain text.                                                                                                                                                                          |
-| `TeacherNote`      | **Internal note** (`teacherNotes.title`)               | **never**            | About the lesson, the group or one student. Always shown in the internal style (§4).                                                                                                                 |
-| Lesson "done"      | **Recorded** badge (`lessons.status.recorded`)         | no                   | Derived, not stored: lesson has ended and every expected student has an attendance row. The stored `LessonStatus.COMPLETED` is set by the server at that moment so timetable views can show it (Q2). |
-| Lesson "to record" | **To record** badge (`lessons.status.toRecord`)        | no                   | Lesson has ended, is not cancelled, and attendance is incomplete.                                                                                                                                    |
-| Log missing        | **No log** (`lessons.status.noLog`)                    | no                   | Shown next to _Recorded_ when the log is empty; a reminder, not a blocker.                                                                                                                           |
+| Concept       | UI word (key)                                 | Students see it? | Notes                                                                                      |
+| ------------- | --------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| Lesson log    | **What we covered** (`lessonLog.covered`)     | yes              | Plain text, one per lesson.                                                                |
+| Homework      | **Homework** (`lessonLog.homework`)           | yes              | Plain text, one per lesson, for the next lesson. Optional. No due date, answers or review. |
+| `TeacherNote` | **Internal note** (`teacherNotes.title`)      | **never**        | About the lesson, the group or one student. Always shown in the internal style (§4).       |
+| Missing log   | **No log yet** badge (`lessons.status.noLog`) | no               | A lesson that has ended, isn't cancelled and has no "What we covered". A reminder only.    |
 
-**Expected students** of a lesson = members of the lesson's group whose
-membership covers the lesson date (`joinedAt ≤ lesson date` and
-`leftAt` null or `> lesson date`), plus students who already have an
-attendance row (e.g. they left the group later). From P3, replacement
-students joining the lesson are added with a _Replacement_ tag.
+## 4. Internal style (token `internal`)
 
-## 4. Internal style (new token: `internal`)
-
-TeacherNotes must be recognisable as private at a glance, without relying
-on color, and must not look like a status (warning, error) or a lesson type.
-Add to `tokens.md` §1.2:
+TeacherNotes must look private at a glance, without relying on color.
+They must not look like a status (warning, error) or a lesson type. The
+token is in `tokens.md` §1.2:
 
 | Token      | Surface            | Border                                | Header band                                     | Text                | Icon (lucide) |
 | ---------- | ------------------ | ------------------------------------- | ----------------------------------------------- | ------------------- | ------------- |
@@ -84,443 +83,320 @@ Rules for every place an internal note appears (lesson page, admin views,
 later a student's profile):
 
 1. A dark header band with the lock icon and the visible text **"Internal —
-   only teachers and admins see this"** (`teacherNotes.internalBanner`). The
-   text is always rendered, not only on hover.
-2. The region is a `<section aria-labelledby>` whose heading is "Internal
-   notes" so screen readers announce it the same way.
-3. The add/edit field's label repeats it: "Internal note (students can't see
-   this)".
-4. Internal notes are never shown in a student-facing layout, never
-   included in a list or card that also contains student-visible content
-   without the band, and never printed in toasts.
+   only teachers and admins see this"** (`teacherNotes.internalBanner`). It
+   is always rendered, not only on hover.
+2. The region is a `<section aria-labelledby>` with the heading "Internal
+   notes".
+3. The add/edit field's label repeats it: "Internal note (students can't
+   see this)".
+4. Internal notes never appear in a student-facing layout or in toasts.
+   They are never shown next to student-visible content without the band.
 
-## 5. Teacher lesson page (`/teacher/lessons/[id]`)
+## 5. Teacher
 
-### 5.1 Entry points
+### 5.1 Flow
 
 ```mermaid
 flowchart TD
   TT[Weekly timetable] -->|click lesson| SH[Lesson details sheet]
   SH -->|Open lesson| LP["/teacher/lessons/[id]"]
-  DB[Teacher dashboard] -->|Next lesson: Open lesson| LP
-  DB -->|To do: Record attendance| LP
+  DB[Teacher dashboard: To do] -->|Write log for B1 Evening, Mon 20 Oct| LP
   LL["Lesson log list /teacher/lessons"] -->|row| LP
-  LP --> ATT[Attendance: tap per student or Mark all present] --> SAVEA[Save attendance]
-  LP --> LOG[Write lesson log] --> SAVEL[Save log]
-  LP --> NOTE[Add internal note: lesson / group / student]
-  LP --> HW[Add homework → homework.md]
-  SAVEA --> REC{All expected students recorded and lesson ended?}
-  REC -- yes --> DONE[Badge: Recorded]
-  REC -- no --> TODO[Badge: To record]
+  LP --> W[Write What we covered + Homework] --> S[Save]
+  LP --> N[Add internal note: lesson / group / student]
+  S --> ST[Students of the group see log + homework]
 ```
 
-- **Lesson details sheet** (`timetable.md` §6.3) gets a primary button
-  _Open lesson_ (`lessons.open`) for teacher and admin, and for students on
-  past lessons _View lesson_ (`lessons.view`). P2 also adds to the sheet: an
-  attendance summary line for teacher/admin ("8 present · 1 absent · 1
-  excused") and, for students, their own attendance badge.
-- **Teacher dashboard** `To do` card (app-layout §7.3) now ships: up to 5
-  lessons _To record_ (oldest first, last 14 days) and the count of
-  submissions to review (homework.md). Empty: `lessons.todo.empty` "You're
-  all caught up."
+- In the **lesson details sheet** (`timetable.md` §6.3), teachers and
+  admins get a primary button _Open lesson_. Students get _View lesson_ on
+  past lessons. For students, the sheet also shows the homework text of
+  that lesson when there is one.
+- The **teacher dashboard _To do_ card** (app-layout §7.3) lists up to 5
+  lessons from the last 14 days with no log yet, oldest first. When there
+  are none: "You're all caught up."
 
-### 5.2 Layout
+### 5.2 Lesson page (`/teacher/lessons/[id]`)
 
-Desktop (≥ 1024): page header + two columns, `lg:grid-cols-12`. Left 8 cols:
-Attendance, Lesson log, Homework. Right 4 cols: Internal notes (sticky
-`top-20`). Tablet and mobile: one column in the order Attendance → Lesson
-log → Homework → Internal notes. No tabs: the page is short and teachers
-should see everything at once.
+On desktop (≥ 1024) the page has two columns. The left 8 columns hold the
+lesson log. The right 4 columns hold internal notes (sticky). On tablet
+and mobile it is one column: log, then internal notes.
 
 ```
-┌ ‹ Back                                                                    ┐
-│ B1 Evening                              [Recorded ✓] or [To record]       │ h1 + status
-│ Mon 20 Oct 2026 · 17:00–18:30 · Room 3 · 👥 Group lesson · B1             │ meta line
-│ ⓘ You're substituting for Tomas Horvat in this lesson.                    │ only for substitute
-├───────────────────────────────────────────────┬───────────────────────────┤
-│ Attendance                 8 of 10 recorded   │ ▓ 🔒 Internal — only      │
-│ [Mark all present]                            │ ▓ teachers and admins …   │
-│ Name            Present  Absent  Excused      │ Internal notes            │
-│ Eva Novak       (●)      ( )     ( )   [note] │ [About: This lesson ▾]    │
-│ Jan Kos         ( )      (●)     ( )   [note] │ [textarea            ]    │
-│ …                                             │ [Add note]                │
-│                       [Save attendance]       │ ─ notes on this lesson ─  │
-├───────────────────────────────────────────────┤ Tomas · 20 Oct · Student: │
-│ Lesson log · 👁 Students in this group can see │ Jan Kos  "…"  [⋯]         │
-│ [What we covered…                         ]   │ ─ earlier notes ─         │
-│ Last saved by Tomas Horvat, 20 Oct 18:35      │ …  [Show more]            │
-│                              [Save log]       │                           │
-├───────────────────────────────────────────────┤                           │
-│ Homework                       [Add homework] │                           │
-│ Set in this lesson: Unit 4 exercises · due …  │                           │
-│ Due in this lesson: Essay · 6/10 submitted    │                           │
-└───────────────────────────────────────────────┴───────────────────────────┘
+┌ ‹ My timetable                                              ‹ ›            ┐
+│ B1 Evening                                   [No log yet]                  │
+│ Mon 20 Oct 2026 · 17:00–18:30 · Room 3 · 👥 Group lesson · B1              │
+│ ⓘ You're substituting for Tomas Horvat in this lesson.     (substitute)   │
+├──────────────────────────────────────────────┬─────────────────────────────┤
+│ Lesson log   👁 Students in this group see it │ ▓ 🔒 Internal — only        │
+│ What we covered                              │ ▓ teachers and admins …     │
+│ [Unit 4: present perfect vs past simple… ]   │ Internal notes              │
+│ Homework (optional)                          │ About [This lesson ▾]       │
+│ [One page essay about your favourite movie]  │ [textarea              ]    │
+│ Last saved by Tomas Horvat, 20 Oct 18:40     │ [Add note]                  │
+│                                   [Save]     │ ─ notes on this lesson ─    │
+│                                              │ ─ earlier notes (4) ▸ ─     │
+├──────────────────────────────────────────────┤                             │
+│ Previous lesson's homework (read-only)        │                             │
+│ "Workbook p. 34, ex. 1–3" — Wed 15 Oct       │                             │
+└──────────────────────────────────────────────┴─────────────────────────────┘
 ```
 
-Page header:
+**Page header**
 
-- Back link: to where the user came from when known (`?from=timetable` /
-  `?from=lessons` / dashboard), default _My timetable_.
-- h1 = group name (1-on-1: the group name, e.g. "Eva Novak 1-on-1").
-- Meta line (`tabular-nums`): long date, time range, room (online room:
-  _Join online_ link button), type icon + label, level code.
-- Status badge, one of: _Scheduled_ (future, `muted`), _To record_
-  (`warning`, icon `clipboard-pen`), _Recorded_ (`success`, icon
-  `check`), _Cancelled_ (`danger`, icon `ban`, + reason). _No log_ (`muted`)
-  can appear next to _Recorded_.
-- Substitute banner (`info` Alert, icon `user-round-cog`) when the viewer is
-  the substitute: "You're substituting for {teacher} in this lesson." When
-  the viewer is the regular teacher and a substitute is set: "{substitute} is
-  substituting in this lesson. You can both edit it."
-- Prev / next lesson of the same group (icon buttons `chevron-left/right`,
-  `aria-label` "Previous lesson of {group}" / "Next lesson of {group}") —
-  quick for catching up on several lessons.
+- Back link: _My timetable_, or _Lesson log_ when opened from the list.
+- h1: the group name.
+- Meta line (`tabular-nums`): date, time, room (online rooms get a _Join
+  online_ link button), type icon + label, level.
+- Badge: _No log yet_ (`warning`, icon `notebook-pen`) once the lesson has
+  ended without a log, or _Cancelled_ (`danger`, + reason). No badge
+  otherwise.
+- Substitute banner (`info`, icon `user-round-cog`):
+  - Shown to the substitute: "You're substituting for {teacher} in this
+    lesson."
+  - Shown to the regular teacher: "{substitute} is substituting in this
+    lesson. You can both edit it."
+- Previous / next lesson of the same group: icon buttons with
+  `aria-label`s, for catching up on several lessons in a row.
 
-### 5.3 Attendance card
+**Lesson log card** (one form, one _Save_ button)
 
-- Card header: h2 "Attendance" + progress "{recorded} of {total} recorded"
-  - secondary button _Mark all present_ (`attendance.markAllPresent`).
-    When some students are already marked, the button reads _Mark the rest
-    present_ (`attendance.markRestPresent`) and only fills **unmarked** rows;
-    it never overwrites a choice.
-- One row per expected student, alphabetical by name:
-  - Name (+ tags: _Left group_ if they left after the lesson, _Replacement_ P3).
-  - Segmented control = `ToggleGroup type="single"` styled as three
-    buttons, each with icon + text: **Present** (`check`, success tone when
-    selected), **Absent** (`x`, danger tone), **Excused** (`circle-slash`,
-    info tone). Unselected = outline. ≥ 44 px tall on touch layouts
-    (< 1024), 36 px on desktop. Semantics: `role="radiogroup"`
-    `aria-label="Attendance for {name}"`, arrow keys move, Space selects.
-  - _Note_ icon button (`message-square`, `aria-label` "Add a note for
-    {name}") toggles a one-line `Input` under the row, label "Note for the
-    student (they can see it)", ≤ 200 chars. A row with a note shows the
-    icon filled + the note text as a caption.
-- Footer: primary _Save attendance_ (`attendance.save`) + caption "Last saved
-  {time} by {name}". Saving writes all changed rows in one server action;
-  toast "Attendance saved." Rows with no choice stay unrecorded (allowed —
-  partial save, the badge stays _To record_).
-- **Unsaved changes**: the Save button shows "Save attendance (3 changes)";
-  leaving the page or switching lesson with unsaved changes opens an
-  `AlertDialog` "Discard unsaved attendance?" (_Keep editing_ / _Discard_).
-- **When editable**: from the lesson's local date (00:00, school timezone)
-  onwards, with no end date in P2 (see Q3). Before that the controls are
-  disabled with the hint "You can take attendance from the day of the
-  lesson." Cancelled lesson: the card is replaced by a muted text "No
-  attendance for cancelled lessons." and any existing rows are kept, shown
-  read-only.
-- An _Excused_ chosen here is a teacher's decision. From P3, a student's
-  absence report pre-fills _Excused_ with a caption "Reported absent on
-  {date}" — the teacher can still change it.
+- h2 "Lesson log", plus a caption with the `eye` icon: "Students in this
+  group can see this."
+- `Textarea` **What we covered**. Placeholder: "e.g. Unit 4: present
+  perfect vs past simple, speaking practice in pairs." It auto-grows from
+  4 lines. Max 5,000 characters; a counter appears from 4,500.
+- `Textarea` **Homework (optional)**. Hint: "What students should prepare
+  for the next lesson." Placeholder: "e.g. One page essay about your
+  favourite movie." It auto-grows from 2 lines. Max 2,000 characters.
+- Both fields are plain text. Line breaks are kept and URLs are
+  auto-linked when shown. No rich text in v1.
+- Footer: a _Save_ button (primary when there are changes, outline
+  otherwise) and the caption "Last saved by {name}, {dateTime}". Toast
+  "Lesson log saved."
+- Saving with both fields empty removes the record, after an `AlertDialog`
+  "Remove the lesson log and homework?".
+- **When it's editable:** from the lesson's start time onwards, with no end
+  date. Before the start, the card says "You can fill this in once the
+  lesson has started." (Q2: should homework be allowed before the lesson?)
+  The card is hidden for cancelled lessons. If a log was written before the
+  lesson was cancelled, it is kept and shown read-only.
+- **Unsaved changes:** leaving the page or moving to the previous/next
+  lesson opens an `AlertDialog` "Discard unsaved changes?" with _Keep
+  editing_ and _Discard_.
+- **Two teachers editing** (regular teacher and substitute): the server
+  rejects a save when the record changed after it was loaded. It shows a
+  warning `Alert`: "{name} saved this lesson log while you were editing.
+  Copy your text, reload, and save again." The typed text stays in the
+  fields.
 
-States: loading (skeleton rows) · empty group ("No students in this group
-on {date}." + for admin a link to the group's members) · saving (button
-spinner, controls disabled) · save error (inline `Alert` above the footer,
-choices kept, _Try again_) · conflict (someone else saved meanwhile: `Alert`
-warning "{name} changed attendance while you were editing. Your changes are
-kept; review and save again." with the other person's values shown as
-captions) · read-only (admin; future lesson; cancelled).
+**Previous lesson's homework** (small read-only card under the log): the
+homework text from the group's previous lesson and its date. It reminds
+the teacher what students were asked to prepare. It is hidden when there
+is none.
 
-### 5.4 Lesson log card
+**States:** loading (skeleton) · saving (spinner on the button, fields
+disabled) · save error (inline `Alert` above the footer, text kept, _Try
+again_) · conflict (as above) · future lesson · cancelled.
 
-- h2 "Lesson log" + visibility caption with `eye` icon: "Students in this
-  group can see this." (`lessonLog.visibleToStudents`).
-- `Textarea` label "What we covered", placeholder "e.g. Unit 4: present
-  perfect vs past simple, speaking practice in pairs, vocabulary p. 52."
-  Auto-grows from 4 lines, max 5,000 characters, counter appears from
-  4,500. Plain text; line breaks kept; URLs auto-linked on display. No rich
-  text in v1.
-- Footer: _Save log_ (outline when unchanged, primary when dirty) + "Last
-  saved by {name}, {dateTime}". Empty and saved → removes the log (confirm
-  `AlertDialog` "Remove the lesson log?").
-- Editable from the lesson's start time onwards (writing a plan beforehand
-  is not this feature); before that: hint "You can write the log once the
-  lesson has started." Cancelled lesson: card hidden.
-- Same unsaved-changes guard as attendance (one dialog covers both).
+### 5.3 Internal notes card
 
-### 5.5 Homework card
+The whole card uses the internal style (§4).
 
-Summary only; the dialogs and review screens are in `homework.md`.
+- **Add form** at the top:
+  - `Select` _About_: **This lesson** (default), **Group: {group}**, or
+    **Student: {name}** for each current member of the group.
+  - `Textarea` "Internal note (students can't see this)", max 2,000
+    characters.
+  - Button _Add note_.
+  - Stored data: `lessonId` is always set (the context the note was written
+    in), plus `groupId` or `studentId` for group or student notes.
+- **Notes on this lesson**, newest first. Each shows the author, a relative
+  date (full date in the `<time>` title), an _About_ chip and the body.
+  - Own notes have a menu with _Edit_ (inline) and _Delete_ (`AlertDialog`
+    "Delete this note?").
+  - Other people's notes are read-only. "Edited" is shown when a note was
+    changed.
+- **Earlier notes about this group and its students**: collapsed by
+  default, with the count in the trigger. It holds notes from other lessons
+  about this group or one of its current members, 10 at a time, with _Show
+  more_. This is how a substitute learns that "Jan needs extra time in
+  written tasks".
+- **Empty state:** "No internal notes yet. Use them for things only
+  teachers and admins should know, like learning needs."
+- Notes are allowed on future and cancelled lessons.
 
-- h2 "Homework" + _Add homework_ (`homework.add`) button (opens the
-  homework dialog pre-filled with this lesson as "set in" and the group's
-  next lesson as "due").
-- **Set in this lesson**: rows "Title · Due {date} · {n}/{total} submitted"
-  → link to the homework detail.
-- **Due in this lesson**: same rows, so the teacher can check what students
-  should have prepared.
-- Empty: "No homework set in or due for this lesson."
+### 5.4 Lesson list (`/teacher/lessons`, nav _Lesson log_)
 
-### 5.6 Internal notes card
+- Segmented filter: **No log yet** (default, with count) · **Upcoming** ·
+  **Past**, plus a group `Select`. It defaults to the current term, with a
+  term `Select` for looking back.
+- Columns: Date & time (a link) · Group (type icon) · What we covered
+  (excerpt, or "—") · Homework (excerpt, or "—"). Rows become stacked cards
+  on mobile.
+- Empty state per filter:
+  - No log yet: "You're all caught up."
+  - Upcoming: "No upcoming lessons."
+  - Past: "No past lessons yet."
 
-Uses the `internal` style (§4) for the whole card.
+Teacher nav change: the P2 item _Homework_ from app-layout §4.3 is
+**dropped**. Homework lives in the lesson log.
 
-- Add form (top): `Select` _About_ with options **This lesson** (default),
-  **Group: {group}**, and **Student: {name}** for each expected student;
-  `Textarea` label "Internal note (students can't see this)", max 2,000
-  chars; button _Add note_. Data: always stores `lessonId` (the context it
-  was written in) and sets `groupId` or `studentId` for group/student
-  notes.
-- **Notes on this lesson** (newest first): author name, relative date with
-  full date in `<time>` title, _About_ chip (Lesson / Group / student
-  name), body. Overflow menu on **own** notes: _Edit_ (inline), _Delete_
-  (`AlertDialog` "Delete this note?"). Others' notes are read-only, and
-  "Edited" is shown when `updatedAt > createdAt`.
-- **Earlier notes about this group and its students** (collapsible,
-  collapsed by default, count in the trigger): notes from other lessons
-  whose `groupId` is this group or `studentId` is an expected student;
-  10 at a time, _Show more_. This is how a substitute learns that "Jan
-  needs extra time in written tasks".
-- Empty: "No internal notes yet. Use them for things only teachers and
-  admins should know, like learning needs or behaviour."
-- Notes are allowed on cancelled and future lessons (planning notes are
-  fine here, unlike the log).
-
-### 5.7 Lesson list (`/teacher/lessons`, nav _Lesson log_)
-
-Conventional list page (app-layout §4.4):
-
-- Segmented filter: **To record** (default; ended, not cancelled,
-  attendance incomplete) · **Upcoming** · **Past**. Plus group `Select`.
-  Counts in the segment labels.
-- Columns: Date & time · Group (type icon) · Attendance ("8/10", or badge)
-  · Log (✓ / "No log") · Homework (n) · status badge. Row → lesson page.
-  Mobile: stacked cards.
-- Empty per filter: To record → "You're all caught up." · Upcoming → "No
-  upcoming lessons." · Past → "No past lessons yet."
-- Range: current term by default; term `Select` to look back.
-
-## 6. Student lesson history (mobile-first)
+## 6. Student (mobile-first)
 
 ### 6.1 Flow
 
 ```mermaid
 flowchart TD
-  H[Student home] -->|More → Lesson history| L["/student/lessons"]
-  TT[Timetable: past lesson] -->|View lesson| D["/student/lessons/[id]"]
-  L -->|tap card| D
-  D -->|Homework set here| HW["/student/homework/[id]"]
-  D -->|Homework due here| HW
+  H[Home: Latest homework card] --> L["/student/lessons/[id]"]
+  HW["Homework tab /student/homework"] -->|tap lesson| L
+  TT[Timetable: past lesson] -->|View lesson| L
 ```
 
-Navigation: the student nav item `nav.attendance` from app-layout §4.3 is
-replaced by **Lesson history** (`nav.lessonHistory`, icon `history`), under
-_More_; the bottom bar stays Home · Timetable · Homework · More.
+### 6.2 Homework tab (`/student/homework`, bottom tab ★)
 
-### 6.2 List (`/student/lessons`)
+This is the student's lesson history, built around "what do I need to
+prepare". It lists past lessons, newest first, grouped by month, across all
+the student's groups (including groups they left: the history is theirs).
 
 ```
 ┌──────────────────────────────┐
-│ Lesson history               │ h1
-│ [Autumn 2026 ▾]              │ term select (only if > 1 term)
+│ Homework                     │ h1
+│ [All groups ▾]               │ only if in > 1 group
+│ October                      │ h2
 │ ┌──────────────────────────┐ │
-│ │ This term                │ │ summary card
-│ │ 18 present · 1 absent ·  │ │
-│ │ 1 excused  (20 lessons)  │ │
+│ │ Mon 20 Oct · B1 Evening   │ │
+│ │ 📋 One page essay about   │ │ homework (full text, prominent)
+│ │    your favourite movie   │ │
+│ │ We covered: Unit 4:       │ │ log excerpt, 2 lines, muted
+│ │ present perfect vs past…  │ │
 │ └──────────────────────────┘ │
-│ October                      │ h2 month
 │ ┌──────────────────────────┐ │
-│ │ Mon 20 Oct · 17:00  [✓ Present]
-│ │ B1 Evening               │ │
-│ │ Unit 4: present perfect… │ │ log excerpt, 2 lines
-│ │ 📋 Homework set          │ │
+│ │ Wed 15 Oct · B1 Evening   │ │
+│ │ No homework               │ │ muted
+│ │ We covered: Reading …     │ │
 │ └──────────────────────────┘ │
-│ ┌ Wed 15 Oct · 17:00 [✗ Absent]┐
-│ │ … "Arrived 20 min late"   │ │ attendance note when present
+│ ┌ Mon 13 Oct · Cancelled ──┐ │ muted, dashed
+│ [Load more]                  │
 └──────────────────────────────┘
 ```
 
-- Only lessons that have **started**, newest first, grouped by month,
-  across all the student's groups (including groups they left — history
-  is theirs). Cancelled lessons are shown muted with "Cancelled" so gaps
-  make sense.
-- Card (full-width link, ≥ 44 px): date + time · group name · attendance
-  badge (Present `success` + `check` / Absent `danger` + `x` / Excused
-  `info` + `circle-slash` / Not recorded `muted`) · log excerpt (2 lines,
-  or "No lesson log yet." muted) · chips "Homework set" / "Homework due"
-  when relevant.
-- Summary card: counts of present / absent / excused for the selected term
-  and the number of lessons; no percentage score (it reads as a grade; see
-  Q4). Lessons not recorded are not counted.
-- Infinite list with _Load more_ button (20 per page), not infinite scroll.
+- Each card is a full-width link (≥ 44 px) to the lesson page. It shows the
+  date and group, the **homework text in full** (the main point), and a
+  2-line excerpt of "We covered". If the teacher hasn't written anything
+  yet, the card says "Your teacher hasn't added notes for this lesson yet."
+- Cancelled lessons are shown muted with "Cancelled", so gaps make sense.
+- A _Load more_ button loads 20 more. No infinite scroll.
+- Empty state: "No lessons yet" / "After your first lesson, you'll see
+  what was covered and the homework here."
+- Not in any group: `timetable.empty.noGroups`.
 
-### 6.3 Lesson page (`/student/lessons/[id]`)
+Student nav change: the P2 item _Attendance_ from app-layout §4.3 is
+**dropped**. _Homework_ stays a bottom tab.
 
-Single column, `max-w-md`:
+### 6.3 Home card (app-layout §7.4)
 
-1. Back link "Lesson history" (or "Timetable" when opened from there).
-2. h1 group name; meta: date, time, teacher (or "{substitute} (substitute)"),
-   room.
-3. **Your attendance**: badge + attendance note if any. Not recorded yet:
-   "Your teacher hasn't taken attendance yet." Future lesson: section hidden.
-4. **What we covered**: the log text, or "Your teacher hasn't written the
+The card is renamed from "Homework due" to **Latest homework**. It shows
+the homework from the most recent past lesson of each of the student's
+groups (up to 3), with the lesson date, then _See all_. When there is
+none: "No homework from your last lessons."
+
+### 6.4 Lesson page (`/student/lessons/[id]`)
+
+Single column, `max-w-md`, 16 px text:
+
+1. Back link: "Homework", or "Timetable" when opened from there.
+2. h1 is the group name. Meta: date, time, teacher (or "{substitute}
+   (substitute)"), room.
+3. **Homework**: the text, or "No homework for this lesson."
+4. **What we covered**: the text, or "Your teacher hasn't written the
    lesson log yet."
-5. **Homework**: _Set in this lesson_ and _Due in this lesson_ cards with
-   status (homework.md) linking to the homework page.
 
-Never shown: other students' names or attendance, TeacherNotes, counts like
-"8 present". A future lesson opens this page too (from the timetable sheet)
-with only meta + homework due.
+This page never shows TeacherNotes or other students' names.
 
-States: loading skeleton · not found (404, also for lessons of other
-groups) · error Alert + _Try again_ · not in any group: "You're not in any
-group yet. The school office will add you." (reuses `timetable.empty.noGroups`).
+**States:** loading skeleton · 404 (also for lessons of other groups) ·
+error `Alert` + _Try again_.
 
 ## 7. Admin (Phase 2 scope)
 
-Decision: P2 gives admins **read access** plus a per-group and per-student
-attendance overview. School-wide attendance reports, exports and
-"missing attendance" alerts belong to P6 _Reports_ (Q5).
+Read-only access only. There is no attendance overview, because there is
+no attendance.
 
-### 7.1 Lesson page (`/admin/lessons/[id]`)
-
-Same layout as the teacher page, everything read-only:
-
-- Attendance as a table (name, status badge, note, "recorded by {name},
-  {dateTime}").
-- Lesson log text + last editor.
-- Homework rows link to `/admin/homework/[id]` (read-only, homework.md §7).
-- Internal notes card (internal style) without the add form.
-- Header actions: _Open in timetable_ (week view at that date) and, for
-  generated lessons, _Open slot in editor_.
-- Banner `info`: "Admins can view this lesson. The teacher records
-  attendance and the lesson log." (`lessons.admin.readOnlyHint`).
-
-Entry: admin weekly timetable sheet _Open lesson_; attendance overview
-cells; admin `/admin/lessons` list (same as §5.7 with an extra Teacher
-filter and default filter **To record** across the school — useful to
-chase missing attendance without a report).
-
-### 7.2 Group detail › Attendance tab (`/admin/groups/[id]?tab=attendance`)
-
-Desktop-first matrix, term `Select` (default current):
-
-```
-              │ 6 Oct │ 8 Oct │ 13 Oct │ 15 Oct │ … │ Present │ Absent │ Excused
-Eva Novak     │  P    │  P    │   A    │   P    │   │   14    │   1    │   0
-Jan Kos       │  P    │  E    │   P    │   –    │   │   12    │   0    │   2
-```
-
-- Rows = students who were members during the term (left members after a
-  separator, muted). Columns = the group's lessons in the term up to today,
-  oldest → newest, horizontally scrollable with the name column and the
-  totals sticky. Cancelled lessons are omitted.
-- Cells show a **letter and a color** (P success, A danger, E info, "–" not
-  recorded, blank = not a member then), with `title`/`aria-label` "Eva
-  Novak, Mon 13 Oct: absent". Column headers link to the lesson page.
-- Real `<table>` with `<th scope>` for row and column headers. Below 768 px:
-  a list per student with the three totals instead of the matrix.
-- Empty: "No lessons in {term} yet."
-
-### 7.3 Student detail › Attendance tab (`/admin/students/[id]?tab=attendance`)
-
-- Term `Select`; totals row (present / absent / excused / not recorded).
-- Table: Date · Group · Teacher · Status badge · Note · link to lesson.
-  Filter by status.
-- Same data as the student's own history, plus the "recorded by" column.
-- Also a **Internal notes** tab on student detail: all TeacherNotes with
-  `studentId` = this student, newest first, internal style, read-only.
+- **`/admin/lessons/[id]`** has the same layout as the teacher page, read
+  only:
+  - The log and homework text, with the last editor.
+  - The internal notes card without the add form.
+  - Header actions _Open in timetable_ and _Open slot in editor_.
+  - An `info` banner: "Admins can view this lesson. Teachers write the
+    lesson log and homework."
+- **`/admin/lessons`** is the same list as §5.4, with a Teacher filter. The
+  default filter **No log yet** covers the whole school, so an admin can
+  see which lessons are missing logs.
+- **Student detail › Internal notes tab**: all TeacherNotes about the
+  student, newest first, in the internal style, read-only.
+- Entry points: _Open lesson_ in the admin weekly timetable sheet, and the
+  list above.
 
 ## 8. Copy (i18n keys, English source)
 
-`{name}` = ICU placeholder; plurals use ICU `plural`.
-
 ### lessons
 
-| Key                             | Copy                                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------- |
-| `lessons.lesson`                | Lesson                                                                          |
-| `lessons.open`                  | Open lesson                                                                     |
-| `lessons.view`                  | View lesson                                                                     |
-| `lessons.back.timetable`        | My timetable                                                                    |
-| `lessons.back.list`             | Lesson log                                                                      |
-| `lessons.prevOfGroup`           | Previous lesson of {group}                                                      |
-| `lessons.nextOfGroup`           | Next lesson of {group}                                                          |
-| `lessons.status.scheduled`      | Scheduled                                                                       |
-| `lessons.status.toRecord`       | To record                                                                       |
-| `lessons.status.recorded`       | Recorded                                                                        |
-| `lessons.status.noLog`          | No log                                                                          |
-| `lessons.status.cancelled`      | Cancelled                                                                       |
-| `lessons.substitute.you`        | You're substituting for {teacher} in this lesson.                               |
-| `lessons.substitute.other`      | {substitute} is substituting in this lesson. You can both edit it.              |
-| `lessons.cancelledBanner`       | This lesson was cancelled: {reason}                                             |
-| `lessons.summary`               | {present} present · {absent} absent · {excused} excused                         |
-| `lessons.list.title`            | Lesson log                                                                      |
-| `lessons.list.filter.toRecord`  | To record ({count})                                                             |
-| `lessons.list.filter.upcoming`  | Upcoming                                                                        |
-| `lessons.list.filter.past`      | Past                                                                            |
-| `lessons.list.col.when`         | Date & time                                                                     |
-| `lessons.list.col.group`        | Group                                                                           |
-| `lessons.list.col.attendance`   | Attendance                                                                      |
-| `lessons.list.col.log`          | Log                                                                             |
-| `lessons.list.col.homework`     | Homework                                                                        |
-| `lessons.list.col.teacher`      | Teacher                                                                         |
-| `lessons.list.empty.toRecord`   | You're all caught up.                                                           |
-| `lessons.list.empty.upcoming`   | No upcoming lessons.                                                            |
-| `lessons.list.empty.past`       | No past lessons yet.                                                            |
-| `lessons.todo.title`            | To do                                                                           |
-| `lessons.todo.record`           | Record attendance for {group}, {date}                                           |
-| `lessons.todo.empty`            | You're all caught up.                                                           |
-| `lessons.admin.readOnlyHint`    | Admins can view this lesson. The teacher records attendance and the lesson log. |
-| `lessons.admin.openInTimetable` | Open in timetable                                                               |
-| `lessons.admin.openSlot`        | Open slot in editor                                                             |
-| `lessons.unsaved.title`         | Discard unsaved changes?                                                        |
-| `lessons.unsaved.description`   | Your changes to attendance or the lesson log haven't been saved.                |
-| `lessons.unsaved.keep`          | Keep editing                                                                    |
-| `lessons.unsaved.discard`       | Discard                                                                         |
-
-### attendance
-
-| Key                             | Copy                                                                                            |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `attendance.title`              | Attendance                                                                                      |
-| `attendance.progress`           | {recorded} of {total} recorded                                                                  |
-| `attendance.markAllPresent`     | Mark all present                                                                                |
-| `attendance.markRestPresent`    | Mark the rest present                                                                           |
-| `attendance.markedAnnouncement` | {count, plural, one {# student marked present} other {# students marked present}}               |
-| `attendance.rowLabel`           | Attendance for {name}                                                                           |
-| `attendance.status.PRESENT`     | Present                                                                                         |
-| `attendance.status.ABSENT`      | Absent                                                                                          |
-| `attendance.status.EXCUSED`     | Excused                                                                                         |
-| `attendance.status.none`        | Not recorded                                                                                    |
-| `attendance.note`               | Note for the student (they can see it)                                                          |
-| `attendance.addNote`            | Add a note for {name}                                                                           |
-| `attendance.save`               | Save attendance                                                                                 |
-| `attendance.saveWithChanges`    | {count, plural, one {Save attendance (# change)} other {Save attendance (# changes)}}           |
-| `attendance.saved`              | Attendance saved.                                                                               |
-| `attendance.lastSaved`          | Last saved {dateTime} by {name}                                                                 |
-| `attendance.notYet`             | You can take attendance from the day of the lesson.                                             |
-| `attendance.cancelled`          | No attendance for cancelled lessons.                                                            |
-| `attendance.emptyGroup`         | No students in this group on {date}.                                                            |
-| `attendance.tag.leftGroup`      | Left group                                                                                      |
-| `attendance.tag.replacement`    | Replacement                                                                                     |
-| `attendance.conflict`           | {name} changed attendance while you were editing. Your changes are kept; review and save again. |
-| `attendance.reportedAbsent`     | Reported absent on {date}                                                                       |
-| `attendance.recordedBy`         | Recorded by {name}, {dateTime}                                                                  |
-| `attendance.overview.title`     | Attendance                                                                                      |
-| `attendance.overview.totals`    | Present · Absent · Excused                                                                      |
-| `attendance.overview.cell`      | {name}, {date}: {status}                                                                        |
-| `attendance.overview.empty`     | No lessons in {term} yet.                                                                       |
-| `attendance.overview.notMember` | Not a member on this date                                                                       |
-| `attendance.letter.PRESENT`     | P                                                                                               |
-| `attendance.letter.ABSENT`      | A                                                                                               |
-| `attendance.letter.EXCUSED`     | E                                                                                               |
+| Key                             | Copy                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| `lessons.open`                  | Open lesson                                                              |
+| `lessons.view`                  | View lesson                                                              |
+| `lessons.back.timetable`        | My timetable                                                             |
+| `lessons.back.list`             | Lesson log                                                               |
+| `lessons.prevOfGroup`           | Previous lesson of {group}                                               |
+| `lessons.nextOfGroup`           | Next lesson of {group}                                                   |
+| `lessons.status.noLog`          | No log yet                                                               |
+| `lessons.status.cancelled`      | Cancelled                                                                |
+| `lessons.substitute.you`        | You're substituting for {teacher} in this lesson.                        |
+| `lessons.substitute.other`      | {substitute} is substituting in this lesson. You can both edit it.       |
+| `lessons.cancelledBanner`       | This lesson was cancelled: {reason}                                      |
+| `lessons.list.title`            | Lesson log                                                               |
+| `lessons.list.filter.noLog`     | No log yet ({count})                                                     |
+| `lessons.list.filter.upcoming`  | Upcoming                                                                 |
+| `lessons.list.filter.past`      | Past                                                                     |
+| `lessons.list.col.when`         | Date & time                                                              |
+| `lessons.list.col.group`        | Group                                                                    |
+| `lessons.list.col.covered`      | What we covered                                                          |
+| `lessons.list.col.homework`     | Homework                                                                 |
+| `lessons.list.col.teacher`      | Teacher                                                                  |
+| `lessons.list.empty.noLog`      | You're all caught up.                                                    |
+| `lessons.list.empty.upcoming`   | No upcoming lessons.                                                     |
+| `lessons.list.empty.past`       | No past lessons yet.                                                     |
+| `lessons.todo.title`            | To do                                                                    |
+| `lessons.todo.writeLog`         | Write the log for {group}, {date}                                        |
+| `lessons.todo.empty`            | You're all caught up.                                                    |
+| `lessons.admin.readOnlyHint`    | Admins can view this lesson. Teachers write the lesson log and homework. |
+| `lessons.admin.openInTimetable` | Open in timetable                                                        |
+| `lessons.admin.openSlot`        | Open slot in editor                                                      |
+| `lessons.unsaved.title`         | Discard unsaved changes?                                                 |
+| `lessons.unsaved.description`   | Your changes to the lesson log haven't been saved.                       |
+| `lessons.unsaved.keep`          | Keep editing                                                             |
+| `lessons.unsaved.discard`       | Discard                                                                  |
 
 ### lessonLog
 
-| Key                            | Copy                                                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------------------ |
-| `lessonLog.title`              | Lesson log                                                                                 |
-| `lessonLog.field`              | What we covered                                                                            |
-| `lessonLog.placeholder`        | e.g. Unit 4: present perfect vs past simple, speaking practice in pairs, vocabulary p. 52. |
-| `lessonLog.visibleToStudents`  | Students in this group can see this.                                                       |
-| `lessonLog.save`               | Save log                                                                                   |
-| `lessonLog.saved`              | Lesson log saved.                                                                          |
-| `lessonLog.lastSaved`          | Last saved by {name}, {dateTime}                                                           |
-| `lessonLog.notYet`             | You can write the log once the lesson has started.                                         |
-| `lessonLog.remove.title`       | Remove the lesson log?                                                                     |
-| `lessonLog.remove.description` | Students will no longer see what was covered in this lesson.                               |
-| `lessonLog.remove.confirm`     | Remove                                                                                     |
-| `lessonLog.tooLong`            | Keep the log under {max} characters.                                                       |
+| Key                             | Copy                                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `lessonLog.title`               | Lesson log                                                                                   |
+| `lessonLog.visibleToStudents`   | Students in this group can see this.                                                         |
+| `lessonLog.covered`             | What we covered                                                                              |
+| `lessonLog.coveredPlaceholder`  | e.g. Unit 4: present perfect vs past simple, speaking practice in pairs.                     |
+| `lessonLog.homework`            | Homework (optional)                                                                          |
+| `lessonLog.homeworkHint`        | What students should prepare for the next lesson.                                            |
+| `lessonLog.homeworkPlaceholder` | e.g. One page essay about your favourite movie.                                              |
+| `lessonLog.save`                | Save                                                                                         |
+| `lessonLog.saved`               | Lesson log saved.                                                                            |
+| `lessonLog.lastSaved`           | Last saved by {name}, {dateTime}                                                             |
+| `lessonLog.notYet`              | You can fill this in once the lesson has started.                                            |
+| `lessonLog.remove.title`        | Remove the lesson log and homework?                                                          |
+| `lessonLog.remove.description`  | Students will no longer see what was covered or the homework for this lesson.                |
+| `lessonLog.remove.confirm`      | Remove                                                                                       |
+| `lessonLog.conflict`            | {name} saved this lesson log while you were editing. Copy your text, reload, and save again. |
+| `lessonLog.tooLong`             | Keep this under {max} characters.                                                            |
+| `lessonLog.previousHomework`    | Homework from the previous lesson ({date})                                                   |
 
 ### teacherNotes
 
@@ -544,111 +420,87 @@ Jan Kos       │  P    │  E    │   P    │   –    │   │   12    │ 
 | `teacherNotes.onThisLesson`       | Notes on this lesson                                                                                                              |
 | `teacherNotes.earlier`            | {count, plural, one {# earlier note about this group and its students} other {# earlier notes about this group and its students}} |
 | `teacherNotes.showMore`           | Show more                                                                                                                         |
-| `teacherNotes.empty`              | No internal notes yet. Use them for things only teachers and admins should know, like learning needs or behaviour.                |
+| `teacherNotes.empty`              | No internal notes yet. Use them for things only teachers and admins should know, like learning needs.                             |
 | `teacherNotes.tooLong`            | Keep the note under {max} characters.                                                                                             |
 
-### history (student)
+### student homework & lesson page
 
-| Key                         | Copy                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------ |
-| `nav.lessonHistory`         | Lesson history                                                                 |
-| `history.title`             | Lesson history                                                                 |
-| `history.summary.title`     | This term                                                                      |
-| `history.summary.counts`    | {present} present · {absent} absent · {excused} excused                        |
-| `history.summary.lessons`   | {count, plural, one {# lesson} other {# lessons}}                              |
-| `history.yourAttendance`    | Your attendance                                                                |
-| `history.attendanceNotYet`  | Your teacher hasn't taken attendance yet.                                      |
-| `history.covered`           | What we covered                                                                |
-| `history.logNotYet`         | Your teacher hasn't written the lesson log yet.                                |
-| `history.noLogShort`        | No lesson log yet.                                                             |
-| `history.chip.homeworkSet`  | Homework set                                                                   |
-| `history.chip.homeworkDue`  | Homework due                                                                   |
-| `history.loadMore`          | Load more                                                                      |
-| `history.empty.title`       | No lessons yet                                                                 |
-| `history.empty.description` | After your first lesson, you'll see what was covered and your attendance here. |
-| `history.substitute`        | {name} (substitute)                                                            |
+| Key                          | Copy                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `homework.title`             | Homework                                                                    |
+| `homework.allGroups`         | All groups                                                                  |
+| `homework.none`              | No homework                                                                 |
+| `homework.noneForLesson`     | No homework for this lesson.                                                |
+| `homework.weCovered`         | We covered: {text}                                                          |
+| `homework.nothingYet`        | Your teacher hasn't added notes for this lesson yet.                        |
+| `homework.loadMore`          | Load more                                                                   |
+| `homework.empty.title`       | No lessons yet                                                              |
+| `homework.empty.description` | After your first lesson, you'll see what was covered and the homework here. |
+| `homework.home.title`        | Latest homework                                                             |
+| `homework.home.seeAll`       | See all                                                                     |
+| `homework.home.empty`        | No homework from your last lessons.                                         |
+| `homework.lesson.covered`    | What we covered                                                             |
+| `homework.lesson.logNotYet`  | Your teacher hasn't written the lesson log yet.                             |
+| `homework.lesson.substitute` | {name} (substitute)                                                         |
 
 ## 9. Accessibility
 
-- Attendance rows: each is a labelled radiogroup; the selected option has
-  icon **and** text and a visible checked state beyond color (filled
-  background + check). Mark-all announces the result via a polite live
-  region (`attendance.markedAnnouncement`).
-- Tab order on the lesson page: header actions → attendance (row by row:
-  group then note button) → Save attendance → log → homework → internal
-  notes. Save buttons are not sticky-hidden behind the bottom bar
-  (`scroll-padding-bottom`).
-- The internal band is real text, contrast 14.6:1; the lock icon is
+- Both log fields have visible labels. The homework hint is linked with
+  `aria-describedby`. Counters use `aria-live="polite"` only within 10 % of
+  the limit.
+- The internal band is real text (contrast 14.6:1). The lock icon is
   decorative (`aria-hidden`).
-- Matrix: `<table>` with `<caption>` "Attendance for {group}, {term}",
-  row/column headers, cell letters plus `aria-label`; sticky columns don't
-  trap focus; horizontal scroll container is focusable (`tabindex=0`) with
-  a label.
-- Character counters use `aria-live="polite"` only when within 10 % of the
-  limit.
-- Student pages: 16 px body, 44 px targets, no hover-only content.
+- Student pages use 16 px body text, 44 px targets and no hover-only
+  content. Homework text on cards is never truncated.
+- The _Save_ button is never hidden behind sticky bars
+  (`scroll-padding-bottom`).
 
 ## 10. Edge cases
 
-- **Student joins a group mid-term**: appears in attendance only from
-  their `joinedAt` date; earlier lessons are not in their history.
-- **Student leaves**: stays in attendance of lessons before `leftAt`; their
-  history keeps those lessons; new lessons don't list them. Attendance
-  already recorded after `leftAt` (e.g. leftAt backdated) is kept and shown
-  with _Left group_.
-- **Group over capacity / 1-on-1**: 1-on-1 page shows one row; _Mark all
-  present_ reads "Mark present".
-- **Lesson moved** (time edited): the page always uses the current
-  `startsAt`; attendance/log stay attached to the lesson.
-- **Lesson cancelled after attendance was taken**: attendance and log
-  stay, read-only, banner "This lesson was cancelled: {reason}"; they don't
-  count in the student's summary.
-- **Substitute removed after recording**: their attendance rows keep
-  `recordedBy`; they lose access to the lesson (404).
-- **Teacher archived**: notes and logs keep the author name.
-- **Two teachers editing** (teacher + substitute): last write wins per row,
-  with the conflict Alert in §5.3 when the server detects a newer
-  `updatedAt` than the one loaded.
-- **Very long lists** (group of 30): rows stay one line on desktop; on
-  mobile the toggle wraps under the name.
-- **Timezone**: dates and the "day of the lesson" rule use the school's
-  timezone.
-- **Deleted student user** (`User.deletedAt`): name shown with
-  "(account disabled)"; history kept.
+- **Student joins a group mid-term:** sees lessons from their `joinedAt`
+  date onwards. The home card still shows the latest homework of the
+  group, so they know what to prepare for their first lesson. (Q3)
+- **Student leaves a group:** keeps the lessons from their membership in
+  the Homework tab. New lessons don't appear.
+- **Lesson moved:** the log stays attached to the lesson. Pages show the
+  current time.
+- **Lesson cancelled after the log was written:** the text is kept and
+  shown read-only with the cancelled banner.
+- **Substitute removed later:** their log edits keep the author name, and
+  they lose access to the lesson (404).
+- **1-on-1 groups:** the same screens. The student is the only reader.
+- **Timezone:** "has started" and all dates use the school's timezone.
 
 ## 11. Data and server notes for the Developer (CARM-35)
 
-- Remove `LATE` from `AttendanceStatus` (owner decision); migrate any
-  existing `LATE` rows to `PRESENT` with the note "Late" (seed data only).
-- Add `Attendance.note` length limit (200) and `LessonLog.content` (5,000),
-  `TeacherNote.body` (2,000) in validation (zod), not only in the UI.
-- Set `Lesson.status = COMPLETED` when the lesson has ended and all expected
-  students are recorded; set it back to `SCHEDULED` if a student is
-  added later without a row (Q2).
-- Optimistic concurrency for attendance: send the loaded `updatedAt` per
-  row; reject with a conflict error when it changed.
-- TeacherNote reads must go through a single server module that requires
-  role TEACHER (with access to the lesson/group) or ADMIN; student loaders
-  must not import it. Covered by unit tests + the CARM-37 e2e suite.
+- **Homework:** add a nullable `homework` text column (≤ 2,000) to
+  `LessonLog`, so one record per lesson holds both texts.
+  `LessonLog.content` becomes nullable, because a lesson can have homework
+  without a log, and vice versa. A record with both fields empty is
+  deleted.
+- **Remove what's no longer used:** drop the `Assignment` model, and drop
+  the `Attendance` model with the `AttendanceStatus` enum. P3 absences use
+  `AbsenceReport`, which is unaffected. Seed data and tests must change to
+  match.
+- `LessonLog` has `authorId` (TeacherProfile). Also store
+  `updatedById` (the last editor) for the "Last saved by" caption, and use
+  `updatedAt` for the conflict check.
+- Validation (zod) mirrors the limits: covered ≤ 5,000, homework ≤ 2,000,
+  `TeacherNote.body` ≤ 2,000.
+- TeacherNote reads go through one server module. That module requires
+  role TEACHER (with access to the lesson or group) or ADMIN. Student
+  loaders must not import it. Cover this with unit tests and the CARM-37
+  e2e suite.
+- `LessonStatus.COMPLETED` is not used by P2. Lessons stay `SCHEDULED` or
+  `CANCELLED`.
 
 ## 12. Open questions for the owner
 
-- **Q1 — Admin edits.** P2 makes admins read-only on lessons. Should an
-  admin be able to correct attendance (e.g. a student brings a doctor's
-  note to the office)? Recommendation: not in P2; P3's absence flow covers
-  excusing, and a later "edit as admin" can be added with an audit entry.
-- **Q2 — `COMPLETED` status.** Recommendation above: the server sets it when
-  attendance is complete, and the log is a reminder only. Alternative: also
-  require a log. Confirm.
-- **Q3 — Editing window.** Attendance and logs stay editable forever in P2.
-  Should they lock, e.g. at term end or after 14 days? Recommendation: lock
-  at term end later, once reports (P6) depend on it.
-- **Q4 — Attendance rate.** Students see counts, not a percentage. Do you
-  want a percentage (and a minimum-attendance rule) shown to students or
-  admins?
-- **Q5 — Admin scope.** P2 ships the group matrix, the student tab and the
-  _To record_ lesson list. School-wide reports, exports and alerts wait for
-  P6. OK?
-- **Q6 — Attendance note visibility.** The short attendance note is visible
-  to the student (it replaces "late"). Private remarks go into internal
-  notes. OK?
+- **Q1 — Admin edits.** Admins are read-only on lesson logs in P2. Should
+  an admin be able to fix a log or homework text? I recommend no.
+- **Q2 — Homework before the lesson.** The log and homework can only be
+  written once the lesson has started. Should teachers be able to prepare
+  the homework text ahead of time? I recommend no, to keep it simple.
+- **Q3 — New students.** A student who joins a group sees only lessons from
+  their join date, plus the group's latest homework on the home card. Is
+  that enough?

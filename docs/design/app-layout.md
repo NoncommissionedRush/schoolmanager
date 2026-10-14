@@ -19,7 +19,7 @@ weekly timetable grid. Tokens: `docs/design/tokens.md`. Clickable wireframe:
 | Role    | Primary device                           | Main jobs (roadmap)                                                                          |
 | ------- | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
 | Admin   | Desktop (≥ 1280)                         | Set up school data, build timetable, review absences/replacements, people, payments, reports |
-| Teacher | Desktop or tablet; phone between lessons | See own lessons, log lessons, attendance, homework, report absence                           |
+| Teacher | Desktop or tablet; phone between lessons | See own lessons, write lesson logs & homework, report absence                                |
 | Student | Phone (≈ 390 × 844)                      | See next lesson & timetable, homework, report absence, book replacement                      |
 
 **One role per user** (decided 2026-10-14): a person is admin, teacher or student — never several. No role switcher.
@@ -131,22 +131,20 @@ Teacher
 | Teaching | My timetable         | `nav.myTimetable`   | `calendar-days`    | P1    |
 | Teaching | My groups & students | `nav.myGroups`      | `users`            | P1    |
 | Teaching | Lesson log           | `nav.lessonLog`     | `notebook-pen`     | P2    |
-| Teaching | Homework             | `nav.homework`      | `clipboard-list`   | P2    |
 | Teaching | Ratings              | `nav.ratings`       | `star`             | P5    |
 | Me       | My absences          | `nav.myAbsences`    | `calendar-x`       | P3    |
 | Me       | Substitutions        | `nav.substitutions` | `user-round-cog`   | P5    |
 
 Student (bottom tabs marked ★)
 
-| Item                      | i18n key                         | Icon             | Phase                                           |
-| ------------------------- | -------------------------------- | ---------------- | ----------------------------------------------- |
-| ★ Home                    | `nav.home`                       | `house`          | P0                                              |
-| ★ Timetable               | `nav.timetable`                  | `calendar-days`  | P1                                              |
-| ★ Homework                | `nav.homework`                   | `clipboard-list` | P2                                              |
-| ★ Absences & replacements | `nav.absencesShort` → "Absences" | `calendar-x`     | P3                                              |
-| Lesson history            | `nav.lessonHistory`              | `history`        | P2 (replaces _Attendance_, see `lessons.md` §6) |
-| Payments                  | `nav.payments`                   | `wallet`         | P6                                              |
-| ★/More                    | `nav.more`                       | `menu`           | P0 (shown once > 4 items exist)                 |
+| Item                      | i18n key                         | Icon             | Phase                           |
+| ------------------------- | -------------------------------- | ---------------- | ------------------------------- |
+| ★ Home                    | `nav.home`                       | `house`          | P0                              |
+| ★ Timetable               | `nav.timetable`                  | `calendar-days`  | P1                              |
+| ★ Homework                | `nav.homework`                   | `clipboard-list` | P2                              |
+| ★ Absences & replacements | `nav.absencesShort` → "Absences" | `calendar-x`     | P3                              |
+| Payments                  | `nav.payments`                   | `wallet`         | P6                              |
+| ★/More                    | `nav.more`                       | `menu`           | P0 (shown once > 4 items exist) |
 
 Until P1 ships, the student bottom bar is hidden (only one destination).
 
@@ -252,7 +250,7 @@ done check. Spec in the P1 dashboard issue.
 1. Greeting + date.
 2. **Next lesson** card (P1): time until start, group/student, room, level, _Open lesson_ (P2 log).
 3. **Today** list (P1) — same compact list as admin, own lessons only.
-4. **To do** (P2): lessons without log, homework to check.
+4. **To do** (P2): lessons without a log (`lessons.md` §5.1).
 
 P0 empty state:
 
@@ -269,7 +267,7 @@ Single column at all widths (`max-w-md` centered on desktop).
 
 1. Greeting "Hi, {firstName}".
 2. **Next lesson** card (P1): weekday + time (large), course/group, teacher, room; _Can't attend?_ (P3).
-3. **Homework due** (P2): up to 3 items, _See all_.
+3. **Latest homework** (P2): homework from the last lesson of each group, _See all_ (`lessons.md` §6.3).
 4. **This week** (P1): mini agenda of remaining lessons.
 
 P0 empty state:

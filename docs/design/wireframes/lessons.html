@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Wireframe — Lessons: detail, attendance, log, notes & history (CARM-34)
+      Wireframe — Lessons: lesson log, homework & internal notes (CARM-34)
     </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -101,45 +101,14 @@
       };
       const card = (inner, extra = "") =>
         `<section class="rounded-lg border border-border bg-white p-6 ${extra}">${inner}</section>`;
-      const ATT = {
-        P: ["✓ Present", "bg-green-50 text-green-700 border-green-600"],
-        A: ["✗ Absent", "bg-red-50 text-red-700 border-red-600"],
-        E: ["⊘ Excused", "bg-blue-50 text-blue-700 border-blue-600"],
-      };
-      const attBadge = (s) =>
-        s === "P"
-          ? badge("✓ Present", "success")
-          : s === "A"
-            ? badge("✗ Absent", "danger")
-            : s === "E"
-              ? badge("⊘ Excused", "info")
-              : badge("Not recorded");
-      const STUDENTS = [
-        ["Eva Novak", "P", ""],
-        ["Jan Kos", "A", ""],
-        ["Lea Horak", "P", "Arrived 20 minutes late"],
-        ["Mia Lunt", "E", ""],
-        ["Petr Sova", "", ""],
-        ["Tom Bily", "", ""],
-      ];
-      function toggle(name, val, disabled, big) {
-        return `<div role="radiogroup" aria-label="Attendance for ${name}" class="inline-flex rounded-md border border-input overflow-hidden ${disabled ? "opacity-50" : ""}">${[
-          "P",
-          "A",
-          "E",
-        ]
-          .map(
-            (k, i) =>
-              `<button role="radio" aria-checked="${val === k}" ${disabled ? "disabled" : ""} class="${big ? "h-11" : "h-9"} px-3 text-sm font-medium ${i ? "border-l border-input" : ""} ${val === k ? ATT[k][1] + " border-2" : "bg-white text-slate-700"}">${ATT[k][0]}</button>`,
-          )
-          .join("")}</div>`;
-      }
+      const COVERED =
+        "Unit 4: present perfect vs past simple.\nSpeaking practice in pairs, vocabulary p. 52.";
+      const HW = "One page essay about your favourite movie.";
 
       function header({ status, sub, admin, mobile }) {
         const st = {
-          scheduled: badge("Scheduled"),
-          toRecord: badge("📝 To record", "warning"),
-          recorded: badge("✓ Recorded", "success") + " " + badge("No log"),
+          none: "",
+          noLog: badge("📝 No log yet", "warning"),
           cancelled: badge("⊘ Cancelled", "danger"),
         }[status];
         return `<div class="space-y-2">
@@ -147,124 +116,58 @@
             <div class="flex gap-1">${btn("‹", "ghost", "w-9 justify-center")}${btn("›", "ghost", "w-9 justify-center")}</div></div>
           <div class="flex flex-wrap items-center gap-3"><h1 class="text-2xl font-semibold">B1 Evening</h1>${st}
             ${admin ? `<div class="ml-auto flex gap-2">${btn("Open in timetable", "outline")}${btn("Open slot in editor", "outline")}</div>` : ""}</div>
-          <p class="text-muted-foreground tnum ${mobile ? "text-base" : ""}">${status === "scheduled" ? "Wed 22 Oct 2026" : "Mon 20 Oct 2026"} · 17:00–18:30 · Room 3 · 👥 Group lesson · B1</p>
+          <p class="text-muted-foreground tnum ${mobile ? "text-base" : ""}">Mon 20 Oct 2026 · 17:00–18:30 · Room 3 · 👥 Group lesson · B1</p>
           ${sub ? alert("👤 You're substituting for Tomas Horvat in this lesson.") : ""}
           ${status === "cancelled" ? alert("This lesson was cancelled: Holiday", "danger") : ""}
-          ${admin ? alert("Admins can view this lesson. The teacher records attendance and the lesson log.") : ""}
+          ${admin ? alert("Admins can view this lesson. Teachers write the lesson log and homework.") : ""}
         </div>`;
       }
 
-      function attendanceCard(st, mobile) {
-        // st: default | dirty | saved | future | cancelled | loading | error | conflict | empty | admin
+      function logCard(st) {
+        // empty | dirty | saved | future | cancelled | error | conflict | loading | admin
         if (st === "loading")
           return card(
-            `<div class="skeleton h-6 w-40 mb-4"></div>${Array(5).fill('<div class="skeleton h-9 w-full mb-2"></div>').join("")}`,
+            `<div class="skeleton h-6 w-40 mb-4"></div><div class="skeleton h-24 mb-3"></div><div class="skeleton h-14"></div>`,
           );
-        const head = (prog, action) =>
-          `<div class="flex flex-wrap items-center gap-3 mb-4"><h2 class="text-lg font-semibold">Attendance</h2><span class="text-muted-foreground tnum">${prog}</span><div class="ml-auto">${action}</div></div>`;
+        const head = `<div class="flex flex-wrap items-center gap-3 mb-3"><h2 class="text-lg font-semibold">Lesson log</h2><span class="text-muted-foreground">👁 Students in this group can see this.</span></div>`;
         if (st === "cancelled")
           return card(
-            head("", "") +
-              `<p class="text-muted-foreground">No attendance for cancelled lessons.</p>`,
+            head +
+              `<p class="text-muted-foreground">No lesson log for cancelled lessons.</p>`,
           );
-        if (st === "empty")
-          return card(
-            head("", "") +
-              `<p class="text-muted-foreground">No students in this group on Mon 20 Oct 2026.</p>`,
-          );
-        if (st === "admin")
-          return card(
-            head("6 of 6 recorded", "") +
-              `<table class="w-full text-left"><thead class="bg-muted"><tr><th class="px-3 py-2">Name</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Note</th><th class="px-3 py-2">Recorded by</th></tr></thead><tbody>${STUDENTS.map(
-                ([n, s, note], i) =>
-                  `<tr class="border-t border-border"><td class="px-3 py-2">${n}</td><td class="px-3 py-2">${attBadge(s || "P")}</td><td class="px-3 py-2 text-muted-foreground">${note}</td><td class="px-3 py-2 text-muted-foreground tnum">Tomas Horvat, 20 Oct 18:3${i}</td></tr>`,
-              ).join("")}</tbody></table>`,
-          );
-        const rows = STUDENTS.map(([n, s, note], i) => {
-          let v = st === "default" || st === "future" ? "" : s;
-          if (st === "saved") v = s || "P";
-          if (st === "dirty" && i > 3) v = "P";
-          return `<li class="py-2 border-t border-border">
-            <div class="flex flex-wrap items-center gap-3">
-              <span class="font-medium ${mobile ? "w-full" : "w-40"}">${n}${i === 5 ? " " + badge("Left group") : ""}</span>
-              ${toggle(n, v, st === "future", mobile)}
-              <button aria-label="Add a note for ${n}" class="h-9 w-9 rounded-md hover:bg-muted ${note && v ? "text-primary" : "text-muted-foreground"}">💬</button>
-            </div>
-            ${note && v ? `<p class="text-xs text-muted-foreground mt-1 ${mobile ? "" : "ml-40 pl-3"}">Note for the student: ${note}</p>` : ""}
-            ${st === "conflict" && i === 1 ? `<p class="text-xs text-amber-700 mt-1 ml-40 pl-3">Ana Kral saved: Excused</p>` : ""}
-          </li>`;
-        }).join("");
-        const recorded = {
-          default: 0,
-          dirty: 6,
-          saved: 6,
-          future: 0,
-          error: 6,
-          conflict: 6,
-        }[st];
-        const markBtn =
-          st === "future"
-            ? btn("Mark all present", "disabled")
-            : st === "default"
-              ? btn("Mark all present", "outline")
-              : st === "saved"
-                ? ""
-                : btn("Mark the rest present", "outline");
-        const footer =
-          st === "future"
-            ? `<p class="text-muted-foreground">You can take attendance from the day of the lesson.</p>`
-            : `<div class="flex flex-wrap items-center gap-3"><span class="text-xs text-muted-foreground tnum">${st === "saved" ? "Last saved 18:34 by Tomas Horvat" : st === "default" ? "Not saved yet" : "Last saved 18:31 by Tomas Horvat"}</span>
-               <div class="ml-auto">${st === "saved" ? btn("Save attendance", "outline") : st === "dirty" || st === "conflict" || st === "error" ? btn("Save attendance (2 changes)") : btn("Save attendance")}</div></div>`;
-        return card(
-          head(`${recorded} of 6 recorded`, markBtn) +
-            (st === "conflict"
-              ? alert(
-                  "Ana Kral changed attendance while you were editing. Your changes are kept; review and save again.",
-                  "warning",
-                )
-              : "") +
-            `<ul class="mb-4">${rows}</ul>` +
-            (st === "error"
-              ? `<div class="mb-3">${alert("Attendance couldn't be saved. Check your connection and try again. Your choices are kept.", "danger")}</div>`
-              : "") +
-            footer,
-        );
-      }
-
-      function logCard(st) {
-        if (st === "cancelled" || st === "loading") return "";
-        const head = `<div class="flex flex-wrap items-center gap-3 mb-3"><h2 class="text-lg font-semibold">Lesson log</h2><span class="text-muted-foreground">👁 Students in this group can see this.</span></div>`;
         if (st === "future")
           return card(
             head +
-              `<p class="text-muted-foreground">You can write the log once the lesson has started.</p>`,
+              `<p class="text-muted-foreground">You can fill this in once the lesson has started.</p>`,
           );
         if (st === "admin")
           return card(
             head +
-              `<p class="whitespace-pre-wrap">Unit 4: present perfect vs past simple.\nSpeaking practice in pairs, vocabulary p. 52.</p><p class="text-xs text-muted-foreground mt-2">Last saved by Tomas Horvat, 20 Oct 18:40</p>`,
+              `<h3 class="font-semibold">What we covered</h3><p class="whitespace-pre-wrap mb-3">${COVERED}</p><h3 class="font-semibold">Homework</h3><p class="mb-3">${HW}</p><p class="text-xs text-muted-foreground">Last saved by Tomas Horvat, 20 Oct 18:40</p>`,
           );
-        const filled = st !== "default";
+        const filled = st !== "empty";
         return card(
           head +
-            `<label class="block font-medium mb-2" for="log">What we covered</label>
-             <textarea id="log" rows="4" class="w-full rounded-md border border-input p-3" placeholder="e.g. Unit 4: present perfect vs past simple, speaking practice in pairs, vocabulary p. 52.">${filled ? "Unit 4: present perfect vs past simple.\nSpeaking practice in pairs, vocabulary p. 52." : ""}</textarea>
-             <div class="flex items-center gap-3 mt-3"><span class="text-xs text-muted-foreground">${filled ? "Last saved by Tomas Horvat, 20 Oct 18:40" : ""}</span><div class="ml-auto">${btn("Save log", filled ? "outline" : "primary")}</div></div>`,
+            (st === "conflict"
+              ? `<div class="mb-3">${alert("Ana Kral saved this lesson log while you were editing. Copy your text, reload, and save again.", "warning")}</div>`
+              : "") +
+            `<div class="space-y-4">
+               <div class="space-y-2"><label class="block font-medium" for="cov">What we covered</label>
+               <textarea id="cov" rows="4" class="w-full rounded-md border border-input p-3" placeholder="e.g. Unit 4: present perfect vs past simple, speaking practice in pairs.">${filled ? COVERED : ""}</textarea></div>
+               <div class="space-y-2"><label class="block font-medium" for="hw">Homework (optional)</label>
+               <textarea id="hw" rows="2" aria-describedby="hwh" class="w-full rounded-md border border-input p-3" placeholder="e.g. One page essay about your favourite movie.">${filled ? HW : ""}</textarea>
+               <p id="hwh" class="text-xs text-muted-foreground">What students should prepare for the next lesson.</p></div>
+             </div>` +
+            (st === "error"
+              ? `<div class="mt-3">${alert("The lesson log couldn't be saved. Check your connection and try again. Your text is kept.", "danger")}</div>`
+              : "") +
+            `<div class="flex items-center gap-3 mt-4"><span class="text-xs text-muted-foreground">${st === "saved" ? "Last saved by Tomas Horvat, 20 Oct 18:40" : st === "empty" ? "Not saved yet" : "Unsaved changes"}</span><div class="ml-auto">${btn("Save", st === "saved" ? "outline" : "primary")}</div></div>`,
         );
       }
 
-      function homeworkCard(st) {
-        if (st === "loading") return "";
-        const admin = st === "admin";
-        return card(`<div class="flex items-center gap-3 mb-3"><h2 class="text-lg font-semibold">Homework</h2><div class="ml-auto">${admin ? "" : btn("+ Add homework", "outline")}</div></div>
-          ${
-            st === "default"
-              ? `<p class="text-muted-foreground">No homework set in or due for this lesson.</p>`
-              : `<h3 class="font-semibold mt-2">Set in this lesson</h3>
-            <a href="#" class="flex justify-between py-2 border-b border-border"><span class="text-primary">Workbook p. 34, ex. 1–3</span><span class="text-muted-foreground tnum">Due Wed 22 Oct, 17:00 · 2/6 submitted</span></a>
-            <h3 class="font-semibold mt-4">Due in this lesson</h3>
-            <a href="#" class="flex justify-between py-2"><span class="text-primary">Essay: my last holiday</span><span class="text-muted-foreground tnum">5/6 submitted · ${badge("3 to review", "warning")}</span></a>`
-          }`);
+      function prevHomework(st) {
+        if (st === "loading" || st === "admin") return "";
+        return `<section class="rounded-lg border border-border bg-white p-4"><h2 class="font-semibold">Homework from the previous lesson (Wed 15 Oct)</h2><p class="text-muted-foreground">Workbook p. 34, exercises 1–3.</p></section>`;
       }
 
       function notesCard(st) {
@@ -272,10 +175,10 @@
           return `<section class="internal rounded-lg"><div class="skeleton h-40 m-4"></div></section>`;
         const admin = st === "admin";
         const notes =
-          st === "default" || st === "future"
-            ? `<p class="text-muted-foreground">No internal notes yet. Use them for things only teachers and admins should know, like learning needs or behaviour.</p>`
+          st === "empty" || st === "future"
+            ? `<p class="text-muted-foreground">No internal notes yet. Use them for things only teachers and admins should know, like learning needs.</p>`
             : `<h3 class="font-semibold">Notes on this lesson</h3>
-            <article class="border-t border-slate-300 py-3 space-y-1"><div class="flex items-center gap-2 text-xs text-muted-foreground"><span class="font-medium text-foreground">Tomas Horvat</span>· <time title="20 Oct 2026 18:42">today</time> ${badge("Jan Kos")}<button class="ml-auto h-6 w-6 rounded hover:bg-muted" aria-label="Note actions">⋯</button></div><p>Missed the last two lessons; check if he needs the handout again.</p></article>
+            <article class="border-t border-slate-300 py-3 space-y-1"><div class="flex items-center gap-2 text-xs text-muted-foreground"><span class="font-medium text-foreground">Tomas Horvat</span>· <time title="20 Oct 2026 18:42">today</time> ${badge("Jan Kos")}<button class="ml-auto h-6 w-6 rounded hover:bg-muted" aria-label="Note actions">⋯</button></div><p>Struggles with written tasks; give him extra time.</p></article>
             <article class="border-t border-slate-300 py-3 space-y-1"><div class="flex items-center gap-2 text-xs text-muted-foreground"><span class="font-medium text-foreground">Ana Kral</span>· <time>today</time> ${badge("Lesson")} · Edited</div><p>Projector in Room 3 flickers — reported.</p></article>
             <button class="w-full text-left py-2 font-medium text-primary" aria-expanded="false">▸ 4 earlier notes about this group and its students</button>`;
         return `<section aria-labelledby="notes-h" class="internal rounded-lg overflow-hidden lg:sticky lg:top-20">
@@ -295,21 +198,20 @@
 
       /* ------------------------------------------------------------- screens */
       const T_STATES = [
-        "default (to record)",
+        "empty (no log yet)",
         "unsaved changes",
-        "saved · recorded",
+        "saved",
         "substitute",
         "future lesson",
         "cancelled",
         "save error",
         "conflict",
-        "empty group",
         "loading",
         "unsaved dialog",
       ];
       function teacherLesson(i) {
-        const map = [
-          "default",
+        const st = [
+          "empty",
           "dirty",
           "saved",
           "saved",
@@ -317,226 +219,146 @@
           "cancelled",
           "error",
           "conflict",
-          "empty",
           "loading",
           "dirty",
-        ];
-        const st = map[i];
+        ][i];
         const status =
-          st === "future"
-            ? "scheduled"
-            : st === "cancelled"
-              ? "cancelled"
-              : st === "saved"
-                ? "recorded"
-                : "toRecord";
+          st === "empty" ? "noLog" : st === "cancelled" ? "cancelled" : "none";
         const dialog =
-          i === 10
-            ? `<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-40"><div role="alertdialog" aria-labelledby="ud" class="bg-white rounded-lg shadow-lg p-6 max-w-md space-y-3"><h2 id="ud" class="text-lg font-semibold">Discard unsaved changes?</h2><p class="text-muted-foreground">Your changes to attendance or the lesson log haven't been saved.</p><div class="flex justify-end gap-2">${btn("Keep editing", "outline")}${btn("Discard", "destructive")}</div></div></div>`
+          i === 9
+            ? `<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-40"><div role="alertdialog" aria-labelledby="ud" class="bg-white rounded-lg shadow-lg p-6 max-w-md space-y-3"><h2 id="ud" class="text-lg font-semibold">Discard unsaved changes?</h2><p class="text-muted-foreground">Your changes to the lesson log haven't been saved.</p><div class="flex justify-end gap-2">${btn("Keep editing", "outline")}${btn("Discard", "destructive")}</div></div></div>`
             : "";
         return `<div class="w-[1180px] bg-muted rounded-lg border border-slate-300 p-6 space-y-6">
           ${header({ status, sub: i === 3 })}
           <div class="grid grid-cols-12 gap-6 items-start">
-            <div class="col-span-8 space-y-6">${attendanceCard(st)}${logCard(st === "empty" ? "saved" : st)}${homeworkCard(st === "dirty" || st === "saved" ? "with" : st)}</div>
-            <div class="col-span-4">${notesCard(st === "dirty" || st === "saved" || st === "error" || st === "conflict" ? "with" : st)}</div>
+            <div class="col-span-8 space-y-6">${logCard(st)}${prevHomework(st)}</div>
+            <div class="col-span-4">${notesCard(st === "empty" || st === "future" || st === "loading" ? st : "with")}</div>
           </div>${dialog}</div>`;
       }
       function teacherMobile(i) {
         const st = ["dirty", "saved"][i];
         return `<div class="w-[390px] bg-muted rounded-[24px] border-4 border-slate-800 overflow-hidden">
           <div class="h-14 bg-white border-b border-border flex items-center px-4 gap-3"><span>☰</span><span class="font-medium">Lingua Language School</span><span class="ml-auto w-8 h-8 rounded-full bg-slate-300"></span></div>
-          <div class="p-4 space-y-4">${header({ status: st === "saved" ? "recorded" : "toRecord", mobile: true })}${attendanceCard(st, true).replace(/p-6/, "p-4")}${logCard(st).replace(/p-6/, "p-4")}${homeworkCard("with").replace(/p-6/, "p-4")}${notesCard("with")}</div></div>`;
+          <div class="p-4 space-y-4">${header({ status: "none", mobile: true })}${logCard(st).replace(/p-6/, "p-4")}${prevHomework(st)}${notesCard("with")}</div></div>`;
       }
       function lessonList(i) {
-        const filters = ["To record (3)", "Upcoming", "Past"];
-        const rows =
-          i === 3
-            ? `<tr><td colspan="6" class="py-12 text-center"><p class="text-lg font-semibold">You're all caught up.</p></td></tr>`
-            : [
+        const filters = ["No log yet (2)", "Upcoming", "Past"];
+        const sel = Math.min(i, 2);
+        const data =
+          sel === 2
+            ? [
                 [
-                  "Mon 20 Oct · 17:00",
+                  "Wed 15 Oct · 17:00",
                   "👥 B1 Evening",
-                  "4/6",
-                  "—",
-                  "1",
-                  badge("📝 To record", "warning"),
+                  "Reading: 'A day in London'…",
+                  "Workbook p. 34, ex. 1–3",
                 ],
                 [
-                  "Mon 20 Oct · 10:00",
-                  "👤 Eva Novak 1-on-1",
-                  "0/1",
+                  "Mon 13 Oct · 17:00",
+                  "👥 B1 Evening",
+                  "Revision unit 3…",
                   "—",
-                  "0",
-                  badge("📝 To record", "warning"),
-                ],
-                [
-                  "Fri 17 Oct · 17:00",
-                  "👥 A2 Kids",
-                  "7/8",
-                  "✓",
-                  "1",
-                  badge("📝 To record", "warning"),
                 ],
               ]
-                .map(
-                  (r) =>
-                    `<tr class="border-t border-border hover:bg-accent">${r.map((c, j) => `<td class="px-3 py-2 ${j === 0 ? "tnum" : ""}">${j === 0 ? `<a href="#" class="text-primary">${c}</a>` : c}</td>`).join("")}</tr>`,
-                )
+            : sel === 1
+              ? [["Wed 22 Oct · 17:00", "👥 B1 Evening", "—", "—"]]
+              : [
+                  ["Mon 20 Oct · 17:00", "👥 B1 Evening", "—", "—"],
+                  ["Mon 20 Oct · 10:00", "👤 Eva Novak 1-on-1", "—", "—"],
+                ];
+        const head = [
+          "Date & time",
+          "Group",
+          ...(i === 4 ? ["Teacher"] : []),
+          "What we covered",
+          "Homework",
+        ];
+        const rows =
+          i === 3
+            ? `<tr><td colspan="4" class="py-12 text-center"><p class="text-lg font-semibold">You're all caught up.</p></td></tr>`
+            : data
+                .map((r) => {
+                  const cells =
+                    i === 4 ? [r[0], r[1], "Tomas Horvat", r[2], r[3]] : r;
+                  return `<tr class="border-t border-border hover:bg-accent">${cells.map((c, j) => `<td class="px-3 py-2 ${j === 0 ? "tnum" : ""}">${j === 0 ? `<a href="#" class="text-primary">${c}</a>` : c}</td>`).join("")}</tr>`;
+                })
                 .join("");
         return `<div class="w-[1100px] bg-muted rounded-lg border border-slate-300 p-6 space-y-4">
           <h1 class="text-2xl font-semibold">Lesson log</h1>
-          <div class="flex flex-wrap gap-3 items-center"><div role="tablist" class="inline-flex rounded-md bg-white border border-border p-1">${filters.map((f, j) => `<button role="tab" aria-selected="${j === Math.min(i, 2) || (i === 3 && j === 0)}" class="px-3 h-8 rounded ${j === Math.min(i, 2) || (i === 3 && j === 0) ? "bg-primary text-white" : ""}">${i === 3 && j === 0 ? "To record (0)" : f}</button>`).join("")}</div>
+          <div class="flex flex-wrap gap-3 items-center"><div role="tablist" class="inline-flex rounded-md bg-white border border-border p-1">${filters.map((f, j) => `<button role="tab" aria-selected="${j === sel}" class="px-3 h-8 rounded ${j === sel ? "bg-primary text-white" : ""}">${i === 3 && j === 0 ? "No log yet (0)" : f}</button>`).join("")}</div>
           <button class="h-9 rounded-md border border-input bg-white px-3">Group: All ▾</button>${i === 4 ? `<button class="h-9 rounded-md border border-input bg-white px-3">Teacher: All ▾</button><span class="text-muted-foreground">(admin /admin/lessons)</span>` : ""}</div>
-          ${card(`<table class="w-full text-left"><thead class="bg-muted"><tr>${["Date & time", "Group", "Attendance", "Log", "Homework", "Status"].map((h) => `<th class="px-3 py-2">${h}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`, "p-0 overflow-hidden")}
+          ${card(`<table class="w-full text-left"><thead class="bg-muted"><tr>${head.map((h) => `<th class="px-3 py-2">${h}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`, "p-0 overflow-hidden")}
         </div>`;
       }
-      function phone(inner, tab = 3) {
+      function phone(inner, tab = 2) {
         return `<div class="w-[390px] min-h-[760px] bg-white rounded-[24px] border-4 border-slate-800 overflow-hidden flex flex-col text-base">
           <div class="h-14 border-b border-border flex items-center px-4 gap-3"><span>☰</span><span class="font-medium">Lingua Language School</span><span class="ml-auto w-8 h-8 rounded-full bg-slate-300"></span></div>
           <main class="flex-1 p-4 space-y-4">${inner}</main>
           <nav aria-label="Primary" class="h-16 border-t border-border grid grid-cols-4 text-xs shrink-0">${["Home", "Timetable", "Homework", "More"].map((t, i) => `<a href="#" class="flex flex-col items-center justify-center ${i === tab ? "text-primary font-medium" : "text-muted-foreground"}" ${i === tab ? 'aria-current="page"' : ""}><span class="text-lg">${["⌂", "▦", "☰", "≡"][i]}</span>${t}</a>`).join("")}</nav></div>`;
       }
-      function studentHistory(i) {
+      function studentHomework(i) {
+        if (i === 1)
+          return phone(
+            `<h1 class="text-2xl font-semibold">Homework</h1><div class="text-center py-12 space-y-2"><div class="text-4xl text-muted-foreground">📋</div><h2 class="text-lg font-semibold">No lessons yet</h2><p class="text-muted-foreground">After your first lesson, you'll see what was covered and the homework here.</p></div>`,
+          );
         if (i === 2)
           return phone(
-            `<h1 class="text-2xl font-semibold">Lesson history</h1><div class="text-center py-12 space-y-2"><div class="text-4xl text-muted-foreground">🕘</div><h2 class="text-lg font-semibold">No lessons yet</h2><p class="text-muted-foreground">After your first lesson, you'll see what was covered and your attendance here.</p></div>`,
+            `<div class="skeleton h-8 w-48"></div>${Array(4).fill('<div class="skeleton h-28"></div>').join("")}`,
           );
         if (i === 3)
           return phone(
-            `<div class="skeleton h-8 w-48"></div><div class="skeleton h-20"></div>${Array(3).fill('<div class="skeleton h-28"></div>').join("")}`,
+            `<h1 class="text-2xl font-semibold">Homework</h1>${alert("<strong>Something went wrong.</strong> We couldn't load your lessons. " + btn("Try again", "outline", "mt-2"), "danger")}`,
           );
         if (i === 4)
           return phone(
-            `<h1 class="text-2xl font-semibold">Lesson history</h1>${alert("<strong>Something went wrong.</strong> We couldn't load your lessons. " + btn("Try again", "outline", "mt-2"), "danger")}`,
+            `<h1 class="text-2xl font-semibold">Hi, Jan</h1><div class="rounded-lg border border-border p-4 space-y-3"><div class="flex justify-between"><h2 class="text-lg font-semibold">Latest homework</h2><a class="text-primary" href="#">See all</a></div>
+            <div class="border-t pt-2"><p class="text-sm text-muted-foreground tnum">B1 Evening · Mon 20 Oct</p><p class="font-medium">${HW}</p></div>
+            <div class="border-t pt-2"><p class="text-sm text-muted-foreground tnum">Eva Novak 1-on-1 · Fri 17 Oct</p><p class="font-medium">Read chapter 2 of the graded reader.</p></div></div>`,
+            0,
           );
         const items = [
           [
-            "Mon 20 Oct · 17:00",
+            "Mon 20 Oct",
             "B1 Evening",
-            "P",
+            HW,
             "Unit 4: present perfect vs past simple. Speaking practice in pairs, vocabulary p. 52.",
-            "Homework set",
-            "",
           ],
           [
-            "Wed 15 Oct · 17:00",
+            "Wed 15 Oct",
             "B1 Evening",
-            "P",
+            "",
             "Reading: 'A day in London', new vocabulary.",
-            "Homework due",
-            "Arrived 20 minutes late",
           ],
-          ["Mon 13 Oct · 17:00", "B1 Evening", "A", "", "", ""],
-          ["Wed 8 Oct · 17:00", "B1 Evening", "C", "", "", ""],
-          ["Mon 6 Oct · 17:00", "B1 Evening", "", "Revision unit 3.", "", ""],
+          ["Mon 13 Oct", "B1 Evening", "C", ""],
+          ["Wed 8 Oct", "B1 Evening", "-", "-"],
         ];
-        const cardsHtml = items
-          .map(([d, g, s, log, chip, note]) =>
-            s === "C"
-              ? `<div class="rounded-lg border border-dashed border-slate-400 bg-slate-50 p-4 text-slate-600"><div class="flex justify-between"><span class="line-through tnum">${d}</span>${badge("Cancelled", "danger")}</div><p>${g}</p></div>`
-              : `<a href="#" class="block rounded-lg border border-border p-4 space-y-1 hover:bg-accent min-h-[44px]"><div class="flex justify-between items-center"><span class="font-medium tnum">${d}</span>${attBadge(s)}</div><p class="text-muted-foreground">${g}</p>${note ? `<p class="text-sm text-muted-foreground">“${note}”</p>` : ""}<p class="line-clamp-2 ${log ? "" : "text-muted-foreground"}">${log || "No lesson log yet."}</p>${chip ? badge("📋 " + chip, "info") : ""}</a>`,
+        const cards = items
+          .map(([d, g, hw, cov]) =>
+            hw === "C"
+              ? `<div class="rounded-lg border border-dashed border-slate-400 bg-slate-50 p-4 text-slate-600"><div class="flex justify-between"><span class="line-through tnum">${d} · ${g}</span>${badge("Cancelled", "danger")}</div></div>`
+              : hw === "-"
+                ? `<a href="#" class="block rounded-lg border border-border p-4 space-y-1 min-h-[44px]"><p class="text-sm text-muted-foreground tnum">${d} · ${g}</p><p class="text-muted-foreground">Your teacher hasn't added notes for this lesson yet.</p></a>`
+                : `<a href="#" class="block rounded-lg border border-border p-4 space-y-2 hover:bg-accent min-h-[44px]"><p class="text-sm text-muted-foreground tnum">${d} · ${g}</p>${hw ? `<p class="font-medium">📋 ${hw}</p>` : `<p class="text-muted-foreground">No homework</p>`}<p class="text-sm text-muted-foreground line-clamp-2">We covered: ${cov}</p></a>`,
           )
           .join("");
-        return phone(`<h1 class="text-2xl font-semibold">Lesson history</h1>
-          <div class="rounded-lg border border-border bg-muted p-4"><h2 class="font-semibold">This term</h2><p class="tnum">18 present · 1 absent · 1 excused</p><p class="text-muted-foreground text-sm">20 lessons</p></div>
-          <h2 class="text-lg font-semibold">October</h2>${cardsHtml}${btn("Load more", "outline", "w-full justify-center h-11")}`);
+        return phone(`<h1 class="text-2xl font-semibold">Homework</h1><button class="h-11 w-full rounded-md border border-input px-3 text-left">All groups ▾</button>
+          <h2 class="text-lg font-semibold">October</h2>${cards}${btn("Load more", "outline", "w-full justify-center h-11")}`);
       }
       function studentLesson(i) {
-        const att =
-          i === 1
-            ? `<p class="text-muted-foreground">Your teacher hasn't taken attendance yet.</p>`
-            : `${attBadge("P")}<p class="text-sm text-muted-foreground mt-1">“Arrived 20 minutes late”</p>`;
-        const log =
-          i === 1
-            ? `<p class="text-muted-foreground">Your teacher hasn't written the lesson log yet.</p>`
-            : `<p class="whitespace-pre-wrap">Unit 4: present perfect vs past simple.\nSpeaking practice in pairs, vocabulary p. 52.</p>`;
+        const empty = i === 1;
         return phone(
-          `<a href="#" class="text-primary">‹ Lesson history</a>
+          `<a href="#" class="text-primary">‹ Homework</a>
           <h1 class="text-2xl font-semibold">B1 Evening</h1>
           <p class="text-muted-foreground tnum">Mon 20 Oct 2026 · 17:00–18:30<br/>Tomas Horvat · Room 3</p>
-          <section class="space-y-2"><h2 class="text-lg font-semibold">Your attendance</h2>${att}</section>
-          <section class="space-y-2"><h2 class="text-lg font-semibold">What we covered</h2>${log}</section>
-          <section class="space-y-2"><h2 class="text-lg font-semibold">Homework</h2>
-            <a href="#" class="block rounded-lg border border-border p-4 min-h-[44px]"><p class="text-xs text-muted-foreground">Set in this lesson</p><p class="font-medium">Workbook p. 34, ex. 1–3</p><p class="text-sm">Due Wed 22 Oct, 17:00 · ${badge("Not started")}</p></a>
-            <a href="#" class="block rounded-lg border border-border p-4 min-h-[44px]"><p class="text-xs text-muted-foreground">Due in this lesson</p><p class="font-medium">Essay: my last holiday</p><p class="text-sm">${badge("✓ Submitted", "success")}</p></a></section>
-          <p class="text-xs text-muted-foreground border-t pt-3">Never shown here: internal notes, other students' names or attendance.</p>`,
+          <section class="space-y-2"><h2 class="text-lg font-semibold">Homework</h2>${empty ? `<p class="text-muted-foreground">No homework for this lesson.</p>` : `<p class="font-medium">${HW}</p>`}</section>
+          <section class="space-y-2"><h2 class="text-lg font-semibold">What we covered</h2>${empty ? `<p class="text-muted-foreground">Your teacher hasn't written the lesson log yet.</p>` : `<p class="whitespace-pre-wrap">${COVERED}</p>`}</section>
+          <p class="text-xs text-muted-foreground border-t pt-3">Never shown here: internal notes, other students' names.</p>`,
         );
       }
       function adminLesson() {
         return `<div class="w-[1180px] bg-muted rounded-lg border border-slate-300 p-6 space-y-6">
-          ${header({ status: "recorded", admin: true })}
-          <div class="grid grid-cols-12 gap-6 items-start"><div class="col-span-8 space-y-6">${attendanceCard("admin")}${logCard("admin")}${homeworkCard("admin")}</div><div class="col-span-4">${notesCard("admin")}</div></div></div>`;
-      }
-      function adminOverview(i) {
-        const dates = [
-          "6 Oct",
-          "8 Oct",
-          "13 Oct",
-          "15 Oct",
-          "20 Oct",
-          "22 Oct",
-        ];
-        const data = [
-          ["Eva Novak", "PPAPP-", [4, 1, 0]],
-          ["Jan Kos", "PEPAA-", [2, 2, 1]],
-          ["Lea Horak", "PPPPP-", [5, 0, 0]],
-          ["Mia Lunt", "  PPE-", [2, 0, 1]],
-        ];
-        const cell = (c, n, d) => {
-          const m = {
-            P: ["P", "bg-green-50 text-green-700"],
-            A: ["A", "bg-red-50 text-red-700"],
-            E: ["E", "bg-blue-50 text-blue-700"],
-            "-": ["–", "text-slate-500"],
-            " ": ["", "bg-slate-100"],
-          }[c];
-          const word = {
-            P: "present",
-            A: "absent",
-            E: "excused",
-            "-": "not recorded",
-            " ": "not a member",
-          }[c];
-          return `<td class="px-2 py-2 text-center font-semibold ${m[1]}" aria-label="${n}, ${d}: ${word}">${m[0]}</td>`;
-        };
-        if (i === 1)
-          return `<div class="w-[1100px] bg-muted rounded-lg border border-slate-300 p-6 space-y-4">
-            <a href="#" class="text-primary">‹ Students</a><h1 class="text-2xl font-semibold">Jan Kos</h1>
-            <div class="flex gap-4 border-b border-border">${["Profile", "Groups", "Attendance", "Homework", "Internal notes"].map((t) => `<button class="pb-2 ${t === "Attendance" ? "border-b-2 border-primary font-medium" : "text-muted-foreground"}">${t}</button>`).join("")}</div>
-            <div class="flex gap-3"><button class="h-9 rounded-md border border-input bg-white px-3">Autumn 2026 ▾</button><button class="h-9 rounded-md border border-input bg-white px-3">Status: All ▾</button><span class="ml-auto tnum">2 present · 2 absent · 1 excused · 1 not recorded</span></div>
-            ${card(
-              `<table class="w-full text-left"><thead class="bg-muted"><tr>${["Date", "Group", "Teacher", "Status", "Note", ""].map((h) => `<th class="px-3 py-2">${h}</th>`).join("")}</tr></thead><tbody>${[
-                ["Wed 22 Oct", ""],
-                ["Mon 20 Oct", "A"],
-                ["Wed 15 Oct", "A"],
-                ["Mon 13 Oct", "P"],
-                ["Wed 8 Oct", "E"],
-                ["Mon 6 Oct", "P"],
-              ]
-                .map(
-                  ([d, s]) =>
-                    `<tr class="border-t border-border"><td class="px-3 py-2 tnum">${d}</td><td class="px-3 py-2">B1 Evening</td><td class="px-3 py-2">Tomas Horvat</td><td class="px-3 py-2">${attBadge(s)}</td><td class="px-3 py-2"></td><td class="px-3 py-2"><a class="text-primary" href="#">Open lesson</a></td></tr>`,
-                )
-                .join("")}</tbody></table>`,
-              "p-0 overflow-hidden",
-            )}</div>`;
-        if (i === 2)
-          return `<div class="w-[1100px] bg-muted rounded-lg border border-slate-300 p-6 space-y-4"><h1 class="text-2xl font-semibold">B1 Evening</h1>${card(`<div class="text-center py-10"><h2 class="text-lg font-semibold">No lessons in Autumn 2026 yet.</h2></div>`)}</div>`;
-        return `<div class="w-[1100px] bg-muted rounded-lg border border-slate-300 p-6 space-y-4">
-          <a href="#" class="text-primary">‹ Courses & groups</a><h1 class="text-2xl font-semibold">B1 Evening</h1>
-          <div class="flex gap-4 border-b border-border">${["Members", "Details", "Timetable", "Attendance", "Homework"].map((t) => `<button class="pb-2 ${t === "Attendance" ? "border-b-2 border-primary font-medium" : "text-muted-foreground"}">${t}</button>`).join("")}</div>
-          <div class="flex gap-3 items-center"><button class="h-9 rounded-md border border-input bg-white px-3">Autumn 2026 ▾</button><span class="text-xs text-muted-foreground">P present · A absent · E excused · – not recorded · grey = not a member</span></div>
-          ${card(
-            `<div tabindex="0" aria-label="Attendance table, scrolls horizontally" class="overflow-x-auto"><table class="w-full text-left tnum"><caption class="sr-only">Attendance for B1 Evening, Autumn 2026</caption><thead class="bg-muted"><tr><th class="px-3 py-2 sticky left-0 bg-muted">Student</th>${dates.map((d) => `<th class="px-2 py-2 text-center"><a href="#" class="text-primary">${d}</a></th>`).join("")}<th class="px-2 py-2">Present</th><th class="px-2 py-2">Absent</th><th class="px-2 py-2">Excused</th></tr></thead><tbody>${data
-              .map(
-                ([n, row, t]) =>
-                  `<tr class="border-t border-border"><th scope="row" class="px-3 py-2 sticky left-0 bg-white font-medium">${n}</th>${[...row].map((c, j) => cell(c, n, dates[j])).join("")}${t.map((x) => `<td class="px-2 py-2 text-center">${x}</td>`).join("")}</tr>`,
-              )
-              .join(
-                "",
-              )}<tr class="border-t-2 border-slate-300 text-muted-foreground"><th scope="row" class="px-3 py-2 sticky left-0 bg-white font-normal">Petr Sova (left 10 Oct)</th>${[..."PP    "].map((c, j) => cell(c, "Petr Sova", dates[j])).join("")}<td class="text-center">2</td><td class="text-center">0</td><td class="text-center">0</td></tr></tbody></table></div>`,
-            "p-0 overflow-hidden",
-          )}</div>`;
+          ${header({ status: "none", admin: true })}
+          <div class="grid grid-cols-12 gap-6 items-start"><div class="col-span-8 space-y-6">${logCard("admin")}</div><div class="col-span-4">${notesCard("admin")}</div></div></div>`;
       }
 
       /* ---------------------------------------------------------------- render */
@@ -550,14 +372,14 @@
         {
           k: "teacherM",
           label: "Teacher lesson (mobile)",
-          states: ["unsaved", "recorded"],
+          states: ["unsaved", "saved"],
           fn: teacherMobile,
         },
         {
           k: "list",
           label: "Lesson log list",
           states: [
-            "to record",
+            "no log yet",
             "upcoming",
             "past",
             "all caught up",
@@ -566,15 +388,15 @@
           fn: lessonList,
         },
         {
-          k: "history",
-          label: "Student history",
-          states: ["list", "empty", "loading", "error"],
-          fn: (i) => studentHistory([0, 2, 3, 4][i]),
+          k: "homework",
+          label: "Student homework tab",
+          states: ["list", "empty", "loading", "error", "home card"],
+          fn: studentHomework,
         },
         {
           k: "slesson",
           label: "Student lesson",
-          states: ["recorded", "not recorded yet"],
+          states: ["filled", "nothing written yet"],
           fn: studentLesson,
         },
         {
@@ -582,12 +404,6 @@
           label: "Admin lesson",
           states: ["read-only"],
           fn: adminLesson,
-        },
-        {
-          k: "overview",
-          label: "Admin attendance",
-          states: ["group matrix", "student tab", "empty"],
-          fn: adminOverview,
         },
       ];
       let cur = { screen: "teacher", state: 0 };
