@@ -54,9 +54,39 @@ The project's access rules are enforced by tests, not only by review:
   Every log, homework and note there carries a unique marker, so finding
   one in a response that shouldn't have it is the leak check.
 
+- **Absences and replacements** (`absences.spec.ts`, Phase 3): on its own
+  term, groups, rooms, lessons and five students:
+  - booking outside the rules is refused by the server, whatever the UI
+    offers: another level, a full room, a clash with the student's own
+    lessons, a lesson that has started, a 1-on-1, their own group's
+    lesson, an expired or a used credit; nothing is written;
+  - a student uses only their own credits and bookings — another
+    student's credit, booking or 1-on-1 is "not found" to every student
+    action, and their pages never show it; a student cancelling "for"
+    someone else only ever reports themselves;
+  - only the student or an admin of their school reports an absence:
+    teachers run neither the student's nor the admin's action, and an
+    admin of another school gets "not found";
+  - only admins approve, reject or override replacements, change the
+    absence settings and reschedule a 1-on-1 after the cutoff (the student
+    gets `CUTOFF_PASSED`);
+  - a replacement student reads the target lesson's log and homework once
+    it has started, never its TeacherNotes, other students' names or
+    absence reasons; after an admin rejects the booking the lesson is
+    "not found" again;
+  - none of it crosses schools: every student action with the other
+    school's lesson, credit or booking, and a student's own credit aimed
+    at the other school's lesson.
+
+  Admin Phase 3 actions are in `crossSchoolCases`, and the Absences and
+  settings pages in both schools' page lists, like every other admin area.
+
 Leak checks read the raw server response (`serverResponse` in
 `fixtures.ts`), which includes the RSC payload, so data the client receives
-but doesn't render still counts as a leak. Mutating checks compare a digest
+but doesn't render still counts as a leak. "Not found" is checked with
+`isNotFound` (Next's 404 digest): inside a streamed page the status stays
+200, and the "Page not found" copy is inlined in every page's payload, so
+looking for the text proves nothing. Mutating checks compare a digest
 of the target rows (or, for school B, the whole school) before and after.
 
 ### Two schools
@@ -78,7 +108,10 @@ signed in on `page`. It looks the action id up in Next's
 `server-reference-manifest.json` (`.next/server` after `pnpm build`,
 `.next/dev/server` under `pnpm dev` once the page using it was compiled) and
 encodes arguments like React does; wrap a form argument (at most one per
-call) in `new FormFields({...})`. The CARM-28 admin-action spec uses the same
+call) in `new FormFields({...})`. It posts to a page of the action's own
+area (`src/app/student/…` → a `/student/…` page): a page elsewhere may
+list the action in the manifest without serving it, and Next's 409 "failed
+to find Server Action" would look like a refusal. The CARM-28 admin-action spec uses the same
 helper. It returns the HTTP status and the action's
 `ActionResult`, or `null` when the action didn't run.
 
@@ -94,9 +127,12 @@ helper. It returns the HTTP status and the action's
 - **New teacher server action**: add it to `teacherLessonCases` in
   `action-cases.ts`, aimed at the target's lesson, note or student. The
   coverage test in `lesson-records.spec.ts` fails until every action under
-  `src/app/teacher/` is listed; it also fails if `src/app/student/` gets a
-  server action (students write nothing yet), which then needs its own
-  cases.
+  `src/app/teacher/` is listed.
+- **New student server action**: add it to `studentCases` in
+  `absences.spec.ts`, aimed at another student's lesson, credit or
+  booking; the coverage test there fails until every action under
+  `src/app/student/` is listed (`lesson-records.spec.ts` also pins the
+  list, to make sure none writes lesson records).
 - **New teacher or student page**: add it to the role's page lists
   (`cross-school.spec.ts`, and `studentPaths` in `teacher-notes.spec.ts` for
   students). Student pages that show lessons also go into the list checks

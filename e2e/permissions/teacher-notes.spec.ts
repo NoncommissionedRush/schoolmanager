@@ -52,6 +52,7 @@ const studentPaths = (weeks: string[], lessons: string[]) => [
   "/student",
   "/student/homework",
   "/student/homework?shown=1000",
+  "/student/absences",
   ...lessons.map((id) => `/student/lessons/${id}`),
   "/student/timetable",
   ...weeks.flatMap((week) => [

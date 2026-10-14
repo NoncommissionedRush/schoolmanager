@@ -58,6 +58,10 @@ const ADMIN_PAGES = [
   "/admin/settings/rooms",
   "/admin/settings/terms",
   "/admin/settings/school",
+  "/admin/settings/absences",
+  "/admin/absences",
+  "/admin/absences?tab=review",
+  "/admin/absences?tab=replacements",
   `/admin/timetable?week=${WEEK}`,
   `/admin/timetable/edit`,
 ];
@@ -100,6 +104,8 @@ test.describe("cross-school › pages", () => {
         `/admin/students?q=Bianca`,
         `/admin/teachers?q=Bruno`,
         `/admin/groups?level=${b.level}&teacher=${b.teacher}`,
+        `/admin/absences?student=${b.student}&group=${b.group}&teacher=${b.teacher}`,
+        `/admin/absences?tab=replacements&student=${b.student}&group=${b.group}`,
       ],
       Object.values(SECOND_NAMES),
     );
@@ -133,6 +139,8 @@ test.describe("cross-school › pages", () => {
         `/admin/timetable?week=${WEEK}&teacher=${a.teacher}&room=${a.room}&group=${a.group}`,
         `/admin/timetable/edit?term=${a.term}`,
         `/admin/students?group=${a.group}`,
+        `/admin/absences?student=${a.student}&group=${a.group}&teacher=${a.teacher}`,
+        `/admin/absences?tab=replacements&student=${a.student}`,
       ],
       SCHOOL_A_NAMES,
     );

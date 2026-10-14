@@ -7,6 +7,7 @@ import { callAction, pagesIn, serverActionsIn } from "../server-actions";
 import { teacherLessonCases } from "./action-cases";
 import {
   expectNoneOf,
+  isNotFound,
   LOGINS,
   SCHOOL_A,
   SCHOOL_B,
@@ -333,11 +334,11 @@ async function signInStudent(browser: Browser) {
 
 /**
  * The lesson pages render "not found" and nothing of the lesson. Not-found
- * inside a streamed page keeps HTTP 200, so check the content.
+ * inside a streamed page keeps HTTP 200, so check the digest (`isNotFound`).
  */
 async function expectNotFound(page: Page, path: string, leaks: string[]) {
   const { body } = await serverResponse(page, path);
-  expect(body, path).toContain("Page not found");
+  expect(isNotFound(body), path).toBe(true);
   expectNoneOf(body, leaks, path);
 }
 

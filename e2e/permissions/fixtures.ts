@@ -170,6 +170,16 @@ export async function serverResponse(page: Page, url: string) {
 }
 
 /**
+ * Whether a server response is Next's "not found". Inside a streamed page
+ * the status stays 200, and the "Page not found" copy is inlined in every
+ * page's RSC payload (the not-found boundary), so only the error digest
+ * tells them apart.
+ */
+export function isNotFound(body: string) {
+  return body.includes("NEXT_HTTP_ERROR_FALLBACK;404");
+}
+
+/**
  * Asserts that none of `needles` occurs anywhere in `body`, also after
  * undoing HTML entities and the JSON escaping of the inlined RSC payload.
  */

@@ -47,7 +47,10 @@ export type ServerAction = { id: string; path: string };
 
 /**
  * Every compiled server action by `filename#exportedName`: its id and the
- * path of a page that serves it (static pages preferred).
+ * path of a page that serves it — one in the action's own area
+ * (`src/app/student/…` → `app/student/…`) first, then static pages. A page
+ * of another area may list the action without serving it (Next answers
+ * 409 "failed to find Server Action"), which would hide the real refusal.
  */
 export function compiledServerActions(): Map<string, ServerAction> {
   const manifest = JSON.parse(readFileSync(manifestPath(), "utf8")) as {
@@ -55,9 +58,12 @@ export function compiledServerActions(): Map<string, ServerAction> {
   };
   const actions = new Map<string, ServerAction>();
   for (const [id, entry] of Object.entries(manifest.node)) {
+    const area = /^src\/(app\/[^/]+\/)/.exec(entry.filename ?? "")?.[1];
+    const rank = (worker: string) =>
+      (area && worker.startsWith(area) ? 0 : 2) + Number(worker.includes("["));
     const pages = Object.keys(entry.workers)
       .filter((worker) => worker.endsWith("/page"))
-      .sort((a, b) => Number(a.includes("[")) - Number(b.includes("[")));
+      .sort((a, b) => rank(a) - rank(b));
     if (!entry.filename || !entry.exportedName || !pages.length) continue;
     actions.set(`${entry.filename}#${entry.exportedName}`, {
       id,
