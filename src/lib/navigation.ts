@@ -87,6 +87,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/timetable/generate",
       icon: "wand-sparkles",
       phase: 4,
+      enabled: true,
       section: "schedule",
     },
     {

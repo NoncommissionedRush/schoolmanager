@@ -1,0 +1,248 @@
+{
+  "title": "Assign teachers",
+  "term": "Term",
+  "termDraft": "Draft term",
+  "termPublished": "Published",
+  "termEnded": "This term has ended. Choose a current or future term.",
+  "desktopRecommended": "Assigning teachers works best on a larger screen. Open this page on a computer.",
+  "tabs": {
+    "groups": "Groups",
+    "groupsStatus": "{ready} ready · {attention, plural, =0 {all set} other {# need attention}}",
+    "draft": "Draft",
+    "draftStatus": "{assigned} of {total} assigned",
+    "draftNone": "No draft yet",
+    "draftRunning": "Assigning…",
+    "draftStale": "Out of date"
+  },
+  "actions": {
+    "assign": "Assign teachers…",
+    "reassign": "Reassign…",
+    "more": "More actions",
+    "openEditor": "Open timetable editor",
+    "discardDraft": "Discard draft…"
+  },
+  "discard": {
+    "title": "Discard the draft for {term}?",
+    "description": "The proposed teachers, locks and hand-made choices are deleted. The live timetable doesn't change.",
+    "confirm": "Discard draft",
+    "done": "Draft discarded."
+  },
+  "groups": {
+    "search": "Search groups",
+    "anyLevel": "Any level",
+    "show": "Show",
+    "filter": {
+      "all": "All",
+      "attention": "Needs attention",
+      "skipped": "Skipped"
+    },
+    "clearFilters": "Clear filters",
+    "col": {
+      "group": "Group",
+      "level": "Level",
+      "times": "Lesson times",
+      "room": "Room",
+      "students": "Students",
+      "canTeach": "Can teach",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "canTeachCount": "{count, plural, =0 {Nobody} one {# teacher} other {# teachers}}",
+    "status": {
+      "READY": "Ready",
+      "KEPT": "Keeps its current teacher",
+      "NO_LESSON_TIMES": "No lesson times",
+      "NO_ROOM": "No room",
+      "TIMES_CLASH": "Times clash",
+      "LEVEL_UNCOVERED": "Nobody teaches its level",
+      "SKIPPED": "Skipped this term",
+      "noTeacherForLevel": "Nobody teaches {level}"
+    },
+    "skip": "Skip this term",
+    "include": "Include",
+    "editGroup": "Edit group",
+    "skippedToast": "{name} is skipped this term.",
+    "includedToast": "{name} is included again.",
+    "summary": "{groups} groups · {lessons} lessons a week · {need} teaching hours · {teachers} teachers can give {can} h"
+  },
+  "ready": {
+    "title": "Before you assign",
+    "titleCount": "Before you assign · {count, plural, one {# thing} other {# things}} to check",
+    "ok": "Ready to assign teachers.",
+    "show": "Show",
+    "teachers": "Teachers",
+    "editGroup": "Edit group",
+    "allLevels": "all levels",
+    "noTimes": "{count, plural, one {# group has} other {# groups have}} no lesson times or room and will be skipped.",
+    "roomClash": "{room} is used by {groupA} and {groupB} at the same time.",
+    "levelUncovered": "Nobody teaches {level}. {count, plural, one {# group} other {# groups}} can't get a teacher.",
+    "timeCrunch": "{day} {time}: {groups} groups at {levels}, only {teachers} teachers who teach them are free.",
+    "teachersNoLevels": "{count, plural, one {# teacher has} other {# teachers have}} no levels yet and won't be assigned.",
+    "hours": "Groups need {need} h a week; teachers can give {can} h.",
+    "studentClash": "{count, plural, one {# group has a student} other {# groups have students}} in another group at the same time."
+  },
+  "assign": {
+    "title": "Assign teachers for {term}",
+    "included": "{groups, plural, one {# group} other {# groups}}, {teachers, plural, one {# teacher} other {# teachers}}.",
+    "skipped": "{count, plural, one {# group isn't ready and is skipped.} other {# groups aren't ready and are skipped.}}",
+    "existing": "Existing teachers",
+    "keepCurrent": "Keep current teachers",
+    "reassignAll": "Reassign everything",
+    "fromDate": "From",
+    "fromDateHint": "Lessons before this date are not touched.",
+    "modeLegend": "Which groups",
+    "onlyUnassigned": "Only groups without a teacher",
+    "reconsiderAll": "Reconsider every group",
+    "keepsLocked": "Keeps {locked, plural, one {# locked assignment} other {# locked assignments}}. {unlocked, plural, one {# group} other {# groups}} may get a different teacher.",
+    "replacesDraft": "This starts a new draft and replaces the current one.",
+    "preference": "When several teachers fit, workloads are kept as even as possible.",
+    "nothing": "No group is ready yet. Add lesson times and a room to your groups.",
+    "confirm": "Assign teachers",
+    "failed": "Couldn't start assigning. Try again."
+  },
+  "run": {
+    "running": "Assigning teachers… {assigned} of {total} groups",
+    "startedBy": "Started by {name}",
+    "done": "{assigned} of {total} groups have a teacher.",
+    "failed": "Assigning failed. The previous draft is unchanged.",
+    "cancelled": "Assigning was cancelled. The previous draft is unchanged."
+  },
+  "draft": {
+    "band": "Draft · not visible to teachers or students",
+    "assignedBy": "Assigned {date} by {name}",
+    "assignedAt": "Assigned {date}",
+    "assigned": "Assigned",
+    "assignedValue": "{assigned} / {total} groups",
+    "noTeacher": "No teacher",
+    "noTeacherValue": "{count, plural, =0 {None} one {# group} other {# groups}}",
+    "show": "Show",
+    "issues": "Issues",
+    "issuesValue": "{conflicts, plural, one {# conflict} other {# conflicts}} · {warnings, plural, one {# warning} other {# warnings}}",
+    "view": {
+      "label": "View",
+      "byGroup": "By group",
+      "byTeacher": "By teacher"
+    },
+    "col": {
+      "teacher": "Teacher",
+      "notes": "Notes"
+    },
+    "onlyUnassigned": "Only without teacher",
+    "empty": {
+      "title": "No draft yet",
+      "description": "Check the groups, then assign teachers."
+    },
+    "nobodyAssigned": "No group could get a teacher. Open the reasons with Show and fix the data.",
+    "stale": "Things changed since teachers were assigned (group times, rooms, members, teacher levels, availability or max hours).",
+    "check": "Check draft",
+    "teacherSet": "{teacher} now teaches {group} (locked).",
+    "teacherRemoved": "{group} has no teacher now (locked).",
+    "changedByOther": "Someone else changed this draft. You're now seeing the latest version."
+  },
+  "notices": {
+    "MIXED_TEACHERS": "Its lessons have different teachers, so it has no current teacher."
+  },
+  "byTeacher": {
+    "teacher": "Teacher",
+    "levels": "Levels",
+    "groups": "Groups",
+    "hours": "Hours",
+    "days": "Days",
+    "max": "Max"
+  },
+  "workload": {
+    "title": "Workload",
+    "range": "{min}–{max} h a week",
+    "average": "average {average} h",
+    "previous": "range was {min}–{max} h",
+    "details": "Details",
+    "hours": "{hours} h",
+    "max": "max {hours} h"
+  },
+  "lock": {
+    "menu": "Lock…",
+    "column": "Locked",
+    "toggle": "Lock teacher for {group}",
+    "allAssigned": "Lock all assigned",
+    "teacher": "Lock all of {teacher}",
+    "unlockAll": "Unlock all"
+  },
+  "picker": {
+    "label": "Teacher for {group}",
+    "choose": "No teacher — choose",
+    "search": "Search teachers",
+    "loading": "Loading teachers…",
+    "noTeacher": "No teacher",
+    "sections": {
+      "AVAILABLE": "Available",
+      "UNAVAILABLE": "Unavailable",
+      "NOT_TEACHING_LEVEL": "Doesn't teach {level}",
+      "OVER_MAX_HOURS": "Over max hours",
+      "BUSY": "Busy"
+    },
+    "load": "{from} h → {to} h a week",
+    "teaches": "Teaches {levels}",
+    "noLevels": "No levels set",
+    "busyLabel": "{name}, busy: {reason}"
+  },
+  "unassigned": {
+    "title": "Groups without a teacher ({count})",
+    "why": "Why?",
+    "intro": "None of the {count} teachers who teach {level} can take all of these times:",
+    "nobodyTeaches": "Nobody teaches {level}.",
+    "archived": "Archived",
+    "suggestions": "Suggestions:",
+    "apply": "Apply",
+    "editTimes": "Edit group times",
+    "teacherLevels": "Teacher levels",
+    "footer": "Fix the data, then reassign to try again.",
+    "reassign": "Reassign…",
+    "empty": "Every group has a teacher."
+  },
+  "compare": {
+    "toggleDraft": "Show draft only",
+    "toggleCompare": "Compare to current",
+    "was": "Was",
+    "changed": "Changed",
+    "summary": "{changed, plural, one {# group changes} other {# groups change}} teacher · {teachers} teachers and {students} students affected"
+  },
+  "publish": {
+    "action": "Publish…",
+    "title": "Publish teacher assignments for {term}?",
+    "descriptionDraft": "Creates one weekly slot per group lesson time with the assigned teacher.",
+    "previewing": "Checking what changes…",
+    "groups": "{groups, plural, one {# group} other {# groups}}, {slots, plural, one {# weekly lesson} other {# weekly lessons}}.",
+    "replaces": "Replaces the {count, plural, one {# slot} other {# slots}} in the timetable editor.",
+    "range": "Lessons will be created from {start} to {end}.",
+    "unassigned": "{count, plural, one {# group has no teacher and won't get lessons.} other {# groups have no teacher and won't get lessons.}}",
+    "workload": "Workload {min}–{max} h a week.",
+    "blocked": "{count, plural, one {# conflict blocks publishing.} other {# conflicts block publishing.}} Fix them in the draft first.",
+    "warnings": "{count, plural, one {# warning to confirm} other {# warnings to confirm}}",
+    "acknowledge": "Publish anyway",
+    "acknowledgeAll": "Confirm all",
+    "lessonIssue": "Lesson:",
+    "confirm": "Publish timetable",
+    "toEditor": "Save to the timetable editor only",
+    "fromDate": "Changes apply from {date}. Lessons before then are not touched.",
+    "changes": "{changed, plural, one {# group gets} other {# groups get}} a different teacher; {new, plural, =0 {no new groups} one {# group starts} other {# groups start}}.",
+    "lessons": "{moved, plural, one {# future lesson gets} other {# future lessons get}} the new teacher and keep their absences and bookings; {created, plural, one {# lesson is} other {# lessons are}} created.",
+    "people": "{teachers, plural, one {# teacher} other {# teachers}} and {students, plural, one {# student} other {# students}} are affected.",
+    "bookings": "{count, plural, one {# replacement booking moves} other {# replacement bookings move}} to the new teacher.",
+    "understand": "I understand this changes the timetable for teachers and students from {date}.",
+    "apply": "Apply changes",
+    "running": "Publishing… creating lessons",
+    "failed": "Couldn't publish. Nothing was changed. Try again.",
+    "done": "{term} published. {count, plural, one {# lesson} other {# lessons}} created.",
+    "savedToEditor": "{count, plural, one {# slot} other {# slots}} saved to the timetable editor.",
+    "applied": "{changed, plural, one {# group has} other {# groups have}} a new teacher; {lessons, plural, one {# lesson} other {# lessons}} moved."
+  },
+  "empty": {
+    "noGroups": {
+      "title": "No groups yet",
+      "description": "Create groups with their lesson times first.",
+      "action": "Go to Courses & groups"
+    },
+    "noTeachers": "Add teachers and set the levels they teach.",
+    "goToTeachers": "Go to Teachers"
+  }
+}

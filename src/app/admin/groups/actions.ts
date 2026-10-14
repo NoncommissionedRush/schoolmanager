@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { runAdminAction } from "@/server/admin/context";
+import { lessonTimesSchema } from "@/server/admin/groups/lesson-times";
 import {
   addMembersSchema,
   addToGroupSchema,
@@ -15,6 +16,7 @@ import {
   createGroup,
   removeMember,
   restoreGroup,
+  saveLessonTimes,
   updateGroup,
 } from "@/server/admin/groups/service";
 import { type ActionResult, msg, ok } from "@/server/admin/result";
@@ -146,5 +148,24 @@ export async function removeMemberAction(
         group: removed.group,
       }),
     );
+  });
+}
+
+/**
+ * Lesson times of a group (timetable-generator.md §5.1). Plain JSON: the
+ * rows are a list the client edits, not form fields. The whole list is
+ * replaced; the last save wins.
+ */
+export async function saveLessonTimesAction(
+  groupId: string,
+  input: unknown,
+): Promise<ActionResult<undefined>> {
+  return runAdminAction(async (scope) => {
+    assertIds(groupId);
+    const parsed = parseInput(lessonTimesSchema, input);
+    if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
+    const saved = await saveLessonTimes(scope, groupId, parsed.data);
+    refresh();
+    return ok(undefined, msg("groups.lessonTimes.saved", { name: saved.name }));
   });
 }

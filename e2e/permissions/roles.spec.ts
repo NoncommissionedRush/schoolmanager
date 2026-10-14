@@ -169,7 +169,82 @@ const unaimedCases = (ids: SchoolIds): ActionCase[] => [
       formOf({ name: "Role Leak", email: LOGINS.A.teacher, color: "blue" }),
     ],
   },
+  // Assign teachers (CARM-56). Valid inputs on school A's own data; the
+  // cross-school cases arrive with the Phase 4 permission suite (CARM-57).
+  {
+    name: "set a group's lesson times",
+    action: [GROUP_ACTIONS, "saveLessonTimesAction"],
+    args: [
+      ids.group,
+      {
+        times: [
+          {
+            weekday: 6,
+            startMinute: 600,
+            endMinute: 660,
+            roomId: ids.room,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: "set a teacher's levels",
+    action: ["src/app/admin/teachers/actions.ts", "saveTeacherLevelsAction"],
+    args: [ids.teacher, { levelIds: [ids.level], maxHours: 1 }],
+  },
+  ...generatorCases(ids),
 ];
+
+const GROUP_ACTIONS = "src/app/admin/groups/actions.ts";
+const GENERATOR = "src/app/admin/timetable/generator-actions.ts";
+
+/**
+ * Every generator action with valid input. Draft and run ids are the term's
+ * id: the role is checked before any of them is looked up.
+ */
+function generatorCases(ids: SchoolIds): ActionCase[] {
+  const draft = ids.term;
+  const call = (action: string, ...args: unknown[]): ActionCase => ({
+    name: `generator: ${action}`,
+    action: [GENERATOR, action],
+    args,
+  });
+  return [
+    call("checkReadinessAction", { termId: ids.term }),
+    call("setGroupSkippedAction", {
+      termId: ids.term,
+      groupId: ids.group,
+      skipped: true,
+    }),
+    call("startRunAction", { termId: ids.term, mode: "FILL" }),
+    call("getRunAction", draft),
+    call("cancelRunAction", draft),
+    call("getDraftAction", ids.term),
+    call("teacherOptionsAction", { draftId: draft, groupId: ids.group }),
+    call("saveAssignmentAction", {
+      draftId: draft,
+      version: 0,
+      groupId: ids.group,
+      teacherId: ids.teacher,
+    }),
+    call("setAssignmentsLockedAction", {
+      draftId: draft,
+      version: 0,
+      groupIds: [ids.group],
+      locked: true,
+    }),
+    call("checkDraftAction", draft),
+    call("previewApplyAction", { draftId: draft, publish: false }),
+    call("applyDraftAction", {
+      draftId: draft,
+      version: 0,
+      acknowledgedConflictKeys: [],
+      publish: false,
+    }),
+    call("discardDraftAction", draft),
+  ];
+}
 
 /** Every admin action, aimed at school A's own data. */
 const allAdminCases = (ids: SchoolIds) => [

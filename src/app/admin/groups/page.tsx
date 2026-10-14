@@ -13,6 +13,7 @@ import {
   TableCard,
 } from "@/components/admin/list";
 import { EmptyState } from "@/components/empty-state";
+import { lessonTimesLabel } from "@/server/admin/groups/lesson-times";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -178,6 +179,7 @@ async function GroupsPage({ searchParams }: PageProps<"/admin/groups">) {
                           <TableHead>{t("col.level")}</TableHead>
                           <TableHead>{t("col.course")}</TableHead>
                           <TableHead>{t("col.members")}</TableHead>
+                          <TableHead>{t("lessonTimes.column")}</TableHead>
                           <TableHead>{t("col.teachers")}</TableHead>
                           <TableHead>
                             <span className="sr-only">{tc("edit")}</span>
@@ -241,6 +243,15 @@ async function GroupsPage({ searchParams }: PageProps<"/admin/groups">) {
                                     </Badge>
                                   )}
                               </span>
+                            </TableCell>
+                            <TableCell className="tabular-nums">
+                              {lessonTimesLabel(group.lessonTimes, (day) =>
+                                tc(`weekdayShort.${day}` as "weekdayShort.1"),
+                              ) || (
+                                <span className="text-muted-foreground">
+                                  {t("lessonTimes.none")}
+                                </span>
+                              )}
                             </TableCell>
                             <TableCell>
                               {group.teachers.join(", ") || tc("none")}

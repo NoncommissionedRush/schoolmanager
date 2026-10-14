@@ -118,5 +118,40 @@
     "title": "No groups yet",
     "description": "Create group classes and 1-on-1s, then add students.",
     "action": "New group"
+  },
+  "lessonTimes": {
+    "title": "Lesson times",
+    "help": "Every week, in every term this group runs. The generator assigns a teacher who is free at all of them.",
+    "empty": "No lesson times yet. The group is skipped when teachers are assigned.",
+    "day": "Day",
+    "start": "Start",
+    "end": "End",
+    "room": "Room",
+    "rowField": "{field}, lesson time {n}",
+    "chooseRoom": "Choose a room",
+    "roomSeats": "{name} · {capacity, plural, one {# seat} other {# seats}}",
+    "roomOnline": "{name} · online",
+    "duration": "{minutes} min",
+    "quickDurationFor": "{minutes} minutes for lesson time {n}",
+    "add": "Add lesson time",
+    "remove": "Remove lesson time",
+    "removeRow": "Remove lesson time {n}",
+    "summary": "{count, plural, one {# lesson} other {# lessons}} · {hours} h a week.",
+    "ok": "No clashes.",
+    "column": "Lesson times",
+    "none": "No lesson times",
+    "save": "Save lesson times",
+    "saved": "Lesson times of {name} saved.",
+    "archived": "An archived group's lesson times can't be changed.",
+    "roomClash": "{room} is already used by {group} on {weekday}, {from}–{to}.",
+    "changedNote": "These times are used the next time teachers are assigned. The current timetable of {term} still has the old times.",
+    "changeCurrent": "Change the current timetable too…",
+    "warning": {
+      "capacity": "{room} has {capacity, plural, one {# seat} other {# seats}}, but the group has {members} students.",
+      "OUTSIDE_SCHOOL_DAYS": "Not a school day.",
+      "OUTSIDE_SCHOOL_HOURS": "Outside school hours.",
+      "ROOM_ARCHIVED": "This room is archived. Choose another one."
+    },
+    "dayNoSchool": "{day} (no school)"
   }
 }

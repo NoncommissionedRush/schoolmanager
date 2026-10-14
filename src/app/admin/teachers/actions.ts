@@ -19,7 +19,12 @@ import {
 } from "@/server/admin/people/schema";
 import { type ActionResult, msg, ok } from "@/server/admin/result";
 import { assertIds, assertOptionalId } from "@/server/admin/shared";
-import { createTeacher, updateTeacher } from "@/server/admin/teachers/service";
+import { teacherLevelsSchema } from "@/server/admin/teachers/levels";
+import {
+  createTeacher,
+  saveTeacherLevels,
+  updateTeacher,
+} from "@/server/admin/teachers/service";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
 
 const PATH = "/admin/teachers";
@@ -116,5 +121,21 @@ export async function deleteAvailabilityAction(teacherId: string, id: string) {
     await deleteAvailability(scope, teacherId, id);
     revalidatePath(`${PATH}/${teacherId}`);
     return ok(undefined, msg("availability.deleted"));
+  });
+}
+
+/** "Levels they teach" and "Max hours a week" (timetable-generator.md §5.2). */
+export async function saveTeacherLevelsAction(
+  teacherId: string,
+  input: unknown,
+): Promise<ActionResult<undefined>> {
+  return runAdminAction(async (scope) => {
+    assertIds(teacherId);
+    const parsed = parseInput(teacherLevelsSchema, input);
+    if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
+    const saved = await saveTeacherLevels(scope, teacherId, parsed.data);
+    revalidatePath(PATH, "layout");
+    revalidatePath("/admin/timetable", "layout");
+    return ok(undefined, msg("teachers.levels.saved", { name: saved.name }));
   });
 }

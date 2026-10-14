@@ -70,5 +70,22 @@
     "hasSlots": "{name} still teaches {count, plural, one {# timetable slot} other {# timetable slots}} in current or upcoming terms. End or reassign them in the timetable first.",
     "openTimetable": "Open timetable",
     "slotItem": "{group} · {weekday} {time}"
+  },
+  "levels": {
+    "title": "Levels they teach",
+    "quickSelect": "Quick select:",
+    "upTo": "Up to…",
+    "upToLevel": "Up to {level}",
+    "all": "All",
+    "none": "None",
+    "help": "The generator only gives {name} groups of these levels. You can still pick {name} for any group by hand.",
+    "column": "Levels",
+    "empty": "No levels set",
+    "save": "Save levels and hours",
+    "saved": "Levels and hours of {name} saved."
+  },
+  "maxHours": {
+    "label": "Max hours a week",
+    "help": "Leave empty for no limit. The generator never assigns more."
   }
 }

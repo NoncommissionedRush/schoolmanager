@@ -24,11 +24,14 @@ import {
   getTeacher,
   listTerms,
   pickCurrentTerm,
+  rankedLevels,
   teacherSlots,
 } from "@/server/admin/teachers/service";
+import { minutesToHours } from "@/server/admin/teachers/levels";
 import { formatMinutes, toIsoDate } from "@/server/scheduling/time";
 
 import { AvailabilityTab } from "./availability-client";
+import { TeacherLevelsForm } from "./levels-client";
 import { parseTeacherTab } from "./tabs";
 import {
   SetPasswordButton,
@@ -56,12 +59,14 @@ async function TeacherPage({
   const today = schoolToday(viewer.school.timezone);
   const todayIso = toIsoDate(today);
 
-  const [availability, passwordSetAt, terms, school] = await Promise.all([
-    listAvailability(db, teacher.id),
-    lastPasswordChange({ db, ...scope }, teacher.userId),
-    listTerms(db),
-    db.school.findFirstOrThrow({ select: { teachingWeekdays: true } }),
-  ]);
+  const [availability, passwordSetAt, terms, school, levels] =
+    await Promise.all([
+      listAvailability(db, teacher.id),
+      lastPasswordChange({ db, ...scope }, teacher.userId),
+      listTerms(db),
+      db.school.findFirstOrThrow({ select: { teachingWeekdays: true } }),
+      rankedLevels(db),
+    ]);
   const termParam = param(query, "term");
   const term =
     terms.find((candidate) => candidate.id === termParam) ??
@@ -81,6 +86,22 @@ async function TeacherPage({
         </CardHeader>
         <CardContent>
           <TeacherProfileForm teacher={teacher} />
+        </CardContent>
+      </Card>
+      <Card className="lg:col-start-1">
+        <CardContent>
+          <TeacherLevelsForm
+            teacherId={teacher.id}
+            name={teacher.name}
+            levels={levels.map((level) => ({
+              id: level.id,
+              code: level.code,
+              name: level.name,
+              archived: level.archivedAt !== null,
+            }))}
+            levelIds={teacher.levelIds}
+            maxHours={minutesToHours(teacher.maxMinutesPerWeek)}
+          />
         </CardContent>
       </Card>
       <Card className="h-fit">

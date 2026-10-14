@@ -12,5 +12,8 @@
   "dateOrder": "The end date must be on or after the start date.",
   "date": "Enter a valid date.",
   "time": "Enter a valid time.",
-  "unique": "{field} \"{value}\" is already used."
+  "unique": "{field} \"{value}\" is already used.",
+  "lessonTimesOverlap": "Two lesson times of this group overlap.",
+  "lessonTimesMax": "A group can have at most {max} lesson times.",
+  "hoursRange": "Enter hours from {min} to {max}, in quarter hours."
 }

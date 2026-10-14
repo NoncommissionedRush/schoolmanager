@@ -315,10 +315,7 @@ let actions: Map<string, ServerAction>;
  * page imports, so these can't be called over HTTP at all until their
  * screens exist. Remove each entry when its pages land.
  */
-const NOT_WIRED_YET = [
-  // Timetable generator: the Assign teachers screens arrive in CARM-56.
-  "src/app/admin/timetable/generator-actions.ts",
-];
+const NOT_WIRED_YET: string[] = [];
 
 async function newSession(browser: Browser, email: string, home: string) {
   const page = await browser.newPage();
