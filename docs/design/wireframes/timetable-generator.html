@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — Timetable generator admin flow (CARM-54)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .hatch {
+        background: repeating-linear-gradient(
+          135deg,
+          #fde68a55 0 4px,
+          transparent 4px 10px
+        );
+      }
+      .lg-group {
+        background: #eff6ff;
+        border-left: 3px solid #2563eb;
+        color: #1e3a8a;
+      }
+      .lg-one {
+        background: #f5f3ff;
+        border-left: 3px solid #7c3aed;
+        color: #4c1d95;
+      }
+      .lg-ghost {
+        background: #f8fafc;
+        border: 1px dashed #94a3b8;
+        border-left: 3px dashed #94a3b8;
+        color: #475569;
+        opacity: 0.75;
+      }
+      .draft-outline {
+        outline: 1px dashed #94a3b8;
+        outline-offset: -1px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Timetable generator</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* --------------------------------------------------------------- helpers */
+      const HOUR = 44;
+      const START = 8,
+        END = 21;
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          destructive: "bg-destructive text-white",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const badge = (t, tone = "muted") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border ${c}">${t}</span>`;
+      };
+      const alert = (tone, title, body = "", actions = "") => {
+        const c = {
+          warning: "bg-amber-50 border-amber-300 text-amber-900",
+          danger: "bg-red-50 border-red-300 text-red-900",
+          info: "bg-blue-50 border-blue-300 text-blue-900",
+          success: "bg-green-50 border-green-300 text-green-900",
+        }[tone];
+        const icon = { warning: "⚠", danger: "⛔", info: "ℹ", success: "✓" }[
+          tone
+        ];
+        return `<div role="${tone === "danger" ? "alert" : "status"}" class="rounded-lg border p-3 flex gap-3 ${c}"><span aria-hidden="true">${icon}</span><div class="flex-1"><div class="font-medium">${title}</div>${body ? `<div class="mt-1">${body}</div>` : ""}${actions ? `<div class="mt-2 flex flex-wrap gap-2">${actions}</div>` : ""}</div></div>`;
+      };
+      const sel = (label, value) =>
+        `<div class="space-y-1"><label class="block font-medium">${label}</label><button class="h-9 w-full rounded-md border border-input bg-white px-3 text-left">${value} ▾</button></div>`;
+      const toMin = (t) => {
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + m;
+      };
+      const yOf = (t) => ((toMin(t) - START * 60) / 60) * HOUR;
+      const height = (a, b) => ((toMin(b) - toMin(a)) / 60) * HOUR;
+      const dialog = (title, body, footer, w = "max-w-lg") => `
+        <div class="absolute inset-0 bg-black/50 grid place-items-start justify-center p-10 z-30 overflow-auto">
+          <div role="dialog" aria-modal="true" aria-label="${title}" class="bg-white rounded-lg shadow-lg w-full ${w} p-6">
+            <div class="flex items-start justify-between mb-4"><h2 class="text-lg font-semibold">${title}</h2><button aria-label="Close" class="w-8 h-8 rounded-md hover:bg-muted">✕</button></div>
+            <div class="space-y-4">${body}</div>
+            <div class="flex justify-end gap-2 mt-6">${footer}</div>
+          </div>
+        </div>`;
+      const sheet = (title, body, footer = "", w = 480) => `
+        <div class="absolute inset-0 bg-black/50 z-30 flex justify-end">
+          <aside role="dialog" aria-modal="true" aria-label="${title}" class="bg-white h-full shadow-lg flex flex-col" style="width:${w}px">
+            <div class="flex items-center justify-between p-4 border-b border-border"><h2 class="text-lg font-semibold">${title}</h2><button aria-label="Close" class="w-8 h-8 rounded-md hover:bg-muted">✕</button></div>
+            <div class="flex-1 overflow-auto p-4 space-y-4">${body}</div>
+            ${footer ? `<div class="p-4 border-t border-border flex justify-end gap-2">${footer}</div>` : ""}
+          </aside>
+        </div>`;
+      const toast = (text, action = "") =>
+        `<div role="status" class="absolute bottom-4 right-4 z-40 bg-white border border-border shadow-lg rounded-lg px-4 py-3 flex items-center gap-4 max-w-md"><span>${text}</span>${action ? `<button class="font-medium text-primary underline">${action}</button>` : ""}</div>`;
+
+      /* --------------------------------------------------------------- app shell */
+      const shell = (content, overlay = "") => `
+        <div class="relative bg-muted w-[1280px] min-h-[820px] rounded-lg overflow-hidden border border-slate-300 flex">
+          <nav aria-label="Main" class="w-56 bg-white border-r border-border p-3 space-y-1 text-sm shrink-0">
+            <div class="font-semibold px-2 py-2">Lingua School</div>
+            <div class="px-2 pt-3 pb-1 text-xs text-muted-foreground uppercase">Schedule</div>
+            <div class="px-2 py-1.5 rounded-md">📅 Timetable</div>
+            <div class="px-2 py-1.5 rounded-md">📝 Lesson log</div>
+            <div class="px-2 py-1.5 rounded-md">🗓 Absences & replacements</div>
+            <div class="px-2 py-1.5 rounded-md bg-accent text-accent-foreground font-medium" aria-current="page">✨ Auto-generate</div>
+            <div class="px-2 pt-3 pb-1 text-xs text-muted-foreground uppercase">People</div>
+            <div class="px-2 py-1.5">🎓 Students</div>
+            <div class="px-2 py-1.5">🧑‍🏫 Teachers</div>
+            <div class="px-2 pt-3 pb-1 text-xs text-muted-foreground uppercase">Academics</div>
+            <div class="px-2 py-1.5">📚 Courses & groups</div>
+          </nav>
+          <main class="flex-1 min-w-0 p-6 space-y-4">${content}</main>
+          ${overlay}
+        </div>`;
+
+      const header = (o = {}) => {
+        const termBadge = o.published
+          ? badge("Published 1 Sep", "success")
+          : badge("Draft term");
+        const primary = o.running
+          ? `<span class="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-50 border border-blue-300 text-blue-800 font-medium"><span class="animate-spin">◌</span> Generating… 60 %</span>`
+          : o.noPrimary
+            ? ""
+            : btn(o.hasDraft ? "Regenerate…" : "✨ Generate draft…");
+        return `
+        <div class="flex items-center gap-3 flex-wrap">
+          <h1 class="text-2xl font-semibold mr-4">Auto-generate timetable</h1>
+          <button class="h-9 rounded-md border border-input bg-white px-3">Term: ${o.term || "Spring 2027"} ▾</button>${termBadge}
+          <div class="flex-1"></div>
+          <button aria-label="More actions" class="h-9 w-9 rounded-md border border-input bg-white">⋯</button>
+          ${primary}
+        </div>`;
+      };
+      const tabs = (active, o = {}) => {
+        const t = (k, n, label, status) =>
+          `<button role="tab" aria-selected="${active === k}" class="px-4 py-2 -mb-px border-b-2 ${active === k ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground"}"><span class="font-medium">${n} ${label}</span> <span class="ml-2 text-xs ${o.statusTone?.[k] || "text-muted-foreground"}">${status}</span></button>`;
+        return `<div role="tablist" class="flex border-b border-slate-300">
+          ${t("demand", "①", "Weekly needs", o.demand ?? "62 groups · 3 incomplete")}
+          ${t("draft", "②", "Draft", o.draft ?? "Score 86 · 4 not placed")}
+        </div>`;
+      };
+
+      /* --------------------------------------------------------------- demand */
+      const DEMAND = [
+        // name, type, level, students, lessons, len, teacher, room, fixed, status
+        [
+          "A1 Beginners Mon/Wed",
+          "g",
+          "A1",
+          8,
+          2,
+          90,
+          "Ana Kral",
+          "Any",
+          "—",
+          "",
+        ],
+        ["A2 Kids", "g", "A2", 9, 2, 60, "Any of 3", "Room 3", "Sat 09:00", ""],
+        [
+          "A2 Morning",
+          "g",
+          "A2",
+          6,
+          3,
+          60,
+          "Ana Kral",
+          "Physical ≥ 6",
+          "—",
+          "",
+        ],
+        [
+          "B1 Evening",
+          "g",
+          "B1",
+          7,
+          2,
+          90,
+          "Tomas Horvat",
+          "Physical ≥ 7",
+          "—",
+          "",
+        ],
+        [
+          "B1 Grammar 1-on-1",
+          "o",
+          "B1",
+          1,
+          1,
+          60,
+          "Tomas Horvat",
+          "Any",
+          "—",
+          "",
+        ],
+        [
+          "B2 Conversation",
+          "g",
+          "B2",
+          8,
+          2,
+          90,
+          "Eva Simon",
+          "Any",
+          "—",
+          "new",
+        ],
+        ["C1 Business", "g", "C1", 6, "", "", "", "Any", "—", "inc"],
+        [
+          "Jan Novak 1-on-1",
+          "o",
+          "B2",
+          1,
+          1,
+          45,
+          "Eva Simon",
+          "Online",
+          "—",
+          "",
+        ],
+        ["B2 Exam prep", "g", "B2", 5, "", "", "", "", "", "off"],
+      ];
+      const demandRow = (r, i, selected) => {
+        const [n, k, lv, st, les, len, t, room, fx, s] = r;
+        if (s === "off")
+          return `<tr class="border-t border-border text-muted-foreground"><td class="px-3 py-2"></td><td class="px-3 py-2">○ ${n}</td><td colspan="7" class="px-3 py-2 italic">Off this term</td><td class="px-3 py-2"><button class="text-primary underline">Turn on</button></td></tr>`;
+        const inc = s === "inc";
+        const cell = (v, w = "w-16", invalid = false) =>
+          `<input aria-label="${w === "w-14" ? "Lessons a week" : "Value"}, ${n}" value="${v}" class="h-8 ${w} rounded-md border ${invalid ? "border-red-600 bg-red-50" : "border-input"} px-2 tnum" ${invalid ? 'aria-invalid="true"' : ""}/>`;
+        return `<tr class="border-t border-border ${inc ? "bg-amber-50" : selected ? "bg-accent" : "bg-white"}">
+          <td class="px-3 py-2"><input type="checkbox" aria-label="Select ${n}" ${selected ? "checked" : ""}/></td>
+          <td class="px-3 py-2 font-medium">${inc ? `<span class="text-amber-700" title="Incomplete — skipped when generating">⚠<span class="sr-only">Incomplete</span></span> ` : ""}<a class="underline decoration-slate-300" href="#">${n}</a> ${s === "new" ? badge("New", "info") : ""}</td>
+          <td class="px-3 py-2">${k === "g" ? "👥 Group" : "👤 1-on-1"}</td>
+          <td class="px-3 py-2">${lv}</td>
+          <td class="px-3 py-2 tnum">${st}</td>
+          <td class="px-3 py-2">${cell(les, "w-14", inc)}</td>
+          <td class="px-3 py-2"><button class="h-8 w-24 rounded-md border ${inc ? "border-red-600 bg-red-50" : "border-input bg-white"} px-2 text-left tnum">${len ? len + " min" : "—"} ▾</button></td>
+          <td class="px-3 py-2"><button class="h-8 w-40 rounded-md border ${inc ? "border-red-600 bg-red-50" : "border-input bg-white"} px-2 text-left truncate">${t || "Choose"} ▾</button></td>
+          <td class="px-3 py-2">${room}</td>
+          <td class="px-3 py-2">${fx === "—" ? "—" : `📌 ${fx}`}</td>
+          <td class="px-3 py-2"><button aria-label="Row actions, ${n}" class="w-8 h-8 rounded-md hover:bg-muted">⋯</button></td>
+        </tr>`;
+      };
+      const demandTable = (o = {}) => `
+        <div class="bg-white rounded-lg border border-border">
+          ${
+            o.bulk
+              ? `<div role="toolbar" aria-label="Bulk actions" class="flex items-center gap-2 p-3 border-b border-border bg-accent">
+                  <strong>3 selected</strong>
+                  ${btn("Set lessons a week", "outline")}${btn("Set length", "outline")}${btn("Set teacher", "outline")}${btn("Set room", "outline")}${btn("Turn off", "outline")}
+                  <div class="flex-1"></div>${btn("Clear selection", "ghost")}
+                </div>`
+              : `<div class="flex items-center gap-2 p-3 border-b border-border flex-wrap">
+                  <input placeholder="Search groups" class="h-9 w-56 rounded-md border border-input px-3"/>
+                  <button class="h-9 rounded-md border border-input bg-white px-3">Level: Any ▾</button>
+                  <button class="h-9 rounded-md border border-input bg-white px-3">Teacher: Any ▾</button>
+                  <div role="group" aria-label="Show" class="inline-flex rounded-md border border-input overflow-hidden"><button class="px-3 h-9 bg-muted font-medium">All</button><button class="px-3 h-9 border-l border-input">Incomplete (3)</button><button class="px-3 h-9 border-l border-input">Off (1)</button></div>
+                  <div class="flex-1"></div><a href="#" class="text-primary underline">+ Add groups</a>
+                </div>`
+          }
+          ${
+            o.bulk
+              ? `<div class="relative"><div class="absolute left-[420px] top-1 z-20 bg-white border border-border shadow-lg rounded-lg p-4 w-72 space-y-3">
+                  <div class="font-medium">Set length</div>${sel("Length", "90 min")}${btn("Apply to 3 groups", "primary", "w-full justify-center")}
+                </div></div>`
+              : ""
+          }
+          <table class="w-full text-left">
+            <thead class="bg-muted text-xs text-muted-foreground"><tr>
+              <th class="px-3 py-2"><input type="checkbox" aria-label="Select all shown"/></th>
+              <th class="px-3 py-2">Group ↑</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Level</th><th class="px-3 py-2">Students</th>
+              <th class="px-3 py-2">Lessons a week</th><th class="px-3 py-2">Length</th><th class="px-3 py-2">Teacher</th><th class="px-3 py-2">Room</th><th class="px-3 py-2">Fixed times</th><th class="px-3 py-2"><span class="sr-only">Actions</span></th>
+            </tr></thead>
+            <tbody>${DEMAND.map((r, i) => demandRow(r, i, o.bulk && [1, 2, 3].includes(i))).join("")}</tbody>
+          </table>
+          <div class="border-t border-border px-3 py-2 text-muted-foreground bg-muted tnum">61 groups on · 148 lessons a week · 196 teaching hours · 3 incomplete</div>
+        </div>`;
+      const precheck = (ok) =>
+        ok
+          ? alert("success", "Before you generate: Ready to generate.")
+          : `<details open class="bg-white rounded-lg border border-border p-4"><summary class="font-medium cursor-pointer">Before you generate · 4 things to check</summary>
+              <ul class="mt-3 space-y-2">
+                <li class="flex gap-2 items-start"><span class="text-amber-700">⚠</span><span class="flex-1">3 groups are incomplete and will be skipped.</span><button class="text-primary underline">Show</button></li>
+                <li class="flex gap-2 items-start"><span class="text-amber-700">⚠</span><span class="flex-1">Tomas Horvat needs 22 h but is free for 18 h.</span><button class="text-primary underline">Availability</button><button class="text-primary underline">Show rows</button></li>
+                <li class="flex gap-2 items-start"><span class="text-amber-700">⚠</span><span class="flex-1">A2 Kids needs 9 seats; the largest suitable room has 8.</span><button class="text-primary underline">Edit details</button></li>
+                <li class="flex gap-2 items-start"><span class="text-red-700">⛔</span><span class="flex-1">A2 Kids: the fixed time Sat 09:00 has a conflict.</span><button class="text-primary underline">Edit details</button></li>
+              </ul></details>`;
+
+      function demand(state) {
+        if (state === 4)
+          return shell(`${header({ noPrimary: false })}${tabs("demand", { demand: "Not started", draft: "No draft yet" })}
+            <div class="bg-white rounded-lg border border-border p-12 text-center space-y-3 max-w-xl mx-auto mt-8">
+              <div class="text-4xl" aria-hidden="true">📋</div>
+              <h2 class="text-lg font-semibold">No weekly needs for Spring 2027 yet</h2>
+              <p class="text-muted-foreground">Copy them from Autumn 2026 and adjust what changed.</p>
+              <div class="flex gap-2 justify-center">${btn("Copy from Autumn 2026")}${btn("Start from scratch", "outline")}</div>
+            </div>`);
+        if (state === 5)
+          return shell(`${header({ noPrimary: true })}
+            <div class="bg-white rounded-lg border border-border p-12 text-center space-y-3 max-w-xl mx-auto mt-8">
+              <div class="text-4xl" aria-hidden="true">👥</div>
+              <h2 class="text-lg font-semibold">No groups to schedule</h2>
+              <p class="text-muted-foreground">Create groups and enrol students first.</p>
+              ${btn("Go to Courses & groups")}
+            </div>`);
+        if (state === 6)
+          return shell(`${header({ running: true })}${tabs("demand", { draft: "Generating… 60 %" })}
+            ${alert("info", "Locked while generating", "Weekly needs can't change while a run uses them. Started by Anna Novak at 10:41.")}
+            <div class="opacity-60 pointer-events-none">${demandTable()}</div>`);
+        const overlay =
+          state === 2
+            ? sheet(
+                "Weekly needs: A2 Kids",
+                `
+                <h3 class="font-semibold">Lessons</h3>
+                <div class="grid grid-cols-2 gap-3">${sel("Lessons a week", "2")}${sel("Length", "60 min")}</div>
+                <h3 class="font-semibold pt-2">Teacher</h3>
+                <fieldset class="space-y-2"><legend class="sr-only">Teacher</legend>
+                  <label class="flex gap-2"><input type="radio" name="t"/> Fixed teacher</label>
+                  <label class="flex gap-2"><input type="radio" name="t" checked/> Any of these teachers</label>
+                  <div class="flex flex-wrap gap-1 pl-6">${badge("Ana Kral ✕")}${badge("Eva Simon ✕")}${badge("Peter Varga ✕")}<button class="text-primary underline text-xs">+ add</button></div>
+                </fieldset>
+                <p class="text-muted-foreground text-xs pl-6">Ana Kral is free for 24 h a week in school hours and has 19 h of needs this term.</p>
+                <h3 class="font-semibold pt-2">Room</h3>
+                <fieldset class="space-y-2"><legend class="sr-only">Room</legend>
+                  <label class="flex gap-2"><input type="radio" name="r"/> Any suitable room</label>
+                  <label class="flex gap-2"><input type="radio" name="r"/> Physical room</label>
+                  <label class="flex gap-2"><input type="radio" name="r"/> Online</label>
+                  <label class="flex gap-2"><input type="radio" name="r" checked/> Specific rooms</label>
+                  <div class="pl-6">${badge("Room 3 ✕")} ${badge("Room 4 ✕")}</div>
+                </fieldset>
+                <div class="space-y-1"><label class="font-medium block">Minimum seats</label><input class="h-9 w-24 rounded-md border border-input px-3" value="9"/><p class="text-xs text-muted-foreground">9 students enrolled</p></div>
+                <h3 class="font-semibold pt-2">Fixed times</h3>
+                <p class="text-xs text-muted-foreground">Lessons with a fixed time are placed exactly there, or reported as not placed.</p>
+                <div class="flex gap-2 items-end">${sel("Day", "Saturday")}${sel("Start", "09:00")}<button aria-label="Remove fixed time" class="h-9 w-9 rounded-md hover:bg-muted">✕</button></div>
+                ${alert("danger", "Conflict", "Room 3 is already used by A1 Weekend on Saturdays 09:00–10:30 (14 dates). Choose another time or allow Room 4.")}
+                <button class="text-primary underline">+ Add fixed time</button>
+                <h3 class="font-semibold pt-2">Preferred time of day <span class="text-xs text-muted-foreground font-normal">(Q3)</span></h3>
+                <div role="group" class="inline-flex rounded-md border border-input overflow-hidden"><button class="px-3 h-9 bg-muted font-medium">Morning</button><button class="px-3 h-9 border-l border-input">Afternoon</button><button class="px-3 h-9 border-l border-input">Evening</button></div>`,
+                btn("Cancel", "outline") + btn("Save"),
+              )
+            : state === 3
+              ? dialog(
+                  "Copy weekly needs",
+                  `${sel("Copy from", "Autumn 2026")}
+                  <p class="text-muted-foreground">Autumn 2026 has no weekly needs; they're worked out from its timetable slots.</p>
+                  <p>Copy needs for <strong>58 groups</strong>. 4 groups have no needs in Autumn 2026 and stay empty. 2 archived groups are skipped.</p>
+                  <fieldset class="space-y-2"><legend class="sr-only">Rows</legend>
+                    <label class="flex gap-2"><input type="radio" name="c" checked/> Only fill empty rows</label>
+                    <label class="flex gap-2"><input type="radio" name="c"/> Overwrite all rows</label>
+                  </fieldset>`,
+                  btn("Cancel", "outline") + btn("Copy"),
+                )
+              : "";
+        return shell(
+          `${header()}${tabs("demand")}${precheck(state === 7)}${demandTable({ bulk: state === 1 })}`,
+          overlay,
+        );
+      }
+
+      /* --------------------------------------------------------------- generate */
+      function generate(state) {
+        const base = (o) =>
+          `${header(o)}${tabs("demand")}${precheck(true)}${demandTable()}`;
+        if (state === 0)
+          return shell(
+            base({}),
+            dialog(
+              "Generate a draft for Spring 2027",
+              `
+              <p><strong>61 groups, 148 lessons a week.</strong></p>
+              ${alert("warning", "3 incomplete groups are skipped.", "", `<button class="underline">Review</button>`)}
+              <fieldset class="space-y-2 border border-border rounded-md p-3"><legend class="px-1 font-medium">This term already has 12 slots.</legend>
+                <label class="flex gap-2"><input type="radio" name="e" checked/> Keep them as they are <span class="text-muted-foreground">(imported as locked)</span></label>
+                <label class="flex gap-2"><input type="radio" name="e"/> Let the generator rearrange them</label>
+              </fieldset>
+              <details class="border border-border rounded-md p-3"><summary class="font-medium cursor-pointer">Preferences</summary>
+                <div class="grid grid-cols-[1fr_auto] gap-2 mt-3 items-center">
+                  <span>No gaps for teachers</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">High ▾</button>
+                  <span>No gaps for students</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button>
+                  <span>Spread a group's lessons over the week</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button>
+                  <span>Same time each lesson day</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button>
+                  <span>Teacher's daily maximum</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Normal ▾</button>
+                  <span>Preferred rooms</span><button class="h-8 w-28 rounded-md border border-input px-2 text-left">Low ▾</button>
+                </div>
+                <button class="text-primary underline text-xs mt-2">Reset to school defaults</button>
+              </details>
+              <details class="border border-border rounded-md p-3"><summary class="font-medium cursor-pointer">Advanced</summary>
+                <div class="grid grid-cols-2 gap-3 mt-3">${sel("Time limit", "Standard (2 min)")}<div class="space-y-1"><label class="font-medium block">Seed</label><div class="h-9 flex items-center text-muted-foreground">New random seed · <button class="text-primary underline ml-1">Use seed…</button></div></div></div>
+              </details>`,
+              btn("Cancel", "outline") + btn("Generate"),
+            ),
+          );
+        if (state === 1)
+          return shell(
+            `${header({ hasDraft: true, published: true, term: "Autumn 2026" })}${tabs("draft")}`,
+            dialog(
+              "Regenerate the draft for Autumn 2026",
+              `
+              <p><strong>61 groups, 148 lessons a week.</strong></p>
+              <div class="space-y-1"><label class="font-medium block">Apply from</label><button class="h-9 w-48 rounded-md border border-input bg-white px-3 text-left">Mon 3 Nov 2026 📅</button><p class="text-xs text-muted-foreground">Lessons before this date are not touched.</p></div>
+              <div class="rounded-md bg-muted p-3">Keeps <strong>23 locked slots</strong>. 121 unlocked slots may move.
+                <label class="flex gap-2 mt-2"><input type="checkbox"/> Also unlock slots I moved by hand</label></div>
+              <details class="border border-border rounded-md p-3"><summary class="font-medium cursor-pointer">Preferences</summary></details>
+              <details class="border border-border rounded-md p-3"><summary class="font-medium cursor-pointer">Advanced</summary></details>`,
+              btn("Cancel", "outline") + btn("Generate"),
+            ),
+          );
+        if (state === 2)
+          return shell(
+            base({}),
+            dialog(
+              "Generate a draft for Spring 2027",
+              `${alert("info", "No complete weekly needs yet. Fill in at least one group.")}`,
+              btn("Cancel", "outline") + btn("Go to weekly needs"),
+            ),
+          );
+        if (state === 3)
+          return shell(
+            base({}),
+            dialog(
+              "Generate a draft for Spring 2027",
+              `${alert("warning", "Peter Varga is already generating this term (started 10:41).")}${runCard(1)}`,
+              btn("Close", "outline"),
+            ),
+          );
+        return "";
+      }
+
+      /* --------------------------------------------------------------- run */
+      const runCard = (phase, slow = false) => `
+        <div class="bg-white rounded-lg border border-border p-6 space-y-4 max-w-2xl">
+          <h2 class="text-lg font-semibold">Generating a draft for Spring 2027</h2>
+          <p class="text-muted-foreground text-xs">Started by Anna Novak at 10:41</p>
+          <ol class="space-y-2">
+            <li class="flex gap-3 items-center"><span aria-hidden="true">${phase === 0 ? "●" : "✓"}</span><span class="font-medium w-56">Placing lessons</span><span class="tnum text-muted-foreground">${phase === 0 ? "132 of 148" : "144 of 148"}</span></li>
+            <li class="flex gap-3 items-center ${phase === 0 ? "text-muted-foreground" : ""}"><span aria-hidden="true">${phase === 0 ? "○" : "●"}</span><span class="font-medium w-56">Improving the timetable</span><span class="tnum text-muted-foreground">${phase === 0 ? "" : "score 74 → 81"}</span></li>
+          </ol>
+          <div role="progressbar" aria-valuenow="${slow ? 100 : phase === 0 ? 20 : 60}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${phase === 0 ? "Placing lessons, 132 of 148" : "Improving the timetable, score 81"}" class="h-2 rounded-full bg-muted overflow-hidden"><div class="h-full bg-primary" style="width:${slow ? 100 : phase === 0 ? 20 : 60}%"></div></div>
+          <div class="flex items-center gap-3"><span class="tnum">${slow ? "2:34 of about 2:00" : phase === 0 ? "0:24 of about 2:00" : "1:12 of about 2:00"}</span>${slow ? `<span class="text-amber-700 font-medium">Taking longer than expected…</span>` : ""}</div>
+          <div class="flex items-center gap-3 border-t border-border pt-4">
+            <span class="flex-1 text-muted-foreground">You can leave this page; the run continues.</span>
+            ${phase === 0 ? btn("Cancel run", "outline") : btn("Stop and keep best", "outline")}
+          </div>
+        </div>`;
+      function run(state) {
+        const head = `${header({ running: state < 3 })}${tabs("draft", { draft: state < 3 ? "Generating… 60 %" : "No draft yet" })}`;
+        if (state === 0) return shell(head + runCard(0));
+        if (state === 1) return shell(head + runCard(1));
+        if (state === 2) return shell(head + runCard(1, true));
+        if (state === 3)
+          return shell(
+            head +
+              alert(
+                "danger",
+                "The run failed. Your weekly needs and the previous draft are unchanged.",
+                "",
+                btn("Try again", "outline") + btn("Copy error ID", "ghost"),
+              ),
+          );
+        if (state === 4)
+          return shell(
+            `${header({ hasDraft: true })}${tabs("draft")}${summary()}${grid({})}`,
+            toast(
+              "Draft ready: 144 of 148 lessons placed, score 86.",
+              "Show not placed",
+            ),
+          );
+        return "";
+      }
+
+      /* --------------------------------------------------------------- draft */
+      const summary = (o = {}) => `
+        <div class="rounded-lg border border-blue-300 bg-blue-50 text-blue-900 px-4 py-2 flex items-center gap-3">
+          <span aria-hidden="true">📝</span><strong>Draft · not visible to teachers or students</strong>
+          <span class="flex-1"></span><span class="text-xs">Generated 14 Oct 10:42 by Anna Novak · seed 51823</span>
+        </div>
+        ${o.stale ? alert("warning", "Things changed since this draft was generated:", "weekly needs of 3 groups · Tomas Horvat's availability · 2 new students in A2 Kids", btn("Check draft", "outline") + btn("Regenerate…", "ghost")) : ""}
+        ${o.nothing ? alert("danger", "No lessons could be placed. The most common reason: no teacher has free time that fits.", "", btn("Show not placed", "outline")) : ""}
+        <div class="flex gap-3 items-stretch">
+          <div class="bg-white rounded-lg border border-border p-3 w-44"><div class="text-xs text-muted-foreground">Placed</div><div class="text-xl font-semibold tnum">${o.nothing ? "0" : "144"} / 148</div><div class="text-xs">lessons</div></div>
+          <div class="bg-white rounded-lg border border-border p-3 w-52 relative"><div class="text-xs text-muted-foreground">Quality score</div><div class="text-xl font-semibold tnum">${o.nothing ? "—" : "86 / 100"} ${o.nothing ? "" : `<span class="text-sm text-green-700">▲ +5<span class="sr-only"> up 5 from the previous run</span></span>`}</div><button class="text-xs text-primary underline">Details</button>
+            ${
+              o.score
+                ? `<div class="absolute left-0 top-full mt-2 z-20 w-96 bg-white border border-border rounded-lg shadow-lg p-4 space-y-2">
+                  <div class="font-medium">What lowers the score</div>
+                  ${[
+                    ["Teacher gaps", "High", "12 teacher gaps", 45],
+                    [
+                      "Same time each lesson day",
+                      "Normal",
+                      "6 groups at different times",
+                      25,
+                    ],
+                    [
+                      "Spread over the week",
+                      "Normal",
+                      "3 groups twice on one day",
+                      18,
+                    ],
+                    [
+                      "Preferred rooms",
+                      "Low",
+                      "9 lessons not in a preferred room",
+                      12,
+                    ],
+                  ]
+                    .map(
+                      ([p, l, c, w]) =>
+                        `<div class="grid grid-cols-[1fr_auto] gap-x-2 items-center"><div><div>${c}</div><div class="text-xs text-muted-foreground">${p} · ${l}</div></div><button class="text-xs text-primary underline">Show</button><div class="col-span-2 h-1.5 bg-muted rounded-full"><div class="h-full bg-blue-600 rounded-full" style="width:${w}%"></div></div></div>`,
+                    )
+                    .join("")}
+                </div>`
+                : ""
+            }
+          </div>
+          <div class="bg-white rounded-lg border ${o.allPlaced ? "border-border" : "border-red-300"} p-3 w-48"><div class="text-xs text-muted-foreground">Not placed</div><div class="text-xl font-semibold tnum ${o.allPlaced ? "text-green-700" : "text-red-700"}">${o.allPlaced ? "None" : o.nothing ? "148 lessons" : "4 lessons"}</div>${o.allPlaced ? "" : `<button class="text-xs text-primary underline">${o.nothing ? "61 groups" : "3 groups"} · Show</button>`}</div>
+          <div class="bg-white rounded-lg border border-border p-3 w-44"><div class="text-xs text-muted-foreground">Issues</div><div class="text-xl font-semibold tnum">${o.stale ? "1 · 3" : "0 · 2"}</div><div class="text-xs">${o.stale ? "conflict · warnings" : "conflicts · warnings"} · <button class="text-primary underline">Show</button></div></div>
+          <div class="flex-1"></div>
+          <div class="flex flex-col gap-2 justify-center">${o.compareBtn ? btn("Compare to current", "outline") : ""}${btn("Publish…")}</div>
+        </div>`;
+
+      const DRAFT = [
+        // room, from, to, group, teacher, kind, flags
+        ["Room 1", "09:00", "10:00", "A2 Morning", "Ana Kral", "g", "lock"],
+        [
+          "Room 1",
+          "17:00",
+          "18:30",
+          "B1 Evening",
+          "Tomas Horvat",
+          "g",
+          "lock moved",
+        ],
+        [
+          "Room 2",
+          "10:00",
+          "11:00",
+          "B1 Grammar 1-on-1",
+          "Tomas Horvat",
+          "o",
+          "new",
+        ],
+        [
+          "Room 2",
+          "16:00",
+          "17:30",
+          "B2 Conversation",
+          "Eva Simon",
+          "g",
+          "pref changed",
+        ],
+        ["Room 3", "09:00", "10:00", "A2 Kids", "Ana Kral", "g", "pin"],
+        ["Room 3", "15:00", "16:30", "A1 Beginners", "Ana Kral", "g", "pref"],
+        ["Online 1", "18:00", "19:00", "C1 Business", "Peter Varga", "g", ""],
+        [
+          "Online 1",
+          "19:00",
+          "19:45",
+          "Jan Novak 1-on-1",
+          "Eva Simon",
+          "o",
+          "warn",
+        ],
+      ];
+      const REMOVED = [
+        ["Room 2", "17:30", "19:00", "B1 Evening", "Tomas Horvat"],
+      ];
+      const ROOMS = ["Room 1", "Room 2", "Room 3", "Online 1"];
+      const draftBlock = (s, i, o) => {
+        const [, a, b, g, t, k, f] = s;
+        const has = (x) => f.split(" ").includes(x);
+        const flags = [];
+        if (has("warn"))
+          flags.push(
+            `<span class="text-amber-700" title="1 warning">⚠<span class="sr-only">1 warning</span></span>`,
+          );
+        if (has("pref"))
+          flags.push(
+            `<span class="text-blue-700" title="Tomas has a 90-min gap before this">✨<span class="sr-only">1 preference not met</span></span>`,
+          );
+        const lead = (has("lock") ? "🔒" : "") + (has("pin") ? "📌" : "");
+        let cmp = "";
+        if (o.compare) {
+          if (has("new")) cmp = badge("＋ New", "success");
+          else if (has("moved")) cmp = badge("↔ Was Tue 17:30", "warning");
+          else if (has("changed"))
+            cmp = badge("✎ Was Ana Kral · Room 1", "warning");
+        }
+        const dim = o.compare && !cmp ? "opacity-60" : "";
+        const sr = `${g}, Monday ${a} to ${b}, ${t}${has("lock") ? ", locked" : ""}${has("pin") ? ", fixed time" : ""}`;
+        return `<button class="absolute inset-x-1 rounded-sm px-2 py-1 text-left text-xs overflow-hidden draft-outline ${k === "g" ? "lg-group" : "lg-one"} ${o.sel === i ? "ring-2 ring-ring shadow-sm" : ""} ${dim}" style="top:${yOf(a)}px;height:${height(a, b)}px" aria-label="${sr}">
+          <div class="flex gap-1 items-center"><span aria-hidden="true">${lead}</span><span class="tnum">${a}–${b}</span><span class="flex-1"></span>${flags.join("")}</div>
+          <div class="font-semibold truncate">${k === "g" ? "👥" : "👤"} ${g}</div><div class="truncate">${t}</div>${cmp ? `<div class="mt-0.5">${cmp}</div>` : ""}
+        </button>`;
+      };
+      const grid = (o) => {
+        const axis = `<div class="relative" style="height:${(END - START) * HOUR}px">${Array.from({ length: END - START }, (_, i) => `<div class="absolute right-2 text-xs text-muted-foreground tnum" style="top:${i * HOUR - 6}px">${String(START + i).padStart(2, "0")}:00</div>`).join("")}</div>`;
+        const lines = Array.from(
+          { length: END - START },
+          (_, i) =>
+            `<div class="absolute inset-x-0 border-t border-border" style="top:${i * HOUR}px"></div>`,
+        ).join("");
+        return `
+        <div class="bg-white rounded-lg border border-border">
+          <div class="flex items-center gap-2 p-3 border-b border-border flex-wrap">
+            <div role="group" aria-label="View" class="inline-flex rounded-md border border-input overflow-hidden"><button class="px-3 h-9 bg-muted font-medium">By room</button><button class="px-3 h-9 border-l border-input">Week</button></div>
+            <div class="inline-flex gap-1">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => `<button class="px-3 h-9 rounded-md ${i === 0 ? "bg-primary text-white" : "border border-input"}">${d}</button>`).join("")}</div>
+            <button class="h-9 rounded-md border border-input bg-white px-3">Teacher: Any ▾</button>
+            <button class="h-9 rounded-md border border-input bg-white px-3">Group: Any ▾</button>
+            <div class="flex-1"></div>
+            ${o.compareToggle ? `<div role="group" aria-label="Mode" class="inline-flex rounded-md border border-input overflow-hidden"><button class="px-3 h-9 ${o.compare ? "" : "bg-muted font-medium"}">Draft</button><button class="px-3 h-9 border-l border-input ${o.compare ? "bg-muted font-medium" : ""}">Compare</button></div>` : ""}
+            ${btn("🔒 Lock… ▾", "outline")}${btn("Not placed 4", "outline", "text-red-700")}${btn("+ New slot", "outline")}
+          </div>
+          ${o.compare ? `<div class="px-3 py-2 border-b border-border bg-muted flex items-center gap-3 flex-wrap"><span class="tnum">118 unchanged · 9 moved · 5 other changes · 12 new · 7 removed</span><span class="text-muted-foreground">· 11 teachers and 94 students get a different week.</span><span class="flex-1"></span><button class="text-primary underline">List changes</button></div>` : ""}
+          <div class="flex overflow-x-auto">
+            <div class="w-14 shrink-0 pt-8">${axis}</div>
+            ${ROOMS.map(
+              (r) => `<div class="flex-1 min-w-[180px] border-l border-border">
+                <h3 class="h-8 px-2 flex items-center gap-1 text-xs font-semibold border-b border-border">${r} <span class="font-normal text-muted-foreground">${r.startsWith("Online") ? "Online" : "8 seats"}</span></h3>
+                <div class="relative" style="height:${(END - START) * HOUR}px">${lines}
+                  ${
+                    o.compare
+                      ? REMOVED.filter((x) => x[0] === r)
+                          .map(
+                            (x) =>
+                              `<div class="absolute inset-x-1 rounded-sm px-2 py-1 text-xs lg-ghost" style="top:${yOf(x[1])}px;height:${height(x[1], x[2])}px"><div class="tnum line-through">${x[1]}–${x[2]}</div><div>🚫 ${x[3]}</div>${badge("Removed")}</div>`,
+                          )
+                          .join("")
+                      : ""
+                  }
+                  ${DRAFT.map((s, i) => (s[0] === r ? draftBlock(s, i, o) : "")).join("")}
+                </div></div>`,
+            ).join("")}
+          </div>
+        </div>`;
+      };
+      function draft(state) {
+        const h = `${header({ hasDraft: true })}${tabs("draft")}`;
+        switch (state) {
+          case 0:
+            return shell(h + summary() + grid({}));
+          case 1:
+            return shell(h + summary({ score: true }) + grid({}));
+          case 2:
+            return shell(
+              h + summary() + grid({ sel: 3 }),
+              sheet(
+                "Edit slot · draft",
+                `
+                ${sel("Group", "👥 B2 Conversation · B2 · 8")}${sel("Teacher", "Eva Simon")}${sel("Room", "Room 2 · 8 seats")}
+                <div class="grid grid-cols-3 gap-2">${sel("Day", "Monday")}${sel("Start", "16:00")}${sel("End", "17:30")}</div>
+                <p class="text-muted-foreground">Every Monday, 2 Feb – 26 Jun 2027 · 20 lessons · 1 date skipped for holidays</p>
+                <label class="flex items-start gap-3 rounded-md border border-border p-3"><span role="switch" aria-checked="true" class="mt-0.5 inline-flex h-5 w-9 rounded-full bg-primary p-0.5"><span class="h-4 w-4 rounded-full bg-white translate-x-4"></span></span><span><span class="font-medium">Locked</span><br/><span class="text-muted-foreground text-xs">The generator won't move this slot when you regenerate.</span></span></label>
+                <section aria-live="polite" class="space-y-2"><h3 class="font-semibold">Check</h3>
+                  <div class="text-green-700">✓ No conflicts.</div>
+                  <div class="rounded-md border border-blue-300 bg-blue-50 text-blue-900 p-2 text-xs">✨ Preference · Eva Simon has a 90-min gap before this lesson.</div>
+                </section>`,
+                btn("Delete slot", "ghost", "text-red-700 mr-auto") +
+                  btn("Cancel", "outline") +
+                  btn("Save slot"),
+                420,
+              ),
+            );
+          case 3:
+            return shell(
+              h + summary() + grid({}),
+              sheet(
+                "Not placed (4)",
+                [
+                  [
+                    "C1 Business · 1 of 2 lessons not placed",
+                    "No time when Peter Varga, a room for 6 and all 6 students are free at once.",
+                    "Closest: Thu 18:00 — 2 students have B2 Conversation then.",
+                    [
+                      "Edit weekly needs",
+                      "Teacher availability",
+                      "Place by hand",
+                    ],
+                  ],
+                  [
+                    "A2 Kids · 1 of 2 lessons not placed",
+                    "The fixed time Sat 09:00 has a conflict: Room 3 is used by A1 Weekend.",
+                    "",
+                    ["Edit weekly needs"],
+                  ],
+                  [
+                    "B1 Evening · 2 of 2 lessons not placed",
+                    "Tomas Horvat has no free time left that fits a 90-min lesson.",
+                    "Closest: Wed 19:00 — outside Tomas Horvat's availability (weekly).",
+                    [
+                      "Teacher availability",
+                      "Edit weekly needs",
+                      "Place by hand",
+                    ],
+                  ],
+                ]
+                  .map(
+                    ([
+                      t,
+                      r,
+                      c,
+                      a,
+                    ]) => `<article class="rounded-lg border border-border p-3 space-y-2">
+                      <h3 class="font-semibold">${t}</h3>
+                      <p class="flex gap-2"><span class="text-red-700" aria-hidden="true">⛔</span>${r}</p>
+                      ${c ? `<p class="text-muted-foreground text-xs">${c} <button class="text-primary underline">Show</button></p>` : ""}
+                      <div class="flex flex-wrap gap-2">${a.map((x) => btn(x, "outline", "h-8 text-xs")).join("")}</div>
+                    </article>`,
+                  )
+                  .join("") +
+                  `<p class="text-muted-foreground">Fix the data, then regenerate to try again.</p>`,
+                btn("Regenerate…"),
+              ),
+            );
+          case 4:
+            return shell(
+              h + summary() + grid({ sel: 1 }),
+              `<div class="absolute left-[640px] top-[470px] z-20 bg-white border border-border shadow-lg rounded-lg py-1 w-64" role="menu">
+                ${["Edit…", "Move…", "🔓 Unlock this slot", "Lock all slots of B1 Evening", "Lock all slots of Tomas Horvat", "Lock everything shown", "Delete from draft"].map((x) => `<button role="menuitem" class="block w-full text-left px-3 py-1.5 hover:bg-muted">${x}</button>`).join("")}
+              </div>` +
+                toast("Moved B1 Evening to Mon 17:00 and locked it.", "Undo"),
+            );
+          case 5:
+            return shell(
+              h +
+                summary({ compareBtn: true }) +
+                grid({ compareToggle: true, compare: true }),
+            );
+          case 6:
+            return shell(
+              `${header({ hasDraft: true })}${tabs("draft", { draft: "Out of date", statusTone: { draft: "text-amber-700 font-medium" } })}` +
+                summary({ stale: true }) +
+                grid({}),
+            );
+          case 7:
+            return shell(
+              `${header({ hasDraft: true })}${tabs("draft", { draft: "Score — · 148 not placed" })}` +
+                summary({ nothing: true }) +
+                `<div class="bg-white rounded-lg border border-border p-8 text-center text-muted-foreground">Only locked and existing slots are shown.</div>`,
+            );
+          case 8:
+            return shell(
+              `${header({})}${tabs("draft", { draft: "No draft yet" })}
+              <div class="bg-white rounded-lg border border-border p-12 text-center space-y-3 max-w-xl mx-auto mt-8">
+                <div class="text-4xl" aria-hidden="true">✨</div>
+                <h2 class="text-lg font-semibold">No draft yet</h2>
+                <p class="text-muted-foreground">Fill in weekly needs, then generate a draft.</p>
+                ${btn("✨ Generate draft…")}
+              </div>`,
+            );
+          case 9:
+            return shell(
+              h + summary() + grid({}),
+              toast(
+                "Draft updated: 7 slots moved, 3 newly placed, score 89 (up 3).",
+                "Show changes",
+              ),
+            );
+        }
+      }
+
+      /* --------------------------------------------------------------- publish */
+      function publish(state) {
+        const h = (o = {}) =>
+          `${header({ hasDraft: true, ...o })}${tabs("draft")}${summary({ compareBtn: o.published })}${grid({})}`;
+        if (state === 0)
+          return shell(
+            h(),
+            dialog(
+              "Publish the draft for Spring 2027?",
+              `<ul class="space-y-1 list-disc pl-5">
+                <li>144 slots (23 locked, 121 generated)</li>
+                <li>Replaces the 12 slots in the timetable editor.</li>
+                <li>Lessons will be created from 2 Feb 2027 to 26 Jun 2027</li>
+                <li>2 warnings acknowledged · <button class="text-primary underline">Review</button></li>
+                <li class="text-amber-800">4 lessons are not placed. · <button class="text-primary underline">Show</button></li>
+              </ul>
+              <p class="text-muted-foreground">Teachers and students will see their lessons right away. You can still change slots later; changes apply from a date you choose.</p>`,
+              btn("Cancel", "outline") +
+                btn("Save to the timetable editor only", "outline") +
+                btn("Publish timetable"),
+            ),
+          );
+        if (state === 1)
+          return shell(
+            h({ published: true, term: "Autumn 2026" }),
+            dialog(
+              "Publish the draft for Autumn 2026?",
+              `${alert("info", "Changes apply from Mon 3 Nov 2026. Lessons before then are not touched.")}
+              <ul class="space-y-1 list-disc pl-5">
+                <li>21 current slots end on Sun 2 Nov; 21 new slots start on Mon 3 Nov. 118 slots stay as they are.</li>
+                <li>Future lessons: 147 removed, 6 kept as cancelled because they have attendance, absences, homework or a substitute.</li>
+                <li>11 teachers and 94 students get a different week. · <button class="text-primary underline">List changes</button></li>
+                <li class="text-amber-800">3 replacement bookings are on lessons that will be cancelled. · <button class="text-primary underline">Show</button></li>
+              </ul>
+              <label class="flex gap-2 items-start rounded-md border border-border p-3"><input type="checkbox" class="mt-1"/> <span>I understand this changes the timetable for teachers and students from 3 Nov 2026.</span></label>`,
+              btn("Cancel", "outline") + btn("Apply draft"),
+              "max-w-xl",
+            ),
+          );
+        if (state === 2)
+          return shell(
+            h(),
+            dialog(
+              "Publish the draft for Spring 2027?",
+              `${alert("danger", "Fix 1 conflict before publishing.", `<ul class="list-disc pl-5"><li>B1 Evening · Mon 17:00 — Tomas Horvat already teaches A2 Evening then (20 dates).</li></ul>`)}
+              ${alert("warning", "The timetable was changed in the editor after this draft was made. Review the new issues.")}`,
+              btn("Cancel", "outline") + btn("Show issues"),
+            ),
+          );
+        if (state === 3)
+          return shell(
+            h(),
+            dialog(
+              "Publish the draft for Spring 2027?",
+              `<ul class="space-y-1 list-disc pl-5 opacity-60"><li>144 slots (23 locked, 121 generated)</li><li>Lessons will be created from 2 Feb 2027 to 26 Jun 2027</li></ul>`,
+              btn("Cancel", "outline", "opacity-50") +
+                `<button class="h-9 px-3 rounded-md font-medium bg-primary text-white inline-flex items-center gap-2" aria-busy="true"><span class="animate-spin">◌</span> Publishing… creating slots and lessons</button>`,
+            ),
+          );
+        if (state === 4)
+          return shell(
+            `<div class="flex items-center gap-3"><h1 class="text-2xl font-semibold">Timetable editor</h1><button class="h-9 rounded-md border border-input bg-white px-3">Term: Spring 2027 ▾</button>${badge("Published 14 Oct", "success")}</div>
+            ${alert("info", "This timetable is published. Changes apply to future lessons from the date you choose and are visible to teachers and students right away.")}
+            <div class="bg-white rounded-lg border border-border h-[560px] grid place-items-center text-muted-foreground">(timetable editor grid — timetable.md §5)</div>`,
+            toast(
+              "Spring 2027 published from the draft. 2,712 lessons created.",
+            ),
+          );
+        return "";
+      }
+
+      /* --------------------------------------------------------------- other */
+      function other(state) {
+        if (state === 0)
+          return `<div class="bg-white w-[1000px] min-h-[500px] rounded-lg border border-slate-300 grid place-items-center">
+            <div class="text-center space-y-3"><div class="text-5xl" aria-hidden="true">🔒</div><h1 class="text-2xl font-semibold">You don't have access to this page</h1><p class="text-muted-foreground">Teachers and students can't open the timetable generator.</p>${btn("Go to my dashboard")}</div></div>`;
+        if (state === 1)
+          return `<div class="bg-muted w-[390px] min-h-[700px] rounded-lg border border-slate-300 p-4 space-y-4">
+            <h1 class="text-2xl font-semibold">Auto-generate timetable</h1>
+            ${alert("info", "This page works best on a larger screen", "Use a desktop or laptop to edit weekly needs and the draft.")}
+            <div class="bg-white rounded-lg border border-border p-4 space-y-2">
+              <div class="font-medium">Spring 2027 ${badge("Draft term")}</div>
+              <div>Weekly needs: 62 groups · 3 incomplete</div>
+              <div>Last run: 14 Oct 10:42 by Anna Novak</div>
+              <div>Draft: score 86 · 4 not placed</div>
+            </div></div>`;
+        if (state === 2)
+          return shell(`${header({ published: true, term: "Autumn 2026", noPrimary: true })}${tabs("draft", { draft: "—" })}
+            ${alert("info", "This term is already published. Generate the next term, or change slots in the timetable editor.", "(Shown only if CARM-53 decides to refuse published terms — Q1.)", btn("Open editor", "outline"))}`);
+        if (state === 3)
+          return shell(`${header({ noPrimary: true })}${tabs("demand")}
+            <div class="space-y-3"><div class="skeleton h-10 w-full"></div>${Array.from({ length: 8 }, () => `<div class="skeleton h-8 w-full"></div>`).join("")}</div>`);
+        if (state === 4)
+          return shell(`${header({ noPrimary: true })}${tabs("demand")}
+            ${alert("danger", "Something went wrong", "We couldn't load this page.", btn("Try again", "outline"))}`);
+        return "";
+      }
+
+      /* --------------------------------------------------------------- router */
+      const SCREENS = [
+        {
+          k: "demand",
+          label: "① Weekly needs",
+          states: [
+            "table + pre-check",
+            "bulk edit",
+            "row details sheet",
+            "copy from term",
+            "empty (copy offer)",
+            "no groups",
+            "locked during run",
+            "ready",
+          ],
+          fn: demand,
+        },
+        {
+          k: "generate",
+          label: "Generate dialog",
+          states: [
+            "first run (term has slots)",
+            "regenerate · published term",
+            "nothing to generate",
+            "run in progress (other admin)",
+          ],
+          fn: generate,
+        },
+        {
+          k: "run",
+          label: "Run progress",
+          states: [
+            "placing",
+            "improving",
+            "long run",
+            "failed",
+            "done (toast)",
+          ],
+          fn: run,
+        },
+        {
+          k: "draft",
+          label: "② Draft",
+          states: [
+            "result + grid",
+            "score details",
+            "edit slot (lock)",
+            "not placed panel",
+            "lock menu · moved",
+            "compare to current",
+            "out of date",
+            "nothing placed",
+            "no draft yet",
+            "regenerated (toast)",
+          ],
+          fn: draft,
+        },
+        {
+          k: "publish",
+          label: "Publish",
+          states: [
+            "draft term",
+            "published term · apply from",
+            "blocked · live changed",
+            "publishing",
+            "done → editor",
+          ],
+          fn: publish,
+        },
+        {
+          k: "other",
+          label: "Other states",
+          states: [
+            "403 teacher/student",
+            "< 1024 px",
+            "term published (if refused)",
+            "loading",
+            "load error",
+          ],
+          fn: other,
+        },
+      ];
+      let cur = { screen: "demand", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>
