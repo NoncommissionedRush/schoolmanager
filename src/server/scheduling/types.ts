@@ -110,7 +110,22 @@ export type SchedulingContext = {
   teachers: readonly PersonInfo[];
   students: readonly PersonInfo[];
   availability: readonly AvailabilityRule[];
+  /**
+   * Absence reports on the lessons above. An absent member doesn't take a
+   * seat in, or clash with, that lesson (replacements.md §5). Optional:
+   * without it every enrolled student attends.
+   */
+  absences?: readonly LessonStudent[];
+  /**
+   * Active replacement bookings (`AUTO_APPROVED`, `APPROVED`, `OVERRIDDEN`)
+   * into the lessons above: the student takes a seat in the target lesson
+   * and attends it (replacements.md §5, §9).
+   */
+  replacements?: readonly LessonStudent[];
 };
+
+/** A student's absence from, or replacement booking into, one lesson. */
+export type LessonStudent = { lessonId: string; studentId: string };
 
 /** A slot to validate. `id` set = edit of that slot (it is not compared with itself). */
 export type SlotCandidate = Omit<SlotInfo, "id"> & { id?: string };
