@@ -9,6 +9,17 @@ import {
   toZonedDateTime,
 } from "@/server/scheduling";
 
+/** A student's cancellation state for one of their lessons (absences.md §5.1). */
+export type StudentAttendance = {
+  /** Last instant a cancellation earns a credit. */
+  cutoffAt: string;
+  cutoffMinutes: number;
+  /** "Valid until" of the credit a cancellation now would earn. */
+  creditValidUntil: IsoDate;
+  /** Their cancellation, if they (or the office) already cancelled. */
+  cancelled: { at: string; byOffice: boolean; credit: boolean } | null;
+};
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isValidIsoDate(value: string): boolean {
@@ -106,6 +117,11 @@ export type LessonView = {
   teacherRole: TeacherRole | null;
   /** The lesson's homework, for students once it has started (lessons.md §5.1). */
   homework: string | null;
+  /**
+   * Students only: their cancellation and the lesson's cutoff
+   * (absences.md §5.1). Filled in by the caller; null for staff.
+   */
+  attendance: StudentAttendance | null;
 };
 
 /** Projects a lesson for `viewer`; students never get other students' names. */
@@ -160,6 +176,7 @@ export function toLessonView(
         : [...lesson.students].sort((a, b) => a.name.localeCompare(b.name)),
     teacherRole,
     homework: viewer.kind === "STUDENT" ? (lesson.homework ?? null) : null,
+    attendance: null,
   };
 }
 

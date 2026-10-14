@@ -1,0 +1,17 @@
+{
+  "title": "Students",
+  "seats": "{room} · {taken} of {capacity} seats",
+  "overCapacity": "{taken} of {capacity} seats — over capacity",
+  "coming": "Coming ({count})",
+  "notComing": "Not coming ({count})",
+  "replacementFrom": "Replacement · from {group}",
+  "cancelledAt": "cancelled {when}",
+  "viaOffice": "via office",
+  "late": "Late",
+  "everyoneComing": "Everyone in the group is coming.",
+  "noStudents": "No students in this group on this date.",
+  "oneOnOneCancelled": "{student} cancelled this lesson",
+  "reportAbsence": "Report absence…",
+  "actionsFor": "Actions for {name}",
+  "oneOnOneCancelledReason": "{student} cancelled this lesson · “{reason}”"
+}

@@ -16,6 +16,8 @@ import {
   zonedTimeToUtc,
 } from "@/server/scheduling";
 
+import { loadStudentAttendance } from "@/server/replacements/views";
+
 import type { SchoolDb } from "./service";
 import {
   gridHours,
@@ -211,6 +213,7 @@ export async function loadWeek(
   let where: Prisma.LessonWhereInput;
   let teacherId: string | undefined;
   let memberships: MembershipWindow[] = [];
+  let student: { id: string; userId: string } | null = null;
   if (viewer.kind === "TEACHER") {
     const profile = await db.teacherProfile.findFirst({
       where: { userId: viewer.userId },
@@ -225,12 +228,15 @@ export async function loadWeek(
     const profile = await db.studentProfile.findFirst({
       where: { userId: viewer.userId },
       select: {
+        id: true,
+        userId: true,
         groupMemberships: {
           select: { groupId: true, joinedAt: true, leftAt: true },
         },
       },
     });
     memberships = profile?.groupMemberships ?? [];
+    student = profile && { id: profile.id, userId: profile.userId };
     where = {
       ...membershipLessonWhere(memberships),
       term: { timetablePublishedAt: { not: null } },
@@ -263,9 +269,14 @@ export async function loadWeek(
       ? rows.filter((r) => isMemberAt(memberships, r.group.id, r.startsAt))
       : rows;
   const now = new Date();
-  const lessons = allowed.map((row) =>
-    toLessonView(toRecord(row, now), { kind: viewer.kind, teacherId }, tz),
-  );
+  // Students also get their own cancellation of each lesson (absences.md §5.1).
+  const attendance = student
+    ? await loadStudentAttendance(db, student, allowed)
+    : new Map();
+  const lessons = allowed.map((row) => ({
+    ...toLessonView(toRecord(row, now), { kind: viewer.kind, teacherId }, tz),
+    attendance: attendance.get(row.id) ?? null,
+  }));
 
   // Holidays of the terms this week (school-wide ones count everywhere).
   const holidays = await db.holiday.findMany({

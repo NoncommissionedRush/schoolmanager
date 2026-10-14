@@ -1,0 +1,68 @@
+{
+  "title": "Absences & credits",
+  "policy": "Cancel at least {hours, plural, one {# hour} other {# hours}} before a lesson to get a makeup credit. Credits are valid for {days, plural, one {# day} other {# days}}.",
+  "policyZero": "Cancel any time before a lesson starts to get a makeup credit. Credits are valid for {days, plural, one {# day} other {# days}}.",
+  "cantAttend": "Can't attend?",
+  "cutoff": {
+    "before": "Cancel by {dateTime} to get a makeup credit.",
+    "beforeZero": "Cancel any time before the lesson starts to get a makeup credit.",
+    "after": "It's after the cutoff ({dateTime}). You can still cancel, but you won't get a credit."
+  },
+  "cancel": {
+    "title": "Cancel {group}?",
+    "creditInfo": "You'll get a makeup credit, valid until {date}. Use it to join another {level} lesson.",
+    "creditInfoOneOnOne": "You'll get a credit to reschedule this lesson with {teacher}, valid until {date}.",
+    "noCreditWarning": "It's less than {hours, plural, one {# hour} other {# hours}} before the lesson, so you won't get a makeup credit. Your teacher will still know you're not coming.",
+    "noCreditWarningZero": "The lesson is about to start, so you won't get a makeup credit. Your teacher will still know you're not coming.",
+    "oneOnOneLate": "Your teacher keeps this time for you, so the lesson counts as taken.",
+    "reason": "Reason (optional)",
+    "reasonPlaceholder": "e.g. Doctor's appointment",
+    "reasonHint": "Your teacher sees the reason.",
+    "confirm": "Cancel my lesson",
+    "confirmNoCredit": "Cancel without credit",
+    "keep": "Keep my lesson",
+    "final": "You can't undo this yourself. If you change your mind, contact the school office.",
+    "doneWithCredit": "Lesson cancelled. You have a makeup credit until {date}.",
+    "doneNoCredit": "Lesson cancelled. No credit, because it was after the cutoff.",
+    "cutoffPassed": "The cutoff passed while you were deciding. You can still cancel, but without a credit.",
+    "started": "This lesson has already started, so it can't be cancelled.",
+    "viewCredits": "View credits"
+  },
+  "notAttending": "Not attending",
+  "youCancelled": "You cancelled this lesson on {date}.",
+  "byOffice": "The school office cancelled this lesson for you on {date}.",
+  "gotCredit": "You got a makeup credit.",
+  "noCreditLate": "No credit — cancelled after the cutoff.",
+  "changedMind": "Changed your mind? Contact the school office.",
+  "section": {
+    "credits": "Makeup credits ({count})",
+    "cancellations": "Upcoming cancellations ({count})",
+    "history": "History ({count})"
+  },
+  "history": {
+    "creditUsed": "Credit from {sourceDate} — used",
+    "creditExpired": "Credit from {sourceDate} — expired on {date}",
+    "cancelledNoCredit": "{date} · {group} — cancelled, no credit",
+    "loadMore": "Load more"
+  },
+  "empty": {
+    "title": "No absences",
+    "description": "If you can't come to a lesson, tap Can't attend? on it in your timetable. Cancel in time and you'll get a credit to make it up."
+  },
+  "status": {
+    "creditEarned": "Credit earned",
+    "noCredit": "No credit",
+    "byOffice": "By the school office"
+  },
+  "oneOnOneWith": "1-on-1 with {teacher}",
+  "errors": {
+    "FORBIDDEN": "Only the student or the school office can cancel a lesson.",
+    "LESSON_CANCELLED": "This lesson has been cancelled.",
+    "LESSON_STARTED": "This lesson has already started, so it can't be cancelled.",
+    "REPLACEMENT_BOOKING": "You're joining this lesson as a replacement. Cancel the booking instead.",
+    "ALREADY_REPORTED": "This lesson has already been cancelled for this student.",
+    "ABSENCE_CREDIT_USED": "The credit from this absence is already used. Reject that replacement or cancel the rescheduled lesson first.",
+    "NOT_PUBLISHED": "This lesson isn't published yet.",
+    "NOT_A_MEMBER": "The student isn't in this lesson's group."
+  }
+}

@@ -1,11 +1,18 @@
 "use client";
 
-import { ClipboardList, ExternalLink, NotebookPen } from "lucide-react";
+import {
+  CalendarX,
+  ClipboardList,
+  ExternalLink,
+  NotebookPen,
+} from "lucide-react";
 import Link from "next/link";
-import { useNow, useTranslations } from "next-intl";
+import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useState } from "react";
 
+import { CancelLessonDialog } from "@/components/absences/cancel-lesson-dialog";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -17,6 +24,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { LessonView, ViewerKind } from "@/server/timetable/week";
 
 import { formatMinutes, useDateFormat } from "./format";
+import { isNotAttending } from "./lesson-parts";
 
 /** Lesson details sheet (timetable.md §6.3): right on desktop, bottom on mobile. */
 export function LessonDetailsSheet({
@@ -39,6 +47,15 @@ export function LessonDetailsSheet({
   const now = useNow({ updateInterval: 60_000 });
   const started =
     lesson !== null && new Date(lesson.startsAt).getTime() <= now.getTime();
+  const [cancelling, setCancelling] = useState(false);
+  const notAttending = lesson !== null && isNotAttending(lesson);
+  const attendance = role === "STUDENT" ? lesson?.attendance : null;
+  const canCancel =
+    lesson !== null &&
+    attendance != null &&
+    !attendance.cancelled &&
+    lesson.status === "SCHEDULED" &&
+    !started;
 
   return (
     <Sheet open={lesson !== null} onOpenChange={onOpenChange}>
@@ -60,26 +77,34 @@ export function LessonDetailsSheet({
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 overflow-y-auto px-4 pb-6">
               <dt className="text-muted-foreground">{t("details.status")}</dt>
               <dd className="flex flex-col items-start gap-1">
-                <Badge
-                  variant={
-                    lesson.status === "CANCELLED" ? "destructive" : "secondary"
-                  }
-                >
-                  {lesson.status === "CANCELLED"
-                    ? t("status.cancelled")
-                    : lesson.status === "COMPLETED"
-                      ? t("status.completed")
-                      : t("status.scheduled")}
-                </Badge>
-                {lesson.status === "CANCELLED" && lesson.cancelReason && (
-                  <span>
-                    {t("details.cancelReason", {
-                      reason: tr.has(lesson.cancelReason as "HOLIDAY")
-                        ? tr(lesson.cancelReason as "HOLIDAY")
-                        : lesson.cancelReason,
-                    })}
-                  </span>
+                {notAttending && attendance?.cancelled ? (
+                  <NotAttending cancelled={attendance.cancelled} />
+                ) : (
+                  <Badge
+                    variant={
+                      lesson.status === "CANCELLED"
+                        ? "destructive"
+                        : "secondary"
+                    }
+                  >
+                    {lesson.status === "CANCELLED"
+                      ? t("status.cancelled")
+                      : lesson.status === "COMPLETED"
+                        ? t("status.completed")
+                        : t("status.scheduled")}
+                  </Badge>
                 )}
+                {!notAttending &&
+                  lesson.status === "CANCELLED" &&
+                  lesson.cancelReason && (
+                    <span>
+                      {t("details.cancelReason", {
+                        reason: tr.has(lesson.cancelReason as "HOLIDAY")
+                          ? tr(lesson.cancelReason as "HOLIDAY")
+                          : lesson.cancelReason,
+                      })}
+                    </span>
+                  )}
               </dd>
               <dt className="text-muted-foreground">{t("details.when")}</dt>
               <dd>
@@ -168,6 +193,13 @@ export function LessonDetailsSheet({
                 </Link>
               </div>
             )}
+            {canCancel && attendance && (
+              <CantAttend
+                lesson={lesson}
+                open={cancelling}
+                onOpenChange={setCancelling}
+              />
+            )}
             {role === "STUDENT" && started && (
               <div className="px-4 pb-4">
                 <Link
@@ -204,5 +236,90 @@ export function LessonDetailsSheet({
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** "Not attending" badge and what the cancellation gave (absences.md §5.1). */
+function NotAttending({
+  cancelled,
+}: {
+  cancelled: { at: string; byOffice: boolean; credit: boolean };
+}) {
+  const t = useTranslations("absences");
+  const format = useFormatter();
+  const date = format.dateTime(new Date(cancelled.at), {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+  return (
+    <>
+      <Badge variant="secondary">
+        <CalendarX aria-hidden="true" />
+        {t("notAttending")}
+      </Badge>
+      <span>
+        {cancelled.byOffice
+          ? t("byOffice", { date })
+          : t("youCancelled", { date })}
+      </span>
+      <span>{cancelled.credit ? t("gotCredit") : t("noCreditLate")}</span>
+      <span className="text-muted-foreground">{t("changedMind")}</span>
+    </>
+  );
+}
+
+/** "Can't attend?" with the cutoff caption, and the cancel dialog (§5.1). */
+function CantAttend({
+  lesson,
+  open,
+  onOpenChange,
+}: {
+  lesson: LessonView;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const t = useTranslations("absences");
+  const format = useFormatter();
+  const now = useNow({ updateInterval: 30_000 });
+  const attendance = lesson.attendance!;
+  const cutoff = new Date(attendance.cutoffAt);
+  const dateTime = format.dateTime(cutoff, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const before = now.getTime() <= cutoff.getTime();
+  return (
+    <div className="flex flex-col items-start gap-2 px-4 pb-4">
+      <Button variant="outline" size="lg" onClick={() => onOpenChange(true)}>
+        <CalendarX aria-hidden="true" />
+        {t("cantAttend")}
+      </Button>
+      <p className={before ? "text-sm text-info" : "text-sm text-warning"}>
+        {before
+          ? attendance.cutoffMinutes === 0
+            ? t("cutoff.beforeZero")
+            : t("cutoff.before", { dateTime })
+          : t("cutoff.after", { dateTime })}
+      </p>
+      <CancelLessonDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        lesson={{
+          id: lesson.id,
+          groupName: lesson.group.name,
+          level: lesson.level,
+          oneOnOne: lesson.group.type === "ONE_ON_ONE",
+          teacherName: lesson.teacher.name,
+          date: lesson.date,
+          startMinute: lesson.startMinute,
+          endMinute: lesson.endMinute,
+          attendance,
+        }}
+      />
+    </div>
   );
 }
