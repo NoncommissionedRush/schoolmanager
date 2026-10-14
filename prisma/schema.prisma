@@ -268,14 +268,16 @@ model StudentProfile {
 // ---------------------------------------------------------------------------
 
 /// Skill level, e.g. CEFR A1–C2. `rank` orders levels (lower = easier).
+/// Archived levels (`archivedAt`) are hidden from pickers; data using them stays.
 model Level {
-  id        String   @id @default(uuid()) @db.Uuid
-  schoolId  String   @map("school_id") @db.Uuid
-  code      String
-  name      String
-  rank      Int
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String    @map("school_id") @db.Uuid
+  code       String
+  name       String
+  rank       Int
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
 
   school   School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   students StudentProfile[]
@@ -360,16 +362,19 @@ model GroupMembership {
 // Resources & calendar
 // ---------------------------------------------------------------------------
 
+/// Archived rooms (`archivedAt`) are hidden from pickers and cannot get new
+/// slots or lessons; slots and lessons already in them keep running.
 model Room {
-  id         String   @id @default(uuid()) @db.Uuid
-  schoolId   String   @map("school_id") @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String    @map("school_id") @db.Uuid
   name       String
   kind       RoomKind
   capacity   Int?
   /// Join link for ONLINE rooms.
-  meetingUrl String?  @map("meeting_url")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  meetingUrl String?   @map("meeting_url")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
 
   school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   timetableSlots TimetableSlot[]

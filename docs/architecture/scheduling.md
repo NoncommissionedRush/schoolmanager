@@ -62,6 +62,7 @@ message also gets `otherGroup`, `otherTime` (`HH:MM–HH:MM`), `dateCount` and
 | `INVALID_TIME`                | blocking    | Weekday not 1–7, start ≥ end, outside 00:00–24:00                                      | —                                         |
 | `OUTSIDE_TERM`                | blocking    | Slot dates (or lesson date) outside the term, or `validFrom > validUntil`              | `term`, `termStart`, `termEnd`            |
 | `GROUP_ARCHIVED`              | blocking    | The group is archived (`deletedAt`)                                                    | `group`                                   |
+| `ROOM_ARCHIVED`               | blocking    | The room is archived (`archivedAt`) and the slot or lesson is not already in it        | `room`                                    |
 | `TEACHER_DOUBLE_BOOKED`       | blocking    | The (effective) teacher already teaches then                                           | `teacher` + double-booking params         |
 | `ROOM_DOUBLE_BOOKED`          | blocking    | A **physical** room is already used then                                               | `room` + double-booking params            |
 | `GROUP_DOUBLE_BOOKED`         | blocking    | The group already has a lesson then                                                    | `group` + double-booking params           |
@@ -79,6 +80,12 @@ message also gets `otherGroup`, `otherTime` (`HH:MM–HH:MM`), `dateCount` and
 
 Notes:
 
+- Archived rooms: a slot or lesson that is **already** in an archived room
+  (the stored slot's room; for a lesson, its own or its slot's) is not
+  blocked, so its other fields can still be edited, lessons keep being
+  generated and the term can be published. It is still checked for clashes
+  like any other. Only new slots and lessons, and moves into the room, are
+  blocked. Archived levels need no check: a slot gets its level from its group.
 - Group size is the number of **currently enrolled** students
   (`GroupMembership.leftAt` null), not `Group.capacity`.
 - Availability: a `DATE_AVAILABLE` exception lifts weekly rules on that date

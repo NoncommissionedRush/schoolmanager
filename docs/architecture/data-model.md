@@ -118,10 +118,16 @@ Prisma does not model CHECK constraints, so these live in
 - teacher note is about a student, group or lesson
 - replacement target ≠ original lesson
 
-## Soft delete
+## Soft delete and archiving
 
-Only `User.deletedAt` and `Group.deletedAt` — history (lessons, attendance)
-must survive when a person leaves or a group is closed. Everything else is
+`User.deletedAt` and `Group.deletedAt` — history (lessons, attendance)
+must survive when a person leaves or a group is closed. `Room.archivedAt` and
+`Level.archivedAt` hide a room or level that is no longer used from pickers
+while everything that refers to it stays as it is (a room that was used last
+term cannot be deleted, but it should not be offered any more); archiving can
+be undone by clearing the column. Slots already in an archived room keep
+running; new slots and lessons cannot be put there (`ROOM_ARCHIVED`, see
+[scheduling.md](scheduling.md#types-and-severities)). Everything else is
 hard-deleted; `onDelete` is `Restrict` wherever a delete would lose history.
 A `Term` can only be deleted while it has no lessons (lessons → term is
 `Restrict`); its slots and its own holidays go with it (`Cascade`). Timetable
@@ -189,8 +195,9 @@ for readability. (`VerificationToken` stands alone.)
 
 `pnpm db:seed` (idempotent — deterministic UUIDs + upserts) creates
 "Demo Language School" (Europe/Bratislava): 1 admin, 8 teachers (some with
-weekly/one-off unavailability), 40 students, levels A1–C1, 6 courses, 10 groups
-and 3 1-on-1s, 4 physical rooms + 1 online room, term "Autumn 2026" with
+weekly/one-off unavailability), 40 students, levels A1–C1 (plus an archived
+C2), 6 courses, 10 groups and 3 1-on-1s, 4 physical rooms + 1 online room
+(plus an archived "Room 5 (Old annex)"), term "Autumn 2026" with
 holidays (one school-wide), a published timetable (A2 Morning's Thursday slot
 ends on 2026-10-25 and continues on Fridays) and lessons generated
 2026-09-14 → 2026-11-08.

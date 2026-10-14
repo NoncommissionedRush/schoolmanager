@@ -24,6 +24,7 @@ import type {
   GroupInfo,
   HolidayInfo,
   LessonCandidate,
+  LessonInfo,
   PersonInfo,
   RoomInfo,
   SchedulingContext,
@@ -60,6 +61,8 @@ export type Calendar = {
   context: SchedulingContext;
   bookingsByDate: ReadonlyMap<IsoDate, readonly Booking[]>;
   terms: ReadonlyMap<string, TermInfo>;
+  slots: ReadonlyMap<string, SlotInfo>;
+  lessons: ReadonlyMap<string, LessonInfo>;
   groups: ReadonlyMap<string, GroupInfo>;
   rooms: ReadonlyMap<string, RoomInfo>;
   teachers: ReadonlyMap<string, PersonInfo>;
@@ -146,6 +149,8 @@ export function buildCalendar(context: SchedulingContext): Calendar {
     context,
     bookingsByDate,
     terms,
+    slots: byId(context.slots),
+    lessons: byId(context.lessons),
     groups: byId(context.groups),
     rooms: byId(context.rooms),
     teachers: byId(context.teachers),
@@ -171,6 +176,12 @@ type Subject = {
   group: GroupInfo;
   teacher: PersonInfo;
   room: RoomInfo | null;
+  /**
+   * Rooms the candidate already has as stored (its slot's, or its lesson's
+   * and that lesson's slot's). Staying in an archived room is allowed;
+   * moving into one is not.
+   */
+  keptRoomIds: readonly (string | null)[];
   occurrences: Occurrence[];
   /** Bookings of the candidate itself (when editing), never compared. */
   isSelf: (booking: Booking) => boolean;
@@ -239,6 +250,9 @@ function collect(calendar: Calendar, subject: Subject, out: ConflictSet) {
 
   if (group.archived) {
     out.add("GROUP_ARCHIVED", "", { group: group.name }, { groupId: group.id });
+  }
+  if (room?.archived && !subject.keptRoomIds.includes(room.id)) {
+    out.add("ROOM_ARCHIVED", "", { room: room.name }, { roomId: room.id });
   }
 
   const studentCount = group.studentIds.length;
@@ -435,6 +449,10 @@ export function checkSlot(
       room: candidate.roomId
         ? lookup(calendar.rooms, candidate.roomId, "room")
         : null,
+      keptRoomIds:
+        selfId !== undefined && calendar.slots.has(selfId)
+          ? [calendar.slots.get(selfId)!.roomId]
+          : [],
       occurrences: dates.map((date) => {
         const o = occurrenceOf(template, date, timeZone);
         return {
@@ -515,6 +533,12 @@ export function checkLesson(
       room: candidate.roomId
         ? lookup(calendar.rooms, candidate.roomId, "room")
         : null,
+      keptRoomIds: [
+        selfId === undefined ? undefined : calendar.lessons.get(selfId),
+        candidate.timetableSlotId === null
+          ? undefined
+          : calendar.slots.get(candidate.timetableSlotId),
+      ].flatMap((stored) => (stored ? [stored.roomId] : [])),
       occurrences: [
         {
           date: local.date,

@@ -158,7 +158,13 @@ async function load(tx: Tx, termId: string, now: Date): Promise<Loaded> {
         },
       }),
       tx.room.findMany({
-        select: { id: true, name: true, kind: true, capacity: true },
+        select: {
+          id: true,
+          name: true,
+          kind: true,
+          capacity: true,
+          archivedAt: true,
+        },
       }),
       tx.teacherProfile.findMany({
         select: { id: true, user: { select: { name: true } } },
@@ -212,7 +218,10 @@ async function load(tx: Tx, termId: string, now: Date): Promise<Loaded> {
         studentIds: g.memberships.map((m) => m.studentId),
         archived: g.deletedAt !== null,
       })),
-      rooms,
+      rooms: rooms.map(({ archivedAt, ...r }) => ({
+        ...r,
+        archived: archivedAt !== null,
+      })),
       teachers: teachers.map((t) => ({ id: t.id, name: t.user.name })),
       students: students.map((s) => ({ id: s.id, name: s.user.name })),
       availability: rules.map((r) => ({

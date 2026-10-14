@@ -67,12 +67,14 @@ export function realisticSchool(seed: number): RealisticSchool {
           name: `Room ${pad(i)}`,
           kind: "PHYSICAL",
           capacity: r.int(4, 14),
+          archived: false,
         }
       : {
           id: `r${pad(i)}`,
           name: `Online ${i}`,
           kind: "ONLINE",
           capacity: null,
+          archived: false,
         },
   );
 
