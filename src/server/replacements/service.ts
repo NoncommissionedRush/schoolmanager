@@ -13,12 +13,14 @@ import {
   checkAbsence,
   checkAbsenceDelete,
   type Conflict,
+  creditExpiry,
   creditState,
   decideSave,
   planAbsence,
   seatsTaken,
   STUDENT_CANCELLED,
   toZonedDateTime,
+  validUntilOf,
 } from "@/server/scheduling";
 import {
   checkLessonInTransaction,
@@ -28,12 +30,9 @@ import {
 } from "@/server/timetable/service";
 import { isMemberAt, membersAt } from "@/server/timetable/week";
 
-/** Replacement statuses that hold a seat (§1 "active"). */
-export const ACTIVE_REPLACEMENT = [
-  "AUTO_APPROVED",
-  "APPROVED",
-  "OVERRIDDEN",
-] as const;
+import { ACTIVE_REPLACEMENT, releaseSpentCredit } from "./release";
+
+export { ACTIVE_REPLACEMENT };
 
 /** Who is acting: the student themselves, or an admin of their school. */
 export type AbsenceActor = { userId: string; role: Role };
@@ -66,20 +65,16 @@ const notFound = () => new AdminError(msg("common.error.notFound"));
 const refusal = (code: string) =>
   new AdminError(msg(`absences.errors.${code}`));
 
-async function inLockedTransaction<T>(
+/**
+ * Runs `fn` in one transaction that first takes the school's timetable
+ * lock (§8), with the school's settings.
+ */
+export async function inLockedTransaction<T>(
   db: SchoolDb,
-  fn: (
-    tx: Tx,
-    school: {
-      id: string;
-      timezone: string;
-      absenceCutoffMinutes: number;
-      makeupCreditValidDays: number;
-    },
-  ) => Promise<T>,
+  fn: (tx: Tx, school: SchoolSettings) => Promise<T>,
 ): Promise<T> {
   return db.$transaction(async (tx) => {
-    const school = await tx.school.findFirstOrThrow({
+    const school: SchoolSettings = await tx.school.findFirstOrThrow({
       select: {
         id: true,
         timezone: true,
@@ -105,6 +100,25 @@ export async function reportAbsence(
   input: ReportAbsenceInput,
   now: Date,
 ): Promise<ReportAbsenceResult> {
+  assertReportInput(actor, input);
+  return inLockedTransaction(db, async (tx, school) => {
+    const result = await reportAbsenceInTx(tx, school, actor, input, now);
+    if (result.status === "cutoffPassed") return result;
+    return {
+      status: "reported",
+      absenceId: result.absenceId,
+      studentName: result.studentName,
+      credit: result.credit,
+      lessonCancelled: result.lessonCancelled,
+    };
+  });
+}
+
+/** Who may report and with which ids (shared with the reschedule flow). */
+export function assertReportInput(
+  actor: AbsenceActor,
+  input: { lessonId: string; studentId?: string },
+) {
   if (actor.role !== "STUDENT" && actor.role !== "ADMIN") {
     throw new AdminError(msg("absences.errors.FORBIDDEN"));
   }
@@ -116,150 +130,255 @@ export async function reportAbsence(
   ) {
     throw notFound();
   }
-  return inLockedTransaction(db, async (tx, school) => {
-    const student = await tx.studentProfile.findFirst({
-      where:
-        actor.role === "STUDENT"
-          ? { userId: actor.userId }
-          : { id: input.studentId },
-      select: {
-        id: true,
-        userId: true,
-        user: { select: { name: true } },
-      },
+}
+
+export type SchoolSettings = {
+  id: string;
+  timezone: string;
+  absenceCutoffMinutes: number;
+  makeupCreditValidDays: number;
+};
+
+/**
+ * The first lesson of a reschedule chain: follow `rescheduledFromId` back
+ * to the regular lesson an admin (or the student) moved first (§3).
+ */
+export async function chainRoot(
+  tx: Tx,
+  lesson: { id: string; startsAt: Date; rescheduledFromId: string | null },
+): Promise<{ id: string; startsAt: Date }> {
+  let current = lesson;
+  // Chains are short; the bound only guards against a corrupt cycle.
+  for (let i = 0; i < 1_000 && current.rescheduledFromId; i++) {
+    const previous = await tx.lesson.findFirst({
+      where: { id: current.rescheduledFromId },
+      select: { id: true, startsAt: true, rescheduledFromId: true },
     });
-    if (!student) throw notFound();
-    if (
-      actor.role === "STUDENT" &&
-      input.studentId !== undefined &&
-      input.studentId !== student.id
-    ) {
-      throw notFound();
-    }
+    if (!previous) break;
+    current = previous;
+  }
+  return current;
+}
 
-    const lesson = await tx.lesson.findFirst({
-      where: { id: input.lessonId },
-      select: {
-        id: true,
-        groupId: true,
-        startsAt: true,
-        status: true,
-        term: { select: { timetablePublishedAt: true } },
-        group: { select: { type: true } },
+/**
+ * `reportAbsence` inside the caller's locked transaction. Besides §3's
+ * table, a 1-on-1 that is itself a reschedule never mints a credit when a
+ * credit is spent on it: in time, the lesson is cancelled and that credit
+ * comes back with its own expiry; late, it stays spent. An admin-moved
+ * 1-on-1 without a credit earns one in time, valid from the chain root.
+ */
+export async function reportAbsenceInTx(
+  tx: Tx,
+  school: SchoolSettings,
+  actor: AbsenceActor,
+  input: ReportAbsenceInput,
+  now: Date,
+): Promise<
+  | (Extract<ReportAbsenceResult, { status: "reported" }> & {
+      lesson: {
+        id: string;
+        groupId: string;
+        teacherId: string;
+        roomId: string | null;
+        timetableSlotId: string | null;
+        startsAt: Date;
+        endsAt: Date;
+        rescheduledFromId: string | null;
+      };
+      creditReleased: boolean;
+    })
+  | { status: "cutoffPassed" }
+> {
+  const student = await tx.studentProfile.findFirst({
+    where:
+      actor.role === "STUDENT"
+        ? { userId: actor.userId }
+        : { id: input.studentId },
+    select: {
+      id: true,
+      userId: true,
+      user: { select: { name: true } },
+    },
+  });
+  if (!student) throw notFound();
+  if (
+    actor.role === "STUDENT" &&
+    input.studentId !== undefined &&
+    input.studentId !== student.id
+  ) {
+    throw notFound();
+  }
+
+  const lesson = await tx.lesson.findFirst({
+    where: { id: input.lessonId },
+    select: {
+      id: true,
+      groupId: true,
+      teacherId: true,
+      roomId: true,
+      timetableSlotId: true,
+      startsAt: true,
+      endsAt: true,
+      status: true,
+      rescheduledFromId: true,
+      term: { select: { timetablePublishedAt: true } },
+      group: { select: { type: true } },
+      spentCredit: {
+        select: { id: true, status: true, expiresAt: true, studentId: true },
       },
-    });
-    if (!lesson) throw notFound();
-    const [memberships, replacements, existing] = await Promise.all([
-      tx.groupMembership.findMany({
-        where: { studentId: student.id, groupId: lesson.groupId },
-        select: { groupId: true, joinedAt: true, leftAt: true },
-      }),
-      tx.replacementRequest.count({
-        where: {
-          studentId: student.id,
-          targetLessonId: lesson.id,
-          status: { in: [...ACTIVE_REPLACEMENT] },
-        },
-      }),
-      tx.absenceReport.count({
-        where: { studentId: student.id, lessonId: lesson.id },
-      }),
-    ]);
-    const reasons = checkAbsence(
-      {
-        lesson: {
-          startsAt: lesson.startsAt,
-          status: lesson.status,
-          published: lesson.term.timetablePublishedAt !== null,
-        },
-        isMember: isMemberAt(memberships, lesson.groupId, lesson.startsAt),
-        hasActiveReplacement: replacements > 0,
-        alreadyReported: existing > 0,
+    },
+  });
+  if (!lesson) throw notFound();
+  const [memberships, replacements, existing] = await Promise.all([
+    tx.groupMembership.findMany({
+      where: { studentId: student.id, groupId: lesson.groupId },
+      select: { groupId: true, joinedAt: true, leftAt: true },
+    }),
+    tx.replacementRequest.count({
+      where: {
+        studentId: student.id,
+        targetLessonId: lesson.id,
+        status: { in: [...ACTIVE_REPLACEMENT] },
       },
-      now,
-    );
-    // Lessons the student doesn't take part in don't exist for them.
-    if (reasons.includes("NOT_PUBLISHED") || reasons.includes("NOT_A_MEMBER")) {
-      throw notFound();
-    }
-    if (reasons.length > 0) throw refusal(reasons[0]);
+    }),
+    tx.absenceReport.count({
+      where: { studentId: student.id, lessonId: lesson.id },
+    }),
+  ]);
+  const reasons = checkAbsence(
+    {
+      lesson: {
+        startsAt: lesson.startsAt,
+        status: lesson.status,
+        published: lesson.term.timetablePublishedAt !== null,
+      },
+      isMember: isMemberAt(memberships, lesson.groupId, lesson.startsAt),
+      hasActiveReplacement: replacements > 0,
+      alreadyReported: existing > 0,
+    },
+    now,
+  );
+  // Lessons the student doesn't take part in don't exist for them.
+  if (reasons.includes("NOT_PUBLISHED") || reasons.includes("NOT_A_MEMBER")) {
+    throw notFound();
+  }
+  if (reasons.length > 0) throw refusal(reasons[0]);
 
-    const plan = planAbsence(
-      { startsAt: lesson.startsAt, type: lesson.group.type },
-      school,
-      school.timezone,
-      now,
-    );
-    if (input.expectCredit && !plan.earnsCredit) {
-      return { status: "cutoffPassed" };
-    }
+  const oneOnOne = lesson.group.type === "ONE_ON_ONE";
+  const spent =
+    oneOnOne && lesson.spentCredit?.status === "USED"
+      ? lesson.spentCredit
+      : null;
+  // An admin-moved 1-on-1 counts its credit's validity from the chain root.
+  const anchor =
+    oneOnOne && !spent && lesson.rescheduledFromId
+      ? await chainRoot(tx, lesson)
+      : lesson;
+  const plan = planAbsence(
+    { startsAt: lesson.startsAt, type: lesson.group.type },
+    school,
+    school.timezone,
+    now,
+  );
+  const creditPlan =
+    plan.credit && anchor !== lesson
+      ? creditExpiry(
+          anchor.startsAt,
+          school.makeupCreditValidDays,
+          school.timezone,
+        )
+      : plan.credit;
+  if (input.expectCredit && !plan.earnsCredit) {
+    return { status: "cutoffPassed" };
+  }
 
-    let absenceId: string;
-    try {
-      const report = await tx.absenceReport.create({
-        data: {
-          schoolId: school.id,
-          lessonId: lesson.id,
-          studentId: student.id,
-          reportedById: actor.userId,
-          reason: input.reason,
-          createdAt: now,
-        },
-        select: { id: true },
-      });
-      absenceId = report.id;
-    } catch (error) {
-      if (isUniqueViolation(error)) throw refusal("ALREADY_REPORTED");
-      throw error;
-    }
-
-    let credit: { id: string; validUntil: string } | null = null;
-    if (plan.credit) {
-      const row = await tx.makeupCredit.create({
-        data: {
-          schoolId: school.id,
-          studentId: student.id,
-          sourceLessonId: lesson.id,
-          absenceReportId: absenceId,
-          expiresAt: plan.credit.expiresAt,
-          createdAt: now,
-        },
-        select: { id: true },
-      });
-      credit = { id: row.id, validUntil: plan.credit.validUntil };
-    }
-    if (plan.cancelLesson) {
-      await tx.lesson.updateMany({
-        where: { id: lesson.id, status: "SCHEDULED" },
-        data: { status: "CANCELLED", cancelReason: STUDENT_CANCELLED },
-      });
-    }
-    await tx.auditLog.create({
+  let absenceId: string;
+  try {
+    const report = await tx.absenceReport.create({
       data: {
         schoolId: school.id,
-        actorId: actor.userId,
-        action: "absence.reported",
-        entityType: "AbsenceReport",
-        entityId: absenceId,
-        data: {
-          lessonId: lesson.id,
-          studentId: student.id,
-          byAdmin: actor.role === "ADMIN",
-          creditId: credit?.id ?? null,
-          expiresAt: plan.credit?.expiresAt.toISOString() ?? null,
-          lessonCancelled: plan.cancelLesson,
-          cutoffMinutes: school.absenceCutoffMinutes,
-        },
+        lessonId: lesson.id,
+        studentId: student.id,
+        reportedById: actor.userId,
+        reason: input.reason,
+        createdAt: now,
       },
+      select: { id: true },
     });
-    return {
-      status: "reported",
-      absenceId,
-      studentName: student.user.name,
-      credit,
-      lessonCancelled: plan.cancelLesson,
-    };
+    absenceId = report.id;
+  } catch (error) {
+    if (isUniqueViolation(error)) throw refusal("ALREADY_REPORTED");
+    throw error;
+  }
+
+  let credit: { id: string; validUntil: string } | null = null;
+  let creditReleased = false;
+  if (spent) {
+    // Never a new credit: in time the spent one comes back (§3).
+    if (plan.earnsCredit) {
+      const released = await releaseSpentCredit(
+        tx,
+        spent,
+        "STUDENT",
+        school.timezone,
+        now,
+      );
+      creditReleased = true;
+      if (released.status === "AVAILABLE") {
+        credit = {
+          id: spent.id,
+          validUntil: validUntilOf(released.expiresAt, school.timezone),
+        };
+      }
+    }
+  } else if (creditPlan) {
+    const row = await tx.makeupCredit.create({
+      data: {
+        schoolId: school.id,
+        studentId: student.id,
+        sourceLessonId: lesson.id,
+        absenceReportId: absenceId,
+        expiresAt: creditPlan.expiresAt,
+        createdAt: now,
+      },
+      select: { id: true },
+    });
+    credit = { id: row.id, validUntil: creditPlan.validUntil };
+  }
+  if (plan.cancelLesson) {
+    await tx.lesson.updateMany({
+      where: { id: lesson.id, status: "SCHEDULED" },
+      data: { status: "CANCELLED", cancelReason: STUDENT_CANCELLED },
+    });
+  }
+  await tx.auditLog.create({
+    data: {
+      schoolId: school.id,
+      actorId: actor.userId,
+      action: "absence.reported",
+      entityType: "AbsenceReport",
+      entityId: absenceId,
+      data: {
+        lessonId: lesson.id,
+        studentId: student.id,
+        byAdmin: actor.role === "ADMIN",
+        creditId: credit?.id ?? null,
+        creditReleased: creditReleased ? spent!.id : null,
+        expiresAt: creditPlan?.expiresAt.toISOString() ?? null,
+        lessonCancelled: plan.cancelLesson,
+        cutoffMinutes: school.absenceCutoffMinutes,
+      },
+    },
   });
+  return {
+    status: "reported",
+    absenceId,
+    studentName: student.user.name,
+    credit,
+    lessonCancelled: plan.cancelLesson,
+    lesson,
+    creditReleased,
+  };
 }
 
 export type DeleteAbsenceResult =
@@ -317,6 +436,8 @@ export async function deleteAbsence(
             endsAt: true,
             status: true,
             cancelReason: true,
+            rescheduledFromId: true,
+            rescheduledTo: { select: { id: true } },
             group: { select: { name: true, type: true } },
             room: { select: { capacity: true } },
           },
@@ -336,6 +457,14 @@ export async function deleteAbsence(
       now,
     });
     if (refused) throw refusal(refused);
+    // A 1-on-1 in a reschedule chain isn't restored: it was moved on, or
+    // its credit already came back (§3, §7). Move it with Reschedule.
+    if (
+      restoresLesson &&
+      (lesson.rescheduledTo !== null || lesson.rescheduledFromId !== null)
+    ) {
+      throw refusal("ABSENCE_RESCHEDULED");
+    }
 
     let overridden: Conflict[] = [];
     if (restoresLesson) {

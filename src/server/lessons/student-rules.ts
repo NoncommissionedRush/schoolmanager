@@ -21,18 +21,21 @@ export function parseShown(value: string | undefined): number {
 
 /**
  * Whether a student may open a lesson (§2): it belongs to a group they were
- * a member of when it started, its term is published, and it has started.
+ * a member of when it started, or they hold an active replacement booking
+ * into it (absences.md §2), its term is published, and it has started.
  * Anything else is "not found".
  */
 export function canStudentSeeLesson(
   memberships: readonly MembershipWindow[],
-  lesson: { groupId: string; startsAt: Date; published: boolean },
+  lesson: { id?: string; groupId: string; startsAt: Date; published: boolean },
   now: Date,
+  bookedLessonIds: readonly string[] = [],
 ): boolean {
   return (
     lesson.published &&
     hasStarted(lesson, now) &&
-    isMemberAt(memberships, lesson.groupId, lesson.startsAt)
+    (isMemberAt(memberships, lesson.groupId, lesson.startsAt) ||
+      (lesson.id !== undefined && bookedLessonIds.includes(lesson.id)))
   );
 }
 

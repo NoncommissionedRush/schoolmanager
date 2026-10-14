@@ -76,6 +76,27 @@ describe("canStudentSeeLesson", () => {
     ).toBe(false);
   });
 
+  it("allows another group's lesson only while booked onto it as a replacement", () => {
+    const booked = { id: "l9", ...lesson("g3", "2026-10-13T15:00:00Z") };
+    expect(canStudentSeeLesson(memberships, booked, NOW, ["l9"])).toBe(true);
+    // Not booked (rejected, cancelled or moved): no access.
+    expect(canStudentSeeLesson(memberships, booked, NOW, [])).toBe(false);
+    // A booking gives no access before the lesson starts or when unpublished.
+    expect(
+      canStudentSeeLesson(
+        memberships,
+        { ...booked, startsAt: at("2026-10-21T15:00:00Z") },
+        NOW,
+        ["l9"],
+      ),
+    ).toBe(false);
+    expect(
+      canStudentSeeLesson(memberships, { ...booked, published: false }, NOW, [
+        "l9",
+      ]),
+    ).toBe(false);
+  });
+
   it("refuses other groups, future lessons and unpublished terms", () => {
     expect(
       canStudentSeeLesson(

@@ -504,7 +504,7 @@ describe.skipIf(!url)("absences & makeup credits (database)", () => {
       { shownHistory: 20 },
       NOW,
     );
-    expect(view.policy).toEqual({ hours: 24, days: 30 });
+    expect(view.policy).toEqual({ hours: 24, days: 30, cutoffMinutes: 1440 });
     expect(view.credits.map((c) => c.sourceDate)).toEqual([
       "2026-10-21",
       "2026-10-22",

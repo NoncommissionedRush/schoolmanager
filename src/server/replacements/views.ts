@@ -15,6 +15,7 @@ import {
   cutoffAt,
   daysLeft,
   type IsoDate,
+  RESCHEDULED,
   STUDENT_CANCELLED,
   toZonedDateTime,
   validUntilOf,
@@ -29,7 +30,7 @@ import {
 
 export type { StudentAttendance };
 
-import { ACTIVE_REPLACEMENT } from "./service";
+import { ACTIVE_REPLACEMENT } from "./release";
 
 /** The school's absence settings, as the student policy line shows them. */
 export async function loadAbsenceSettings(db: SchoolDb) {
@@ -62,6 +63,23 @@ function times(
   };
 }
 
+/** The first lesson of a reschedule chain (the lesson made up for). */
+async function rescheduleRoot(
+  db: SchoolDb,
+  lesson: { startsAt: Date; rescheduledFromId: string | null },
+) {
+  let current = lesson;
+  for (let i = 0; i < 1_000 && current.rescheduledFromId; i++) {
+    const previous = await db.lesson.findFirst({
+      where: { id: current.rescheduledFromId },
+      select: { startsAt: true, rescheduledFromId: true },
+    });
+    if (!previous) break;
+    current = previous;
+  }
+  return current;
+}
+
 // ---------------------------------------------------------------------------
 // Student: what a lesson's "Can't attend?" needs (§5.1)
 // ---------------------------------------------------------------------------
@@ -74,16 +92,20 @@ export async function loadStudentAttendance(
   db: SchoolDb,
   student: { id: string; userId: string },
   lessons: readonly { id: string; startsAt: Date }[],
+  now: Date = new Date(),
 ): Promise<Map<string, StudentAttendance>> {
   const out = new Map<string, StudentAttendance>();
   if (lessons.length === 0) return out;
-  const [settings, reports] = await Promise.all([
+  const lessonIds = lessons.map((l) => l.id);
+  const creditInfo = {
+    status: true,
+    expiresAt: true,
+    sourceLesson: { select: { startsAt: true } },
+  } satisfies Prisma.MakeupCreditSelect;
+  const [settings, reports, bookings, moved] = await Promise.all([
     loadAbsenceSettings(db),
     db.absenceReport.findMany({
-      where: {
-        studentId: student.id,
-        lessonId: { in: lessons.map((l) => l.id) },
-      },
+      where: { studentId: student.id, lessonId: { in: lessonIds } },
       select: {
         lessonId: true,
         createdAt: true,
@@ -91,8 +113,66 @@ export async function loadStudentAttendance(
         makeupCredit: { select: { id: true } },
       },
     }),
+    db.replacementRequest.findMany({
+      where: {
+        studentId: student.id,
+        targetLessonId: { in: lessonIds },
+        status: { in: [...ACTIVE_REPLACEMENT] },
+      },
+      select: {
+        id: true,
+        targetLessonId: true,
+        originalLesson: { select: { startsAt: true } },
+        makeupCredit: { select: creditInfo },
+      },
+    }),
+    // Rescheduled 1-on-1s (ad-hoc lessons of their own group).
+    db.lesson.findMany({
+      where: { id: { in: lessonIds }, rescheduledFromId: { not: null } },
+      select: {
+        id: true,
+        startsAt: true,
+        rescheduledFromId: true,
+        spentCredit: { select: creditInfo },
+      },
+    }),
   ]);
+  const tz = settings.timeZone;
+  const localDate = (instant: Date) => toZonedDateTime(instant, tz).date;
+  const creditOf = (credit: {
+    status: "AVAILABLE" | "USED" | "EXPIRED";
+    expiresAt: Date;
+    sourceLesson: { startsAt: Date };
+  }) => ({
+    sourceDate: localDate(credit.sourceLesson.startsAt),
+    validUntil: validUntilOf(credit.expiresAt, tz),
+    expired: now.getTime() >= credit.expiresAt.getTime(),
+  });
   const byLesson = new Map(reports.map((r) => [r.lessonId, r]));
+  const bookingOf = new Map<string, StudentAttendance["booking"]>();
+  // An admin-moved 1-on-1 earns a credit valid from its chain root (§3).
+  const anchorOf = new Map<string, Date>();
+  for (const b of bookings) {
+    bookingOf.set(b.targetLessonId, {
+      kind: "replacement",
+      bookingId: b.id,
+      originalDate: localDate(b.originalLesson.startsAt),
+      credit: creditOf(b.makeupCredit),
+    });
+  }
+  for (const lesson of moved) {
+    const root = await rescheduleRoot(db, lesson);
+    anchorOf.set(lesson.id, root.startsAt);
+    bookingOf.set(lesson.id, {
+      kind: "rescheduled",
+      bookingId: null,
+      originalDate: localDate(root.startsAt),
+      credit:
+        lesson.spentCredit?.status === "USED"
+          ? creditOf(lesson.spentCredit)
+          : null,
+    });
+  }
   for (const lesson of lessons) {
     const report = byLesson.get(lesson.id);
     out.set(lesson.id, {
@@ -102,7 +182,7 @@ export async function loadStudentAttendance(
       ).toISOString(),
       cutoffMinutes: settings.absenceCutoffMinutes,
       creditValidUntil: creditExpiry(
-        lesson.startsAt,
+        anchorOf.get(lesson.id) ?? lesson.startsAt,
         settings.makeupCreditValidDays,
         settings.timeZone,
       ).validUntil,
@@ -113,6 +193,7 @@ export async function loadStudentAttendance(
             credit: report.makeupCredit !== null,
           }
         : null,
+      booking: bookingOf.get(lesson.id) ?? null,
     });
   }
   return out;
@@ -121,6 +202,12 @@ export async function loadStudentAttendance(
 // ---------------------------------------------------------------------------
 // Student: Absences & credits tab (§5.4)
 // ---------------------------------------------------------------------------
+
+const usedOnSelect = {
+  startsAt: true,
+  endsAt: true,
+  group: { select: { name: true } },
+} satisfies Prisma.LessonSelect;
 
 const creditSelect = {
   id: true,
@@ -133,6 +220,12 @@ const creditSelect = {
       group: { select: { name: true, type: true } },
       teacher: { select: { user: { select: { name: true } } } },
     },
+  },
+  // What a USED credit is spent on, for the history line.
+  rescheduledLesson: { select: usedOnSelect },
+  replacements: {
+    where: { status: { in: [...ACTIVE_REPLACEMENT] } },
+    select: { targetLesson: { select: usedOnSelect } },
   },
 } satisfies Prisma.MakeupCreditSelect;
 
@@ -166,17 +259,54 @@ export type StudentHistoryItem =
       groupName: string;
       /** The day the credit expired (first day it was no longer valid). */
       expiredOn: IsoDate;
+      /** What a used credit was spent on. */
+      usedFor: {
+        kind: "replacement" | "rescheduled";
+        groupName: string;
+        date: IsoDate;
+        startMinute: number;
+      } | null;
     }
   | {
       kind: "cancelledNoCredit";
       id: string;
       sourceDate: IsoDate;
       groupName: string;
+    }
+  | {
+      /** A booking the school rejected or that its lesson's cancellation released. */
+      kind: "removedBySchool";
+      id: string;
+      sourceDate: IsoDate;
+      groupName: string;
+      reason: string | null;
+      lessonCancelled: boolean;
     };
 
+/** A replacement or rescheduled 1-on-1 that hasn't started (§5.4). */
+export type StudentUpcomingBooking = LessonTimes & {
+  kind: "replacement" | "rescheduled";
+  /** Replacement booking id; null for a rescheduled lesson. */
+  bookingId: string | null;
+  lessonId: string;
+  groupName: string;
+  oneOnOne: boolean;
+  teacherName: string;
+  startsAt: string;
+  originalDate: IsoDate;
+  /** Last instant cancelling gives the credit back. */
+  cutoffAt: string;
+  credit: { sourceDate: IsoDate; validUntil: IsoDate; expired: boolean } | null;
+  /** The school overrode the booking ("Changed by school") and why. */
+  changedBySchool: string | null;
+  /** "Valid until" of what cancelling in time gives (rescheduled 1-on-1). */
+  creditValidUntil: IsoDate;
+};
+
 export type StudentAbsences = {
-  policy: { hours: number; days: number };
+  policy: { hours: number; days: number; cutoffMinutes: number };
   credits: StudentCredit[];
+  bookings: StudentUpcomingBooking[];
   upcoming: StudentCancellation[];
   history: StudentHistoryItem[];
   historyCount: number;
@@ -198,7 +328,8 @@ export async function loadStudentAbsences(
 ): Promise<StudentAbsences> {
   const settings = await loadAbsenceSettings(db);
   const tz = settings.timeZone;
-  const [credits, reports] = await Promise.all([
+  const cutoffMs = settings.absenceCutoffMinutes * 60_000;
+  const [credits, reports, replacements, rescheduled] = await Promise.all([
     db.makeupCredit.findMany({
       where: { studentId: student.id },
       select: creditSelect,
@@ -221,10 +352,162 @@ export async function loadStudentAbsences(
         },
       },
     }),
+    db.replacementRequest.findMany({
+      where: { studentId: student.id, status: { not: "CANCELLED" } },
+      select: {
+        id: true,
+        status: true,
+        cancelReason: true,
+        reviewNote: true,
+        originalLesson: { select: { startsAt: true } },
+        makeupCredit: {
+          select: {
+            expiresAt: true,
+            sourceLesson: { select: { startsAt: true } },
+          },
+        },
+        targetLesson: {
+          select: {
+            id: true,
+            startsAt: true,
+            endsAt: true,
+            group: { select: { name: true } },
+            teacher: { select: { user: { select: { name: true } } } },
+          },
+        },
+      },
+    }),
+    // Their rescheduled 1-on-1s that haven't started: a credit is spent on
+    // them, or an admin moved them.
+    db.lesson.findMany({
+      where: {
+        rescheduledFromId: { not: null },
+        status: "SCHEDULED",
+        startsAt: { gt: now },
+        group: {
+          type: "ONE_ON_ONE",
+          memberships: { some: { studentId: student.id } },
+        },
+      },
+      select: {
+        id: true,
+        startsAt: true,
+        endsAt: true,
+        rescheduledFromId: true,
+        group: { select: { name: true } },
+        teacher: { select: { user: { select: { name: true } } } },
+        spentCredit: {
+          select: {
+            studentId: true,
+            expiresAt: true,
+            sourceLesson: { select: { startsAt: true } },
+          },
+        },
+      },
+    }),
   ]);
+  const local = (instant: Date) => toZonedDateTime(instant, tz).date;
+
+  const bookings: StudentUpcomingBooking[] = [];
+  const history: { item: StudentHistoryItem; sortAt: number }[] = [];
+  for (const r of replacements) {
+    const target = r.targetLesson;
+    if (r.status === "REJECTED") {
+      history.push({
+        item: {
+          kind: "removedBySchool",
+          id: r.id,
+          sourceDate: local(target.startsAt),
+          groupName: target.group.name,
+          reason: r.reviewNote,
+          lessonCancelled: false,
+        },
+        sortAt: target.startsAt.getTime(),
+      });
+      continue;
+    }
+    if (target.startsAt <= now) continue;
+    bookings.push({
+      kind: "replacement",
+      bookingId: r.id,
+      lessonId: target.id,
+      ...times(target, tz),
+      groupName: target.group.name,
+      oneOnOne: false,
+      teacherName: target.teacher.user.name,
+      startsAt: target.startsAt.toISOString(),
+      originalDate: local(r.originalLesson.startsAt),
+      cutoffAt: new Date(target.startsAt.getTime() - cutoffMs).toISOString(),
+      credit: {
+        sourceDate: local(r.makeupCredit.sourceLesson.startsAt),
+        validUntil: validUntilOf(r.makeupCredit.expiresAt, tz),
+        expired: now.getTime() >= r.makeupCredit.expiresAt.getTime(),
+      },
+      changedBySchool: r.status === "OVERRIDDEN" ? (r.reviewNote ?? "") : null,
+      creditValidUntil: validUntilOf(r.makeupCredit.expiresAt, tz),
+    });
+  }
+  // Released because the school cancelled the lesson (absences.md §11).
+  const released = await db.replacementRequest.findMany({
+    where: {
+      studentId: student.id,
+      status: "CANCELLED",
+      cancelReason: "LESSON_CANCELLED",
+    },
+    select: {
+      id: true,
+      targetLesson: {
+        select: { startsAt: true, group: { select: { name: true } } },
+      },
+    },
+  });
+  for (const r of released) {
+    history.push({
+      item: {
+        kind: "removedBySchool",
+        id: r.id,
+        sourceDate: local(r.targetLesson.startsAt),
+        groupName: r.targetLesson.group.name,
+        reason: null,
+        lessonCancelled: true,
+      },
+      sortAt: r.targetLesson.startsAt.getTime(),
+    });
+  }
+  for (const lesson of rescheduled) {
+    const credit =
+      lesson.spentCredit?.studentId === student.id ? lesson.spentCredit : null;
+    const root = await rescheduleRoot(db, lesson);
+    bookings.push({
+      kind: "rescheduled",
+      bookingId: null,
+      lessonId: lesson.id,
+      ...times(lesson, tz),
+      groupName: lesson.group.name,
+      oneOnOne: true,
+      teacherName: lesson.teacher.user.name,
+      startsAt: lesson.startsAt.toISOString(),
+      originalDate: local(root.startsAt),
+      cutoffAt: new Date(lesson.startsAt.getTime() - cutoffMs).toISOString(),
+      credit: credit && {
+        sourceDate: local(credit.sourceLesson.startsAt),
+        validUntil: validUntilOf(credit.expiresAt, tz),
+        expired: now.getTime() >= credit.expiresAt.getTime(),
+      },
+      changedBySchool: null,
+      creditValidUntil: credit
+        ? validUntilOf(credit.expiresAt, tz)
+        : creditExpiry(root.startsAt, settings.makeupCreditValidDays, tz)
+            .validUntil,
+    });
+  }
+  bookings.sort(
+    (a, b) =>
+      a.startsAt.localeCompare(b.startsAt) ||
+      a.lessonId.localeCompare(b.lessonId),
+  );
 
   const available: StudentCredit[] = [];
-  const history: { item: StudentHistoryItem; sortAt: number }[] = [];
   for (const credit of credits) {
     const source = credit.sourceLesson;
     const sourceDate = toZonedDateTime(source.startsAt, tz).date;
@@ -240,6 +523,10 @@ export async function loadStudentAbsences(
         daysLeft: daysLeft(credit.expiresAt, now, tz),
       });
     } else {
+      const usedOn =
+        state === "USED"
+          ? (credit.replacements[0]?.targetLesson ?? credit.rescheduledLesson)
+          : null;
       history.push({
         item: {
           kind: state === "USED" ? "creditUsed" : "creditExpired",
@@ -247,6 +534,14 @@ export async function loadStudentAbsences(
           sourceDate,
           groupName: source.group.name,
           expiredOn: toZonedDateTime(credit.expiresAt, tz).date,
+          usedFor: usedOn
+            ? {
+                kind: credit.rescheduledLesson ? "rescheduled" : "replacement",
+                groupName: usedOn.group.name,
+                date: local(usedOn.startsAt),
+                startMinute: toZonedDateTime(usedOn.startsAt, tz).minute,
+              }
+            : null,
         },
         sortAt: source.startsAt.getTime(),
       });
@@ -299,8 +594,10 @@ export async function loadStudentAbsences(
     policy: {
       hours: Math.floor(settings.absenceCutoffMinutes / 60),
       days: settings.makeupCreditValidDays,
+      cutoffMinutes: settings.absenceCutoffMinutes,
     },
     credits: available,
+    bookings,
     upcoming,
     history: history.slice(0, options.shownHistory).map((h) => h.item),
     historyCount: history.length,
@@ -345,10 +642,13 @@ export type LessonRosterView = {
     reason: string | null;
     viaOffice: boolean;
     late: boolean;
+    replacement: boolean;
   }[];
   seatsTaken: number;
   /** A 1-on-1 the student cancelled: who, and why. */
   oneOnOneCancelled: { name: string; reason: string | null } | null;
+  /** A rescheduled 1-on-1: who moved it from when (absences.md §6.1). */
+  rescheduledFrom: { name: string; startsAt: string; byAdmin: boolean } | null;
   /** Admins can report an absence for a coming member now. */
   reportable: boolean;
 };
@@ -369,6 +669,7 @@ export async function loadLessonRoster(
       startsAt: true,
       status: true,
       cancelReason: true,
+      rescheduledFrom: { select: { startsAt: true, cancelReason: true } },
       term: { select: { timetablePublishedAt: true } },
       room: { select: { name: true, capacity: true } },
       group: {
@@ -402,8 +703,15 @@ export async function loadLessonRoster(
         },
       },
       replacementsTo: {
-        where: { status: { in: [...ACTIVE_REPLACEMENT] } },
+        where: {
+          OR: [
+            { status: { in: [...ACTIVE_REPLACEMENT] } },
+            { status: "CANCELLED", cancelReason: "STUDENT_LATE" },
+          ],
+        },
         select: {
+          status: true,
+          cancelledAt: true,
           student: { select: { id: true, user: { select: { name: true } } } },
           originalLesson: { select: { group: { select: { name: true } } } },
         },
@@ -423,16 +731,30 @@ export async function loadLessonRoster(
       viaOffice: a.reportedById !== a.student.userId,
       hasCredit: a.makeupCredit !== null,
     })),
-    replacements: lesson.replacementsTo.map((r) => ({
-      id: r.student.id,
-      name: r.student.user.name,
-      fromGroup: r.originalLesson.group.name,
-    })),
+    replacements: lesson.replacementsTo
+      .filter((r) => r.status !== "CANCELLED")
+      .map((r) => ({
+        id: r.student.id,
+        name: r.student.user.name,
+        fromGroup: r.originalLesson.group.name,
+      })),
+    lateCancelled: lesson.replacementsTo
+      .filter((r) => r.status === "CANCELLED")
+      .map((r) => ({
+        id: r.student.id,
+        name: r.student.user.name,
+        cancelledAt: r.cancelledAt!,
+      })),
   });
   const oneOnOne = lesson.group.type === "ONE_ON_ONE";
+  // A 1-on-1 the student cancelled; one moved on with the same credit has
+  // no report, so name the group's student.
   const studentCancelled =
     oneOnOne && lesson.cancelReason === STUDENT_CANCELLED
-      ? lesson.absenceReports[0]
+      ? (lesson.absenceReports[0] ?? {
+          student: { user: { name: members[0]?.name ?? "" } },
+          reason: null,
+        })
       : undefined;
   return {
     lessonId: lesson.id,
@@ -453,6 +775,14 @@ export async function loadLessonRoster(
           reason: studentCancelled.reason,
         }
       : null,
+    rescheduledFrom:
+      oneOnOne && lesson.rescheduledFrom
+        ? {
+            name: members[0]?.name ?? "",
+            startsAt: lesson.rescheduledFrom.startsAt.toISOString(),
+            byAdmin: lesson.rescheduledFrom.cancelReason === RESCHEDULED,
+          }
+        : null,
     reportable:
       lesson.status === "SCHEDULED" &&
       lesson.startsAt > now &&
