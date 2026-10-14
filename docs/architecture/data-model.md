@@ -99,6 +99,19 @@ The Phase 3 rules (cutoff, credit expiry, room-size limit, 1-on-1
 reschedule) and the schema changes they need are in
 [replacements.md](replacements.md).
 
+## Timetable generator (Phase 4)
+
+The generator assigns one teacher per group for a term
+([generator.md](generator.md)). Its inputs: `GroupLessonTime` (a group's
+weekly lesson times, each with a room, kept across terms), `TeacherLevel`
+(the levels a teacher may be given), `TeacherProfile.maxMinutesPerWeek`
+(hard for the generator, a warning by hand) and `GroupTermSkip` ("Skip this
+term"). Its output lives in `TimetableDraft` (one per term) with one
+`TimetableDraftAssignment` per included group, read only by the generator
+service; `GeneratorRun` records each run's progress and result. Applying a
+draft writes ordinary `TimetableSlot`s and lessons through the editor's
+checks; the draft is then deleted.
+
 ## Teacher availability
 
 `TeacherAvailability.kind`:
@@ -132,6 +145,10 @@ Prisma does not model CHECK constraints, so these live in
   body ≤ 2,000 characters
 - teacher note is about a student, group or lesson
 - replacement target ≠ original lesson
+- generator (in `*_generator_teacher_assignment`): lesson time weekday 1–7,
+  `0 ≤ start < end ≤ 1440` on the 5-minute grid; `max_minutes_per_week`
+  null or 15–6000; a draft has `effective_from` exactly when its mode is not
+  `REPLACE`; one `RUNNING` generator run per term (partial unique index)
 
 ### Terms never overlap
 
@@ -233,4 +250,7 @@ Lessons stay `SCHEDULED` (P2 doesn't use `COMPLETED`); most past lessons
 have a lesson log with homework, every sixth has none yet
 ("No log yet"). Also: teacher notes, one substitution, one cancelled
 lesson, absences with makeup credits and two replacements (auto-approved and
-overridden). Fixtures live in `prisma/seed/data.ts`.
+overridden). For the generator: every group's lesson times (its current
+slots), each teacher's levels (their groups' levels plus the next one up)
+and a weekly maximum on two teachers. Fixtures live in
+`prisma/seed/data.ts`.

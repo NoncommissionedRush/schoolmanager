@@ -74,6 +74,7 @@ message also gets `otherGroup`, `otherTime` (`HH:MM–HH:MM`), `dateCount` and
 | `ONE_ON_ONE_STUDENT_COUNT`    | overridable | A 1-on-1 group does not have exactly one enrolled student                              | `group`, `studentCount`                   |
 | `TEACHER_UNAVAILABLE_WEEKLY`  | overridable | A weekly unavailability overlaps (minus dates lifted by a `DATE_AVAILABLE` exception)  | `teacher`, `allDay` (yes/no), `time`      |
 | `TEACHER_UNAVAILABLE_ON_DATE` | overridable | A one-off unavailability overlaps                                                      | `teacher`, `allDay`, `time`, `firstDate`  |
+| `TEACHER_LEVEL_NOT_TAUGHT`    | overridable | The teacher has `TeacherLevel` rows, none for the group's level (generator.md §4.3)    | `teacher`, `level`                        |
 | `LESSON_ON_HOLIDAY`           | overridable | A single lesson on a holiday (slots simply skip holidays)                              | `holiday`, `firstDate`                    |
 | `OUTSIDE_SCHOOL_DAYS`         | overridable | Weekday not in `School.teachingWeekdays` (default Mon–Sat)                             | `weekday` (1–7)                           |
 | `OUTSIDE_SCHOOL_HOURS`        | overridable | Outside `School.dayStartMinute`–`dayEndMinute` (default 07:00–21:00)                   | `time`, `schoolHours`                     |
@@ -105,6 +106,14 @@ Notes:
   `DATE_UNAVAILABLE` rule on the same date.
 - Teacher unavailability is overridable because the teacher may agree to
   come in, and a date exception is usually handled with a substitute.
+- Levels (CARM-55): `TEACHER_LEVEL_NOT_TAUGHT` needs `GroupInfo.levelId`
+  and `SchedulingContext.teacherLevels`; without them it is skipped. A
+  teacher with no level rows at all gets no warning (the school may not use
+  levels yet). `loadContext` loads both, so the editor warns too.
+- `UNASSIGNED_TEACHER`: `checkSlot` / `checkLesson` with this sentinel
+  teacher id skip every teacher rule and report only the conflicts of the
+  time itself (the generator's readiness check, the group form's live
+  check).
 
 ### Saving with an override
 
