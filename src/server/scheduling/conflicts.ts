@@ -14,6 +14,7 @@ import {
   occurrenceOf,
   slotOccurrenceDates,
 } from "./generate-lessons";
+import { seatsTaken } from "./replacements";
 import {
   formatMinutes,
   type IsoDate,
@@ -51,6 +52,8 @@ type Booking = {
   teacherId: string;
   roomId: string | null;
   groupId: string;
+  /** Who attends: see `attendeesOf`. */
+  studentIds: readonly string[];
 };
 
 /**
@@ -67,10 +70,50 @@ export type Calendar = {
   rooms: ReadonlyMap<string, RoomInfo>;
   teachers: ReadonlyMap<string, PersonInfo>;
   students: ReadonlyMap<string, PersonInfo>;
+  /** Students absent from each lesson, by lesson id. */
+  absentByLesson: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Students booked into each lesson as active replacements, by lesson id. */
+  replacementsByLesson: ReadonlyMap<string, readonly string[]>;
 };
 
 const byId = <T extends { id: string }>(items: readonly T[]) =>
   new Map(items.map((item) => [item.id, item]));
+
+function byLesson(rows: SchedulingContext["absences"]) {
+  const out = new Map<string, string[]>();
+  for (const { lessonId, studentId } of rows ?? []) {
+    const list = out.get(lessonId);
+    if (list) list.push(studentId);
+    else out.set(lessonId, [studentId]);
+  }
+  return out;
+}
+
+/**
+ * Who attends a lesson and how many seats it takes (replacements.md §5):
+ * the group's enrolled students minus those who reported an absence on it,
+ * plus its active replacement students. A slot occurrence without a lesson
+ * row (`lessonId` null) has neither, so it is the enrolled students.
+ */
+export function attendeesOf(
+  calendar: Pick<Calendar, "absentByLesson" | "replacementsByLesson">,
+  lessonId: string | null,
+  group: GroupInfo,
+): { studentIds: string[]; seats: number } {
+  const absent =
+    (lessonId && calendar.absentByLesson.get(lessonId)) || new Set<string>();
+  const replacements =
+    (lessonId && calendar.replacementsByLesson.get(lessonId)) || [];
+  const present = group.studentIds.filter((id) => !absent.has(id));
+  return {
+    studentIds: [...new Set([...present, ...replacements])],
+    seats: seatsTaken({
+      memberIds: group.studentIds,
+      absentIds: [...absent],
+      replacementIds: replacements,
+    }),
+  };
+}
 
 /** Holidays that apply to a term: its own plus the school-wide ones. */
 export function holidaysOfTerm(
@@ -90,6 +133,14 @@ export function holidaysOfTerm(
 export function buildCalendar(context: SchedulingContext): Calendar {
   const { timeZone } = context.school;
   const terms = byId(context.terms);
+  const groups = byId(context.groups);
+  const attendance = {
+    absentByLesson: new Map(
+      [...byLesson(context.absences)].map(([id, ids]) => [id, new Set(ids)]),
+    ),
+    replacementsByLesson: byLesson(context.replacements),
+  };
+  const enrolled = (groupId: string) => groups.get(groupId)?.studentIds ?? [];
   const bookingsByDate = new Map<IsoDate, Booking[]>();
   const add = (booking: Booking) => {
     const list = bookingsByDate.get(booking.date);
@@ -119,6 +170,10 @@ export function buildCalendar(context: SchedulingContext): Calendar {
       teacherId: lesson.substituteTeacherId ?? lesson.teacherId,
       roomId: lesson.roomId,
       groupId: lesson.groupId,
+      studentIds: groups.has(lesson.groupId)
+        ? attendeesOf(attendance, lesson.id, groups.get(lesson.groupId)!)
+            .studentIds
+        : [],
     });
   }
 
@@ -141,6 +196,7 @@ export function buildCalendar(context: SchedulingContext): Calendar {
         teacherId: slot.teacherId,
         roomId: slot.roomId,
         groupId: slot.groupId,
+        studentIds: enrolled(slot.groupId),
       });
     }
   }
@@ -151,10 +207,11 @@ export function buildCalendar(context: SchedulingContext): Calendar {
     terms,
     slots: byId(context.slots),
     lessons: byId(context.lessons),
-    groups: byId(context.groups),
+    groups,
     rooms: byId(context.rooms),
     teachers: byId(context.teachers),
     students: byId(context.students),
+    ...attendance,
   };
 }
 
@@ -183,6 +240,8 @@ type Subject = {
    */
   keptRoomIds: readonly (string | null)[];
   occurrences: Occurrence[];
+  /** Who attends the candidate (clashes) and the seats it takes (room size). */
+  attendees: { studentIds: readonly string[]; seats: number };
   /** Bookings of the candidate itself (when editing), never compared. */
   isSelf: (booking: Booking) => boolean;
 };
@@ -272,17 +331,18 @@ function collect(calendar: Calendar, subject: Subject, out: ConflictSet) {
       { groupId: group.id },
     );
   }
-  if (room?.capacity != null && studentCount > room.capacity) {
+  const seats = subject.attendees.seats;
+  if (room?.capacity != null && seats > room.capacity) {
     out.add(
       "ROOM_CAPACITY_EXCEEDED",
       room.id,
-      { room: room.name, capacity: room.capacity, studentCount },
+      { room: room.name, capacity: room.capacity, studentCount: seats },
       { roomId: room.id, groupId: group.id },
     );
   }
 
   const { dayStartMinute, dayEndMinute } = context.school;
-  const groupStudents = new Set(group.studentIds);
+  const attending = new Set(subject.attendees.studentIds);
 
   for (const occ of occurrences) {
     if (occ.startMinute < dayStartMinute || occ.endMinute > dayEndMinute) {
@@ -361,7 +421,7 @@ function collect(calendar: Calendar, subject: Subject, out: ConflictSet) {
           occ.date,
         );
       } else {
-        const both = otherGroup.studentIds.filter((s) => groupStudents.has(s));
+        const both = other.studentIds.filter((s) => attending.has(s));
         if (both.length > 0) {
           const conflict = out.add(
             "STUDENT_DOUBLE_BOOKED",
@@ -441,10 +501,13 @@ export function checkSlot(
   const { timeZone } = calendar.context.school;
   const template = { ...candidate, id: candidate.id ?? "" };
   const selfId = candidate.id;
+  const group = lookup(calendar.groups, candidate.groupId, "group");
   collect(
     calendar,
     {
-      group: lookup(calendar.groups, candidate.groupId, "group"),
+      group,
+      // A weekly slot has no per-date absences or replacements.
+      attendees: attendeesOf(calendar, null, group),
       teacher: lookup(calendar.teachers, candidate.teacherId, "teacher"),
       room: candidate.roomId
         ? lookup(calendar.rooms, candidate.roomId, "room")
@@ -521,10 +584,13 @@ export function checkLesson(
     candidate.timetableSlotId && candidate.occurrenceDate
       ? `${candidate.timetableSlotId}|${candidate.occurrenceDate}`
       : null;
+  const group = lookup(calendar.groups, candidate.groupId, "group");
   collect(
     calendar,
     {
-      group: lookup(calendar.groups, candidate.groupId, "group"),
+      group,
+      // An existing lesson keeps its absences and replacement students.
+      attendees: attendeesOf(calendar, selfId ?? null, group),
       teacher: lookup(
         calendar.teachers,
         candidate.substituteTeacherId ?? candidate.teacherId,

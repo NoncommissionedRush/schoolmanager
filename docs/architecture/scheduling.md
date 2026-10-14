@@ -6,19 +6,19 @@ and how dated lessons follow them. The data model is in
 
 ## Where things live
 
-| Path                              | What                                                                                    |
-| --------------------------------- | --------------------------------------------------------------------------------------- |
-| `src/server/scheduling/`          | Pure domain logic. No Prisma, no Next.js; deterministic; unit- and property-tested      |
-| `· types.ts`                      | Plain-data inputs (`SchedulingContext`, `SlotInfo`, `LessonInfo`, …)                    |
-| `· conflict-types.ts`             | `CONFLICT_TYPES`, severities, `Conflict` shape, `decideSave` (override rule)            |
-| `· conflicts.ts`                  | `buildCalendar`, `checkSlot`, `checkLesson`, `checkTimetable`                           |
-| `· availability.ts`               | Teacher (un)availability rules for one date and time window                             |
-| `· generate-lessons.ts`           | Slot → dated lesson occurrences (term, validity range, holidays, DST)                   |
-| `· lesson-sync.ts`                | `planLessonSync` (reconcile lessons with slots/holidays), `planSlotEdit` (update/split) |
-| `· time.ts`                       | Calendar dates, minutes, time-zone conversion                                           |
-| `· testing/`                      | Fixtures and the realistic-data generator used by the tests                             |
-| `src/server/timetable/service.ts` | Database service the editor's server actions call; one transaction per action           |
-| `messages/en-GB/scheduling.json`  | Conflict messages, severity labels, cancel reasons, service errors                      |
+| Path                              | What                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `src/server/scheduling/`          | Pure domain logic. No Prisma, no Next.js; deterministic; unit- and property-tested                                              |
+| `· types.ts`                      | Plain-data inputs (`SchedulingContext`, `SlotInfo`, `LessonInfo`, …)                                                            |
+| `· conflict-types.ts`             | `CONFLICT_TYPES`, severities, `Conflict` shape, `decideSave` (override rule)                                                    |
+| `· conflicts.ts`                  | `buildCalendar`, `checkSlot`, `checkLesson`, `checkTimetable`                                                                   |
+| `· availability.ts`               | Teacher (un)availability rules for one date and time window                                                                     |
+| `· generate-lessons.ts`           | Slot → dated lesson occurrences (term, validity range, holidays, DST)                                                           |
+| `· lesson-sync.ts`                | `planLessonSync` (reconcile lessons with slots/holidays), `planSlotEdit` (update/split), `planSlotCarryOver` (split successors) |
+| `· time.ts`                       | Calendar dates, minutes, time-zone conversion                                                                                   |
+| `· testing/`                      | Fixtures and the realistic-data generator used by the tests                                                                     |
+| `src/server/timetable/service.ts` | Database service the editor's server actions call; one transaction per action                                                   |
+| `messages/en-GB/scheduling.json`  | Conflict messages, severity labels, cancel reasons, service errors                                                              |
 
 ## Conflicts
 
@@ -67,9 +67,9 @@ message also gets `otherGroup`, `otherTime` (`HH:MM–HH:MM`), `dateCount` and
 | `TEACHER_DOUBLE_BOOKED`       | blocking    | The (effective) teacher already teaches then                                           | `teacher` + double-booking params         |
 | `ROOM_DOUBLE_BOOKED`          | blocking    | A **physical** room is already used then                                               | `room` + double-booking params            |
 | `GROUP_DOUBLE_BOOKED`         | blocking    | The group already has a lesson then                                                    | `group` + double-booking params           |
-| `STUDENT_DOUBLE_BOOKED`       | overridable | A student of this group is also in the other group's lesson                            | `studentCount`, `students` + d.-b. params |
+| `STUDENT_DOUBLE_BOOKED`       | overridable | A student attending this lesson also attends the other one (see notes)                 | `studentCount`, `students` + d.-b. params |
 | `ONLINE_ROOM_SHARED`          | overridable | An **online** room is already used then (often a shared link or licence)               | `room` + double-booking params            |
-| `ROOM_CAPACITY_EXCEEDED`      | overridable | Enrolled students > room capacity (online rooms without capacity never)                | `room`, `capacity`, `studentCount`        |
+| `ROOM_CAPACITY_EXCEEDED`      | overridable | Seats taken > room capacity (online rooms without capacity never; see notes)           | `room`, `capacity`, `studentCount`        |
 | `GROUP_OVER_CAPACITY`         | overridable | Enrolled students > the group's own capacity                                           | `group`, `capacity`, `studentCount`       |
 | `ONE_ON_ONE_STUDENT_COUNT`    | overridable | A 1-on-1 group does not have exactly one enrolled student                              | `group`, `studentCount`                   |
 | `TEACHER_UNAVAILABLE_WEEKLY`  | overridable | A weekly unavailability overlaps (minus dates lifted by a `DATE_AVAILABLE` exception)  | `teacher`, `allDay` (yes/no), `time`      |
@@ -89,6 +89,17 @@ Notes:
   blocked. Archived levels need no check: a slot gets its level from its group.
 - Group size is the number of **currently enrolled** students
   (`GroupMembership.leftAt` null), not `Group.capacity`.
+- Who attends (CARM-46): a stored lesson is attended by its group's
+  enrolled students minus those with an absence report on it, plus its
+  active replacement students (`SchedulingContext.absences` and
+  `.replacements`, both optional). `ROOM_CAPACITY_EXCEEDED` on a lesson
+  counts these seats (`seatsTaken`, replacements.md §5), and
+  `STUDENT_DOUBLE_BOOKED` compares attendees on both sides, so an absent
+  student never clashes and a replacement student does. A weekly slot, a
+  slot occurrence without a lesson row and a new ad-hoc lesson have no
+  absences or replacements: enrolled students. `GROUP_OVER_CAPACITY` and
+  `ONE_ON_ONE_STUDENT_COUNT` always count enrolment. Restoring a cancelled
+  1-on-1 by deleting its absence checks with that absence left out.
 - Availability: a `DATE_AVAILABLE` exception lifts weekly rules on that date
   if it is whole-day or covers the whole lesson; it never lifts a
   `DATE_UNAVAILABLE` rule on the same date.
@@ -131,12 +142,12 @@ place; deleting removes it.
 **Published term:** every change has an effective date (default today; never
 in the past).
 
-| Action                    | What happens                                                                                                                                                                                                                                                            |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Create** slot           | `validFrom` = effective date; lessons are generated from then on.                                                                                                                                                                                                       |
-| **Edit** slot from date D | Its lessons from D on are reconciled away (below). If the slot then has no lessons at all, it is updated in place; otherwise it is **split**: the old slot ends on D − 1 and a new slot with the changes starts on D. Lessons of the new template are generated from D. |
-| **End** slot after date L | `validUntil` = L; later lessons are reconciled away; earlier ones stay. A slot ended before it ever took effect, with no lessons left, is deleted.                                                                                                                      |
-| **Delete** slot           | Only if none of its lessons must be kept (`SLOT_HAS_LESSONS` otherwise — end it instead).                                                                                                                                                                               |
+| Action                    | What happens                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Create** slot           | `validFrom` = effective date; lessons are generated from then on.                                                                                                                                                                                                                                                                                                                                 |
+| **Edit** slot from date D | Its lessons from D on are reconciled away (below). If the slot then has no lessons at all, it is updated in place; otherwise it is **split**: the old slot ends on D − 1 and a new slot with the changes starts on D. Lessons of the new template are generated from D; absences, cancelled 1-on-1s and bookings move to the successor in the same week first (replacements.md §5 _Slot splits_). |
+| **End** slot after date L | `validUntil` = L; later lessons are reconciled away; earlier ones stay. A slot ended before it ever took effect, with no lessons left, is deleted.                                                                                                                                                                                                                                                |
+| **Delete** slot           | Only if none of its lessons must be kept (`SLOT_HAS_LESSONS` otherwise — end it instead).                                                                                                                                                                                                                                                                                                         |
 
 **Reconciling lessons away.** A SCHEDULED lesson that is no longer wanted is
 **deleted** if it is untouched — exactly what its slot generates and nothing
@@ -218,6 +229,17 @@ Audit actions: `timetable_slot.created|updated|ended|deleted`,
   input order, give the same answer before and after lessons are generated,
   produce a clash-free timetable when used for greedy placement, and keep
   lessons consistent through slot ends and holiday changes.
+- `replacements.property.test.ts` (CARM-46): three seeded realistic schools
+  with a clash-free timetable. A random sequence of absences, bookings,
+  student cancellations, rejections, room moves and 1-on-1 reschedules,
+  each applied only when the rules allow it, must keep: no lesson over its
+  room size, no credit backing two things, no student in two overlapping
+  lessons, every active booking clean under `reviewReplacement`, every
+  `rescheduleOptions` time passing `checkReschedule` and `checkLesson` with
+  no conflicts, and the same answers for shuffled inputs.
+- `src/server/timetable/split.db.test.ts`: slot-split carry-over against
+  Postgres (absences, credits, bookings moved or released, cancelled
+  1-on-1 successors), opt-in like the next one.
 - `src/server/timetable/service.db.test.ts`: the service against Postgres.
   Opt-in (not in CI yet): point `SCHEDULING_TEST_DATABASE_URL` at a migrated
   scratch database. It creates and removes its own school; if the demo seed is

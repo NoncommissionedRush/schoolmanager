@@ -496,6 +496,62 @@ describe("checkLesson", () => {
     ).toEqual(["ROOM_ARCHIVED"]);
   });
 
+  it("counts absences and replacement students in the room size", () => {
+    // g1 = s1, s2 in r3 (2 seats); s3 is booked in as a replacement.
+    const rooms = [room("r1"), room("r3", { capacity: 2 })];
+    const stored = lesson("l", { roomId: "r3" });
+    const replacements = [{ lessonId: "l", studentId: "s3" }];
+    const full = calendar({ rooms, lessons: [stored], replacements });
+    expect(checkLesson(full, stored)).toMatchObject([
+      {
+        type: "ROOM_CAPACITY_EXCEEDED",
+        params: { capacity: 2, studentCount: 3 },
+      },
+    ]);
+    // s1 reported absent: the seat is free again.
+    const absences = [{ lessonId: "l", studentId: "s1" }];
+    expect(
+      checkLesson(
+        calendar({ rooms, lessons: [stored], replacements, absences }),
+        stored,
+      ),
+    ).toEqual([]);
+    // A new lesson of the group has no absences or bookings yet.
+    expect(
+      checkLesson(calendar({ rooms, absences, replacements }), {
+        ...stored,
+        id: undefined,
+      }),
+    ).toEqual([]);
+  });
+
+  it("finds clashes of attending students only", () => {
+    // g3 (s2, s4) meets at the same time as g1's lesson in another room.
+    const g1 = lesson("l1", { groupId: "g1", roomId: "r1" });
+    const g3 = lesson("l3", { groupId: "g3", teacherId: "t2", roomId: null });
+    const clash = (ctx: Partial<SchedulingContext>) =>
+      checkLesson(calendar({ lessons: [g1, g3], ...ctx }), g1);
+    expect(clash({})).toMatchObject([
+      { type: "STUDENT_DOUBLE_BOOKED", refs: { studentIds: ["s2"] } },
+    ]);
+    // s2 is absent from either lesson: no clash.
+    for (const lessonId of ["l1", "l3"]) {
+      expect(clash({ absences: [{ lessonId, studentId: "s2" }] })).toEqual([]);
+    }
+    // s3 (g2) is booked into g3's lesson and into this one.
+    expect(
+      clash({
+        absences: [{ lessonId: "l3", studentId: "s2" }],
+        replacements: [
+          { lessonId: "l1", studentId: "s3" },
+          { lessonId: "l3", studentId: "s3" },
+        ],
+      }),
+    ).toMatchObject([
+      { type: "STUDENT_DOUBLE_BOOKED", refs: { studentIds: ["s3"] } },
+    ]);
+  });
+
   it("blocks a lesson that ends before it starts", () => {
     const broken = lesson("x", {
       endsAt: new Date("2026-10-13T06:00:00Z"),

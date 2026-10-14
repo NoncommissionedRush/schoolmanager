@@ -5,7 +5,7 @@ import {
   type LessonOccurrence,
   occurrenceOf,
 } from "./generate-lessons";
-import { addDays, type IsoDate } from "./time";
+import { addDays, type IsoDate, isoWeekday } from "./time";
 import type { HolidayInfo, LessonInfo, SlotInfo, TermInfo } from "./types";
 
 /** A stored lesson plus whether anything else points at it. */
@@ -15,6 +15,8 @@ export type ExistingLesson = LessonInfo & {
    * replacements or makeup credits reference this lesson.
    */
   hasDependents: boolean;
+  /** `Lesson.cancelReason`; needed by `planSlotCarryOver`. */
+  cancelReason?: string | null;
 };
 
 /** Stored in `Lesson.cancelReason`; the UI translates `scheduling.cancelReasons.<code>`. */
@@ -225,4 +227,120 @@ export function planSlotEdit(
     ended: { ...slot, validUntil: addDays(nextFrom, -1) },
     next,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Slot splits: what follows the slot to its successor lessons
+// ---------------------------------------------------------------------------
+
+/**
+ * Cancel reasons of a 1-on-1 the student or an admin took out of the
+ * timetable (replacements.md §3, §7). In a split, the successor lesson is
+ * created already cancelled with the same reason.
+ */
+export const CARRIED_CANCEL_REASONS = ["STUDENT_CANCELLED", "RESCHEDULED"];
+
+/** One old-slot lesson and the new slot's occurrence that takes its place. */
+export type CarryOver = {
+  fromLessonId: string;
+  toSlotId: string;
+  toDate: IsoDate;
+  /**
+   * Set when `fromLessonId` is a cancelled 1-on-1: its successor is created
+   * cancelled with this reason, so the student never gets the week back.
+   */
+  cancelSuccessor: string | null;
+};
+
+export type SlotCarryOverInput = {
+  /** The old slot as it ends (`validUntil` = the day before the split). */
+  ended: SlotInfo;
+  /** The new slot continuing it. */
+  next: SlotInfo;
+  term: TermInfo;
+  holidays: readonly HolidayInfo[];
+  /** The old slot's generated lessons from `from` on, any status. */
+  lessons: readonly ExistingLesson[];
+  /** Lessons the split cancels (`planLessonSync(...).cancel` of `ended`). */
+  cancelling: readonly string[];
+  timeZone: string;
+  from: IsoDate;
+  now?: Date;
+};
+
+/** Monday of the ISO week `date` is in. */
+const weekOf = (date: IsoDate) => addDays(date, 1 - isoWeekday(date));
+
+/**
+ * Pairs each old-slot lesson whose absences, cancellation or replacement
+ * bookings must survive a slot split with its **successor**: the new slot's
+ * occurrence in the same ISO week (replacements.md §5 _Slot splits_).
+ * Candidates are the lessons the split cancels (they carry history) and
+ * 1-on-1s already cancelled by the student or rescheduled by an admin.
+ * A lesson has no successor when the new slot doesn't occur that week
+ * (a holiday, the slot ends, or the new weekday falls before `from`), when
+ * the successor has already started, or when the split changes the group
+ * (absences and bookings belong to the old group's lesson). Pure and
+ * deterministic: sorted by date, then lesson id.
+ */
+export function planSlotCarryOver({
+  ended,
+  next,
+  term,
+  holidays,
+  lessons,
+  cancelling,
+  timeZone,
+  from,
+  now,
+}: SlotCarryOverInput): CarryOver[] {
+  if (next.groupId !== ended.groupId) return [];
+  const started = (startsAt: Date) => now !== undefined && startsAt <= now;
+  const successors = new Map<IsoDate, IsoDate>();
+  for (const o of generateLessonOccurrences({
+    slots: [next],
+    term,
+    holidays,
+    timeZone,
+    range: { startDate: from },
+  })) {
+    if (!started(o.startsAt)) successors.set(weekOf(o.date), o.date);
+  }
+  const cancelled = new Set(cancelling);
+  const out: CarryOver[] = [];
+  const taken = new Set<IsoDate>();
+  const sorted = [...lessons].sort(
+    (a, b) =>
+      compareStrings(a.occurrenceDate ?? "", b.occurrenceDate ?? "") ||
+      compareStrings(a.id, b.id),
+  );
+  for (const lesson of sorted) {
+    const date = lesson.occurrenceDate;
+    if (
+      lesson.timetableSlotId !== ended.id ||
+      !date ||
+      date < from ||
+      started(lesson.startsAt)
+    ) {
+      continue;
+    }
+    const cancelSuccessor =
+      lesson.status === "CANCELLED" &&
+      lesson.cancelReason &&
+      CARRIED_CANCEL_REASONS.includes(lesson.cancelReason)
+        ? lesson.cancelReason
+        : null;
+    if (!cancelSuccessor && !cancelled.has(lesson.id)) continue;
+    const toDate = successors.get(weekOf(date));
+    // One lesson per week: a second candidate that week keeps its own.
+    if (!toDate || taken.has(toDate)) continue;
+    taken.add(toDate);
+    out.push({
+      fromLessonId: lesson.id,
+      toSlotId: next.id,
+      toDate,
+      cancelSuccessor,
+    });
+  }
+  return out;
 }
