@@ -47,7 +47,8 @@
   "confirm": {
     "archiveTitle": "Archive {name}?",
     "deleteTitle": "Delete {name}?",
-    "irreversible": "This can't be undone."
+    "irreversible": "This can't be undone.",
+    "restoreTitle": "Restore {name}?"
   },
   "blocked": {
     "archiveTitle": "{name} can't be archived yet",

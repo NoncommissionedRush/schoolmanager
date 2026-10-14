@@ -17,7 +17,7 @@ export type FieldErrors = Record<string, Message>;
 export type Blocked = {
   title: Message;
   reason: Message;
-  items?: string[];
+  items?: Message[];
   link?: { href: string; label: Message };
 };
 

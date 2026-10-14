@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useCallback } from "react";
 
-import type { Message, MessageValue } from "@/server/admin/result";
+import type { Message } from "@/server/admin/result";
 
 type RawTranslate = (
   key: string,
@@ -19,18 +19,19 @@ export function useMessage() {
   return useCallback(
     function render(message: Message): string {
       const values: Record<string, string | number> = {};
+      // Field labels inside validation messages read mid-sentence
+      // ("Choose level."), so they are lower-cased there.
+      const lower = message.key.startsWith("validation.");
       for (const [name, value] of Object.entries(message.values ?? {})) {
-        values[name] = resolve(value, render).toString();
+        values[name] =
+          typeof value === "object"
+            ? lower
+              ? render(value).toLowerCase()
+              : render(value)
+            : value;
       }
       return t(message.key, values);
     },
     [t],
   );
-}
-
-function resolve(
-  value: MessageValue,
-  render: (message: Message) => string,
-): string | number {
-  return typeof value === "object" ? render(value).toLowerCase() : value;
 }

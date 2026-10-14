@@ -229,8 +229,8 @@ export function BlockedDialog({
         </AlertDialogHeader>
         {items.length > 0 && (
           <ul className="list-disc pl-5 text-sm">
-            {items.slice(0, 5).map((item) => (
-              <li key={item}>{item}</li>
+            {items.slice(0, 5).map((item, index) => (
+              <li key={index}>{render(item)}</li>
             ))}
             {items.length > 5 && (
               <li>{t("blocked.more", { count: items.length - 5 })}</li>

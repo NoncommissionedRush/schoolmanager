@@ -1,1 +1,8 @@
-{}
+{
+  "title": "Administrators",
+  "new": "New administrator",
+  "error": {
+    "lastAdmin": "You can't archive the last administrator.",
+    "self": "You can't archive your own account."
+  }
+}

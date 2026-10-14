@@ -48,6 +48,5 @@
     "slotsKeepRunning": "{count, plural, one {# slot still uses} other {# slots still use}} this room. They keep running and are still checked. To move them, edit them in the timetable.",
     "openTimetable": "Open timetable"
   },
-  "editSubmit": "Save changes",
-  "restoreTitle": "Restore {name}?"
+  "editSubmit": "Save changes"
 }

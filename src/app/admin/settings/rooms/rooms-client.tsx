@@ -202,7 +202,7 @@ export function RoomRowActions({ room }: { room: Room }) {
       <ConfirmDialog
         open={dialog === "restore"}
         onOpenChange={close}
-        title={t("restoreTitle", { name: room.name })}
+        title={tc("confirm.restoreTitle", { name: room.name })}
         confirmLabel={tc("restore")}
         run={() => restoreRoomAction(room.id)}
       />

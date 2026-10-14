@@ -1,1 +1,7 @@
-{}
+{
+  "blocked": {
+    "hasSlots": "{name} still teaches {count, plural, one {# timetable slot} other {# timetable slots}} in current or upcoming terms. End or reassign them in the timetable first.",
+    "openTimetable": "Open timetable",
+    "slotItem": "{group} · {weekday} {time}"
+  }
+}
