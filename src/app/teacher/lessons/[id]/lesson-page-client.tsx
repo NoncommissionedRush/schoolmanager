@@ -32,7 +32,6 @@ const noteActions: NoteActions = {
   create: createNoteAction,
   update: updateNoteAction,
   remove: deleteNoteAction,
-  loadEarlier: loadEarlierNotesAction,
 };
 
 /** Teacher lesson page body (lessons.md §5.2–5.3). */
@@ -114,6 +113,7 @@ export function TeacherLessonClient({
             students={lesson.students}
             initial={internalNotes}
             actions={noteActions}
+            loadEarlier={loadEarlierNotesAction}
           />
         </div>
       </div>

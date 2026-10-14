@@ -1,0 +1,28 @@
+{
+  "title": "Homework",
+  "allGroups": "All groups",
+  "group": "Group",
+  "none": "No homework",
+  "noneForLesson": "No homework for this lesson.",
+  "weCovered": "We covered: {text}",
+  "nothingYet": "Your teacher hasn't added notes for this lesson yet.",
+  "loadMore": "Load more",
+  "empty": {
+    "title": "No lessons yet",
+    "description": "After your first lesson, you'll see what was covered and the homework here."
+  },
+  "home": {
+    "title": "Latest homework",
+    "seeAll": "See all",
+    "empty": "No homework from your last lessons."
+  },
+  "lesson": {
+    "covered": "What we covered",
+    "logNotYet": "Your teacher hasn't written the lesson log yet.",
+    "substitute": "{name} (substitute)"
+  },
+  "back": {
+    "homework": "Homework",
+    "timetable": "Timetable"
+  }
+}

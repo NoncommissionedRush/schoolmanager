@@ -262,6 +262,30 @@ export async function loadEarlierNotes(
 }
 
 // ---------------------------------------------------------------------------
+// Student detail › Internal notes (lessons.md §7): admins only
+// ---------------------------------------------------------------------------
+
+/**
+ * Every note about one student, newest first, read-only. Admins only: a
+ * teacher reads notes through the lessons they teach (`loadLessonNotes`).
+ */
+export async function loadStudentNotes(
+  db: SchoolDb,
+  viewer: NoteViewer,
+  studentId: string,
+): Promise<NoteView[]> {
+  assertNoteReader(viewer);
+  if (viewer.role !== "ADMIN" || !isUuid(studentId)) throw notFound();
+  const rows = await db.teacherNote.findMany({
+    where: { studentId },
+    select: noteViewSelect,
+    orderBy: newestFirst,
+  });
+  // Admins never own notes, so nothing is editable here.
+  return rows.map((row) => toNoteView(row, { role: viewer.role }));
+}
+
+// ---------------------------------------------------------------------------
 // Writes: teachers only, on lessons they teach or substitute; a note can be
 // changed or deleted only by its author. Admins read notes but don't write
 // them (lessons.md §7).

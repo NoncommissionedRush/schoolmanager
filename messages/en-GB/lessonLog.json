@@ -24,5 +24,9 @@
   "locked": {
     "cancelled": "This lesson was cancelled, so its lesson log can't be changed.",
     "notStarted": "You can fill this in once the lesson has started."
+  },
+  "readOnly": {
+    "empty": "No lesson log yet.",
+    "notStarted": "The lesson hasn't started yet."
   }
 }

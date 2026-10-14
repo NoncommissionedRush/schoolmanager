@@ -110,6 +110,7 @@ Admin
 | ------------------------- | ------------------------------------------------- | ------------------- | ------------------ | ----- |
 | —                         | Dashboard                                         | `nav.dashboard`     | `layout-dashboard` | P0    |
 | Schedule                  | Timetable                                         | `nav.timetable`     | `calendar-days`    | P1    |
+| Schedule                  | Lesson log (read-only, `lessons.md` §7)           | `nav.lessonLog`     | `notebook-pen`     | P2    |
 | Schedule                  | Absences & replacements                           | `nav.absences`      | `calendar-x`       | P3    |
 | Schedule                  | Substitutions                                     | `nav.substitutions` | `user-round-cog`   | P5    |
 | Schedule                  | Auto-generate                                     | `nav.autoGenerate`  | `wand-sparkles`    | P4    |

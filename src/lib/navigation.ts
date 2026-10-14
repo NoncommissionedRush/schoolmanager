@@ -58,6 +58,15 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       enabled: true,
       section: "schedule",
     },
+    // Read-only lesson list (lessons.md §7): which lessons miss a log.
+    {
+      label: "lessonLog",
+      href: "/admin/lessons",
+      icon: "notebook-pen",
+      phase: 2,
+      enabled: true,
+      section: "schedule",
+    },
     {
       label: "absences",
       href: "/admin/absences",
@@ -216,6 +225,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/student/homework",
       icon: "clipboard-list",
       phase: 2,
+      enabled: true,
       tab: true,
     },
     {

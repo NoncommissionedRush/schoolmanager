@@ -9,6 +9,7 @@ import dashboard from "./dashboard.json";
 import errors from "./errors.json";
 import groups from "./groups.json";
 import holidays from "./holidays.json";
+import homework from "./homework.json";
 import layout from "./layout.json";
 import lessonLog from "./lessonLog.json";
 import lessons from "./lessons.json";
@@ -36,6 +37,7 @@ const messages = {
   errors,
   groups,
   holidays,
+  homework,
   layout,
   lessonLog,
   lessons,

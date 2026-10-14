@@ -68,6 +68,8 @@ export type LessonRecord = {
   } | null;
   /** Students of the group on the lesson's date. */
   students: { id: string; name: string }[];
+  /** Homework of a started lesson; loaded for students only. */
+  homework?: string | null;
 };
 
 /**
@@ -102,6 +104,8 @@ export type LessonView = {
   students: { id: string; name: string }[] | null;
   /** Set for teacher viewers only. */
   teacherRole: TeacherRole | null;
+  /** The lesson's homework, for students once it has started (lessons.md §5.1). */
+  homework: string | null;
 };
 
 /** Projects a lesson for `viewer`; students never get other students' names. */
@@ -155,6 +159,7 @@ export function toLessonView(
         ? null
         : [...lesson.students].sort((a, b) => a.name.localeCompare(b.name)),
     teacherRole,
+    homework: viewer.kind === "STUDENT" ? (lesson.homework ?? null) : null,
   };
 }
 

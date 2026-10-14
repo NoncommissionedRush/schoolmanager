@@ -1,8 +1,8 @@
 "use client";
 
-import { ExternalLink, NotebookPen } from "lucide-react";
+import { ClipboardList, ExternalLink, NotebookPen } from "lucide-react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useNow, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -34,6 +34,11 @@ export function LessonDetailsSheet({
   const tl = useTranslations("lessons");
   const formatDate = useDateFormat();
   const mobile = useIsMobile();
+  // "View lesson" only once the lesson has started (lessons.md §2); the
+  // lesson page itself enforces the same rule server-side.
+  const now = useNow({ updateInterval: 60_000 });
+  const started =
+    lesson !== null && new Date(lesson.startsAt).getTime() <= now.getTime();
 
   return (
     <Sheet open={lesson !== null} onOpenChange={onOpenChange}>
@@ -121,6 +126,22 @@ export function LessonDetailsSheet({
                   </a>
                 )}
               </dd>
+              {role === "STUDENT" && lesson.homework && (
+                <>
+                  <dt className="text-muted-foreground">
+                    {tl("sheet.homework")}
+                  </dt>
+                  <dd className="flex gap-2">
+                    <ClipboardList
+                      aria-hidden="true"
+                      className="mt-1 size-4 shrink-0 text-primary"
+                    />
+                    <span className="break-words whitespace-pre-wrap">
+                      {lesson.homework}
+                    </span>
+                  </dd>
+                </>
+              )}
               {lesson.students && role !== "STUDENT" && (
                 <>
                   <dt className="text-muted-foreground">
@@ -147,14 +168,36 @@ export function LessonDetailsSheet({
                 </Link>
               </div>
             )}
-            {role === "ADMIN" && lesson.slotId && (
+            {role === "STUDENT" && started && (
               <div className="px-4 pb-4">
                 <Link
-                  href={`/admin/timetable/edit?term=${lesson.termId}&slot=${lesson.slotId}&asOf=${lesson.date}`}
-                  className={buttonVariants({ variant: "outline" })}
+                  href={`/student/lessons/${lesson.id}?from=timetable`}
+                  className={buttonVariants({ size: "lg" })}
                 >
-                  {t("details.openInEditor")}
+                  {tl("view")}
                 </Link>
+              </div>
+            )}
+            {role === "ADMIN" && (
+              <div className="flex flex-wrap gap-2 px-4 pb-4">
+                <Link
+                  href={`/admin/lessons/${lesson.id}?from=timetable`}
+                  className={buttonVariants({ size: "lg" })}
+                >
+                  <NotebookPen aria-hidden="true" />
+                  {tl("open")}
+                </Link>
+                {lesson.slotId && (
+                  <Link
+                    href={`/admin/timetable/edit?term=${lesson.termId}&slot=${lesson.slotId}&asOf=${lesson.date}`}
+                    className={buttonVariants({
+                      variant: "outline",
+                      size: "lg",
+                    })}
+                  >
+                    {t("details.openInEditor")}
+                  </Link>
+                )}
               </div>
             )}
           </>

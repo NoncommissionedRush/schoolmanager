@@ -10,10 +10,11 @@ import {
 describe("navigationFor", () => {
   it("shows only shipped items (P0: the dashboards)", () => {
     // The admin data screens (CARM-24) and the timetables (CARM-25) ship
-    // ahead of the rest of P1.
+    // ahead of the rest of P1; the admin lesson list (CARM-36) ahead of P2.
     expect(navigationFor("ADMIN", 0).map((i) => i.href)).toEqual([
       "/admin",
       "/admin/timetable",
+      "/admin/lessons",
       "/admin/students",
       "/admin/teachers",
       "/admin/groups",
@@ -26,9 +27,11 @@ describe("navigationFor", () => {
       "/teacher/timetable",
       "/teacher/lessons",
     ]);
+    // The student Homework tab (CARM-36) too.
     expect(navigationFor("STUDENT", 0).map((i) => i.href)).toEqual([
       "/student",
       "/student/timetable",
+      "/student/homework",
     ]);
   });
 
@@ -36,6 +39,7 @@ describe("navigationFor", () => {
     expect(navigationFor("ADMIN", 1).map((i) => i.label)).toEqual([
       "dashboard",
       "timetable",
+      "lessonLog",
       "students",
       "teachers",
       "courses",

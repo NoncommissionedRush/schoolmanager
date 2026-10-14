@@ -80,6 +80,42 @@ function CardHeading() {
 }
 
 /**
+ * The lesson log as text, for cancelled lessons and for admins (lessons.md
+ * §5.2, §7): "What we covered", the homework and who saved it last.
+ */
+export function ReadOnlyLogCard({
+  log,
+  empty,
+}: {
+  log: LessonLogView | null;
+  /** Shown instead when there is no log. */
+  empty?: string;
+}) {
+  const t = useTranslations("lessonLog");
+  return (
+    <Card>
+      <CardHeading />
+      <CardContent className="flex flex-col gap-4">
+        {!log && empty && <p className="text-muted-foreground">{empty}</p>}
+        {log?.content && (
+          <div className="flex flex-col gap-1">
+            <h3 className="text-sm font-medium">{t("covered")}</h3>
+            <LinkifiedText text={log.content} />
+          </div>
+        )}
+        {log?.homework && (
+          <div className="flex flex-col gap-1">
+            <h3 className="text-sm font-medium">{t("homework")}</h3>
+            <LinkifiedText text={log.homework} />
+          </div>
+        )}
+        {log && <LastSaved log={log} />}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * Lesson log card (lessons.md §5.2): "What we covered" and "Homework" in
  * one form with one Save button. Read-only on cancelled lessons, a hint
  * before the lesson starts.
@@ -117,26 +153,7 @@ export function LessonLogCard({
   if (lock === "cancelled") {
     // A log written before the lesson was cancelled stays, read-only.
     if (!log) return null;
-    return (
-      <Card>
-        <CardHeading />
-        <CardContent className="flex flex-col gap-4">
-          {log.content && (
-            <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-medium">{t("covered")}</h3>
-              <LinkifiedText text={log.content} />
-            </div>
-          )}
-          {log.homework && (
-            <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-medium">{t("homework")}</h3>
-              <LinkifiedText text={log.homework} />
-            </div>
-          )}
-          <LastSaved log={log} />
-        </CardContent>
-      </Card>
-    );
+    return <ReadOnlyLogCard log={log} />;
   }
 
   if (lock === "notStarted") {

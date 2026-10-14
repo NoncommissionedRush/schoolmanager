@@ -12,6 +12,7 @@ import {
   findTeacherNotes,
   loadEarlierNotes,
   loadLessonNotes,
+  loadStudentNotes,
   TeacherNoteAccessError,
   updateLessonNote,
 } from "./teacher-notes";
@@ -152,6 +153,35 @@ describe("lesson page notes: teachers and admins", () => {
       deleteLessonNote(db, { role: "ADMIN" }, LESSON),
     ).rejects.toMatchObject({ error: { key: "common.error.notFound" } });
     expect(calls).toEqual([]);
+  });
+});
+
+describe("student detail notes", () => {
+  const STUDENT = "0b7c6f2f-3c1a-4a59-9d55-4b7f1f9e7a10";
+
+  it("refuses students before querying", async () => {
+    const { db, calls } = recordingDb();
+    await expect(
+      loadStudentNotes(db, { role: "STUDENT" }, STUDENT),
+    ).rejects.toBeInstanceOf(TeacherNoteAccessError);
+    expect(calls).toEqual([]);
+  });
+
+  it("is admin-only: teachers and malformed ids get not found", async () => {
+    const { db, calls } = recordingDb();
+    await expect(
+      loadStudentNotes(db, { role: "TEACHER", teacherId: "t1" }, STUDENT),
+    ).rejects.toMatchObject({ error: { key: "common.error.notFound" } });
+    await expect(
+      loadStudentNotes(db, { role: "ADMIN" }, "nonsense"),
+    ).rejects.toMatchObject({ error: { key: "common.error.notFound" } });
+    expect(calls).toEqual([]);
+  });
+
+  it("lets an admin read the student's notes", async () => {
+    const { db, calls } = recordingDb();
+    expect(await loadStudentNotes(db, { role: "ADMIN" }, STUDENT)).toEqual([]);
+    expect(calls).toEqual(["teacherNote.findMany"]);
   });
 });
 
