@@ -385,7 +385,9 @@ model Room {
   @@map("rooms")
 }
 
-/// A teaching period (e.g. "Autumn 2026"). Dates are inclusive.
+/// A teaching period (e.g. "Autumn 2026"). Dates are inclusive. A school's
+/// terms never share a day (EXCLUDE constraint `terms_no_overlap` in the
+/// migration; docs/architecture/data-model.md).
 model Term {
   id                   String    @id @default(uuid()) @db.Uuid
   schoolId             String    @map("school_id") @db.Uuid

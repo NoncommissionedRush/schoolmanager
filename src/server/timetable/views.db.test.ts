@@ -182,14 +182,15 @@ describe.skipIf(!url)("weekly timetable views (database)", () => {
           schoolId,
           name: "Published",
           startDate: fromIsoDate("2026-09-14"),
-          endDate: fromIsoDate("2026-12-20"),
+          endDate: fromIsoDate("2026-10-22"),
           timetablePublishedAt: new Date("2026-09-01T00:00:00Z"),
         },
         {
           id: ids.draftTerm,
           schoolId,
           name: "Draft",
-          startDate: fromIsoDate("2026-10-19"),
+          // Terms never overlap: the draft follows on in the same week.
+          startDate: fromIsoDate("2026-10-23"),
           endDate: fromIsoDate("2026-10-25"),
         },
       ],
