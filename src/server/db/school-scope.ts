@@ -6,9 +6,15 @@ import { Prisma, type PrismaClient } from "@/generated/prisma/client";
  * `getSchoolScopedDb()` client (src/server/auth/session.ts) applies it to
  * every query.
  *
- * Nested reads and writes (`include`, nested `create`) are not rewritten:
- * relations between tenant-owned models use composite `[schoolId, id]` keys,
- * so anything reached from a scoped row is already in the same school.
+ * Nested reads and writes (`include`, nested `create`) between tenant-owned
+ * models are not rewritten: those relations use composite `[schoolId, id]`
+ * keys, so anything reached from a scoped row is already in the same school.
+ * `User` is the exception — it is global, so its relations (memberships,
+ * profiles, …) span every school. On the scoped client a `User`, whether
+ * queried directly or reached through `include`/`select`, may only return its
+ * own scalar fields; relation reads (`include`, relation `select`, `_count`)
+ * throw. Load school data from the tenant side instead (e.g.
+ * `membership.findMany({ include: { user: true } })`).
  */
 
 export class CrossSchoolAccessError extends Error {
@@ -20,6 +26,62 @@ export class CrossSchoolAccessError extends Error {
 
 type Args = Record<string, unknown> | undefined;
 type Where = Record<string, unknown>;
+
+/**
+ * Relation fields, on any model, whose target is `User`. Field names are
+ * unique to User relations across the schema (checked in
+ * school-scope.test.ts against prisma/schema.prisma).
+ */
+export const USER_RELATION_FIELDS: ReadonlySet<string> = new Set([
+  "user",
+  "recordedBy",
+  "reportedBy",
+  "reviewedBy",
+  "actor",
+]);
+
+const USER_SCALARS: ReadonlySet<string> = new Set(
+  Object.keys(Prisma.UserScalarFieldEnum),
+);
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Throws if a `User` node — the query root when `isUser`, or any nested
+ * `User` relation — reads a relation. Walks `include` and `select` trees.
+ */
+function assertNoUserRelationReads(
+  node: unknown,
+  isUser: boolean,
+  model: string,
+  operation: string,
+  path: string,
+) {
+  if (!isObject(node)) return;
+  for (const key of ["include", "select"] as const) {
+    const fields = node[key];
+    if (!isObject(fields)) continue;
+    for (const [field, value] of Object.entries(fields)) {
+      if (!value) continue;
+      const fieldPath = `${path}.${key}.${field}`;
+      if (isUser && !USER_SCALARS.has(field)) {
+        throw new CrossSchoolAccessError(
+          model,
+          operation,
+          `(${fieldPath}: User relations span schools; read them from the tenant side)`,
+        );
+      }
+      assertNoUserRelationReads(
+        value,
+        USER_RELATION_FIELDS.has(field),
+        model,
+        operation,
+        fieldPath,
+      );
+    }
+  }
+}
 
 /** Models with a `schoolId` column, derived from the generated client. */
 export const TENANT_MODELS: ReadonlySet<string> = new Set(
@@ -183,6 +245,15 @@ function scopeGlobal(
     return a;
   }
   if (model === "User" && READ_OPERATIONS.has(operation)) {
+    for (const key of Object.keys((a.where ?? {}) as Where)) {
+      if (!USER_SCALARS.has(key) && !["AND", "OR", "NOT"].includes(key)) {
+        throw new CrossSchoolAccessError(
+          model,
+          operation,
+          `(where.${key}: relation filters on User are not allowed)`,
+        );
+      }
+    }
     // Only users who belong to the current school are visible.
     a.where = withExtraCondition(a.where as Where, {
       memberships: { some: { schoolId } },
@@ -203,6 +274,7 @@ export function scopeArgs(
   args: Args,
   schoolId: string,
 ): Args {
+  assertNoUserRelationReads(args, model === "User", model, operation, "args");
   return TENANT_MODELS.has(model)
     ? scopeTenant(model, operation, args, schoolId)
     : scopeGlobal(model, operation, args, schoolId);

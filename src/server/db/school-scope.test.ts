@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   CrossSchoolAccessError,
   scopeArgs,
   TENANT_MODELS,
+  USER_RELATION_FIELDS,
 } from "./school-scope";
 
 const SCHOOL = "school-a";
@@ -182,5 +186,133 @@ describe("scopeArgs — global models", () => {
     expect(() => scopeArgs(model, operation, {}, SCHOOL)).toThrow(
       CrossSchoolAccessError,
     );
+  });
+});
+
+describe("scopeArgs — User relations span schools", () => {
+  it("rejects including a user's memberships (other schools leak)", () => {
+    expect(() =>
+      scopeArgs(
+        "User",
+        "findUnique",
+        {
+          where: { id: "u1" },
+          include: { memberships: { include: { school: true } } },
+        },
+        SCHOOL,
+      ),
+    ).toThrow(CrossSchoolAccessError);
+  });
+
+  it("rejects relation selects and _count on User", () => {
+    for (const select of [
+      { id: true, teacherProfiles: true },
+      { id: true, _count: true },
+    ]) {
+      expect(() => scopeArgs("User", "findMany", { select }, SCHOOL)).toThrow(
+        CrossSchoolAccessError,
+      );
+    }
+  });
+
+  it("rejects a User reached through a tenant model and back out", () => {
+    expect(() =>
+      scopeArgs(
+        "School",
+        "findFirst",
+        {
+          include: {
+            memberships: {
+              include: {
+                user: {
+                  include: { memberships: { include: { school: true } } },
+                },
+              },
+            },
+          },
+        },
+        SCHOOL,
+      ),
+    ).toThrow(CrossSchoolAccessError);
+  });
+
+  it("rejects nested User relations on writes' return values", () => {
+    expect(() =>
+      scopeArgs(
+        "AuditLog",
+        "create",
+        {
+          data: { action: "x" },
+          select: { actor: { select: { studentProfiles: true } } },
+        },
+        SCHOOL,
+      ),
+    ).toThrow(CrossSchoolAccessError);
+  });
+
+  it("rejects relation filters on User", () => {
+    expect(() =>
+      scopeArgs(
+        "User",
+        "findMany",
+        { where: { memberships: { some: { schoolId: OTHER } } } },
+        SCHOOL,
+      ),
+    ).toThrow(CrossSchoolAccessError);
+  });
+
+  it("allows a User's scalar fields, directly and from the tenant side", () => {
+    expect(
+      scopeArgs(
+        "User",
+        "findMany",
+        { where: { OR: [{ name: "a" }] }, select: { id: true, name: true } },
+        SCHOOL,
+      ),
+    ).toMatchObject({ select: { id: true, name: true } });
+    expect(
+      scopeArgs(
+        "Membership",
+        "findMany",
+        {
+          include: {
+            user: { select: { id: true, name: true, teacherProfiles: false } },
+            school: true,
+          },
+        },
+        SCHOOL,
+      ),
+    ).toMatchObject({ where: { schoolId: SCHOOL } });
+    expect(() =>
+      scopeArgs(
+        "Lesson",
+        "findMany",
+        { include: { attendance: { include: { recordedBy: true } } } },
+        SCHOOL,
+      ),
+    ).not.toThrow();
+  });
+
+  it("knows every relation field that points at User", () => {
+    const schema = readFileSync(
+      join(process.cwd(), "prisma/schema.prisma"),
+      "utf8",
+    );
+    const relations = [
+      ...schema.matchAll(/^\s+(\w+)\s+(\w+)(\[\])?\??\s+(@relation|$)/gm),
+    ];
+    const toUser = new Set(
+      relations.filter(([, , type]) => type === "User").map(([, f]) => f),
+    );
+    expect(toUser).toEqual(new Set(USER_RELATION_FIELDS));
+    // No relation to another model reuses one of those names.
+    const models = new Set(
+      [...schema.matchAll(/^model (\w+) \{/gm)].map(([, name]) => name),
+    );
+    for (const [, field, type] of relations) {
+      if (USER_RELATION_FIELDS.has(field) && models.has(type)) {
+        expect(type, field).toBe("User");
+      }
+    }
   });
 });
