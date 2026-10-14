@@ -1,0 +1,33 @@
+{
+  "title": "Internal notes",
+  "internalBanner": "Internal — only teachers and admins see this",
+  "field": "Internal note (students can't see this)",
+  "about": {
+    "label": "About",
+    "lesson": "This lesson",
+    "group": "Group: {group}",
+    "student": "Student: {name}"
+  },
+  "chip": {
+    "lesson": "Lesson"
+  },
+  "add": "Add note",
+  "added": "Note added.",
+  "edited": "Edited",
+  "edit": "Edit",
+  "save": "Save note",
+  "actions": "Note actions",
+  "delete": {
+    "action": "Delete",
+    "title": "Delete this note?",
+    "description": "The note will be removed for all teachers and admins.",
+    "confirm": "Delete"
+  },
+  "deleted": "Note deleted.",
+  "onThisLesson": "Notes on this lesson",
+  "earlier": "{count, plural, one {# earlier note about this group and its students} other {# earlier notes about this group and its students}}",
+  "fromLesson": "From the lesson on {date}",
+  "showMore": "Show more",
+  "empty": "No internal notes yet. Use them for things only teachers and admins should know, like learning needs.",
+  "tooLong": "Keep the note under {max} characters."
+}

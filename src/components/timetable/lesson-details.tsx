@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, NotebookPen } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
@@ -31,6 +31,7 @@ export function LessonDetailsSheet({
   const t = useTranslations("timetable");
   const tc = useTranslations("common");
   const tr = useTranslations("scheduling.cancelReasons");
+  const tl = useTranslations("lessons");
   const formatDate = useDateFormat();
   const mobile = useIsMobile();
 
@@ -135,6 +136,17 @@ export function LessonDetailsSheet({
                 </>
               )}
             </dl>
+            {role === "TEACHER" && (
+              <div className="px-4 pb-4">
+                <Link
+                  href={`/teacher/lessons/${lesson.id}`}
+                  className={buttonVariants({ size: "lg" })}
+                >
+                  <NotebookPen aria-hidden="true" />
+                  {tl("open")}
+                </Link>
+              </div>
+            )}
             {role === "ADMIN" && lesson.slotId && (
               <div className="px-4 pb-4">
                 <Link

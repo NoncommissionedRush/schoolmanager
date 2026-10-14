@@ -1,0 +1,63 @@
+{
+  "title": "Lesson",
+  "open": "Open lesson",
+  "view": "View lesson",
+  "back": {
+    "timetable": "My timetable",
+    "list": "Lesson log"
+  },
+  "prevOfGroup": "Previous lesson of {group}",
+  "nextOfGroup": "Next lesson of {group}",
+  "status": {
+    "noLog": "No log yet",
+    "cancelled": "Cancelled"
+  },
+  "substitute": {
+    "you": "You're substituting for {teacher} in this lesson.",
+    "other": "{substitute} is substituting in this lesson. You can both edit it."
+  },
+  "cancelledBanner": "This lesson was cancelled: {reason}",
+  "cancelledNoReason": "This lesson was cancelled.",
+  "list": {
+    "title": "Lesson log",
+    "filter": {
+      "label": "Show",
+      "noLog": "No log yet ({count})",
+      "upcoming": "Upcoming",
+      "past": "Past",
+      "group": "Group",
+      "allGroups": "All groups",
+      "term": "Term"
+    },
+    "col": {
+      "when": "Date & time",
+      "group": "Group",
+      "covered": "What we covered",
+      "homework": "Homework",
+      "teacher": "Teacher"
+    },
+    "empty": {
+      "noLog": "You're all caught up.",
+      "upcoming": "No upcoming lessons.",
+      "past": "No past lessons yet."
+    },
+    "noTerm": "No published timetable yet."
+  },
+  "todo": {
+    "title": "To do",
+    "writeLog": "Write the log for {group}, {date}",
+    "empty": "You're all caught up.",
+    "seeAll": "See all"
+  },
+  "admin": {
+    "readOnlyHint": "Admins can view this lesson. Teachers write the lesson log and homework.",
+    "openInTimetable": "Open in timetable",
+    "openSlot": "Open slot in editor"
+  },
+  "unsaved": {
+    "title": "Discard unsaved changes?",
+    "description": "Your changes to the lesson log haven't been saved.",
+    "keep": "Keep editing",
+    "discard": "Discard"
+  }
+}

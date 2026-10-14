@@ -10,6 +10,8 @@ import errors from "./errors.json";
 import groups from "./groups.json";
 import holidays from "./holidays.json";
 import layout from "./layout.json";
+import lessonLog from "./lessonLog.json";
+import lessons from "./lessons.json";
 import levels from "./levels.json";
 import metadata from "./metadata.json";
 import nav from "./nav.json";
@@ -18,6 +20,7 @@ import rooms from "./rooms.json";
 import scheduling from "./scheduling.json";
 import settings from "./settings.json";
 import students from "./students.json";
+import teacherNotes from "./teacherNotes.json";
 import teachers from "./teachers.json";
 import terms from "./terms.json";
 import timetable from "./timetable.json";
@@ -34,6 +37,8 @@ const messages = {
   groups,
   holidays,
   layout,
+  lessonLog,
+  lessons,
   levels,
   metadata,
   nav,
@@ -42,6 +47,7 @@ const messages = {
   scheduling,
   settings,
   students,
+  teacherNotes,
   teachers,
   terms,
   timetable,
