@@ -188,7 +188,7 @@ describe.skipIf(!url)("admin services (database)", () => {
         values: { name: "Theo" },
       });
 
-      // Used in another school (global User): "already used" too.
+      // Used in another school: "already used" too (one school per user).
       const elsewhere = await refusal(
         createPerson(
           other,
@@ -199,6 +199,16 @@ describe.skipIf(!url)("admin services (database)", () => {
         ),
       );
       expect(elsewhere.error.key).toBe("people.error.emailTaken");
+    });
+
+    it("allows at most one membership per user in the database", async () => {
+      const userId = await teacher("Una");
+      await expect(
+        client.membership.create({
+          data: { schoolId: other.schoolId, userId, role: "STUDENT" },
+        }),
+      ).rejects.toMatchObject({ code: "P2002" });
+      expect(await client.membership.count({ where: { userId } })).toBe(1);
     });
 
     it("sets passwords only for members of the school", async () => {

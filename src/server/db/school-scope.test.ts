@@ -411,7 +411,7 @@ describe("scopeArgs — User relations span schools", () => {
 
   describe("orderBy follows the same rule (CARM-29)", () => {
     const leaks: [string, string, Record<string, unknown>][] = [
-      // Ranks users by how many schools they belong to.
+      // Ranks users by data outside this school.
       ["User", "findMany", { orderBy: { memberships: { _count: "desc" } } }],
       [
         "User",
