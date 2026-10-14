@@ -64,6 +64,8 @@ export type GroupInfo = {
   studentIds: readonly string[];
   /** Archived groups (`Group.deletedAt`) cannot get new slots or lessons. */
   archived: boolean;
+  /** `Group.levelId`; needed for `TEACHER_LEVEL_NOT_TAUGHT`. */
+  levelId?: string | null;
 };
 
 export type RoomInfo = {
@@ -122,7 +124,16 @@ export type SchedulingContext = {
    * and attends it (replacements.md §5, §9).
    */
   replacements?: readonly LessonStudent[];
+  /**
+   * Levels each teacher teaches (`TeacherLevel`). Optional: without it the
+   * `TEACHER_LEVEL_NOT_TAUGHT` check is skipped (generator.md §4.3).
+   */
+  teacherLevels?: readonly TeacherLevelInfo[];
+  /** Level names for messages; a level missing here is shown by its id. */
+  levels?: readonly PersonInfo[];
 };
+
+export type TeacherLevelInfo = { teacherId: string; levelId: string };
 
 /** A student's absence from, or replacement booking into, one lesson. */
 export type LessonStudent = { lessonId: string; studentId: string };

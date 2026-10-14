@@ -28,6 +28,7 @@ import {
   STUDENTS,
   TEACHER_AVAILABILITY,
   TEACHERS,
+  TEACHERS_WITH_MAX_HOURS,
   TERM,
 } from "./seed/data";
 import { seedId } from "./seed/ids";
@@ -281,6 +282,69 @@ async function main() {
         },
       });
     }
+  }
+
+  // --- Generator inputs (Phase 4, docs/architecture/generator.md §2) -------
+  // Each group's lesson times are its current slots, in its room. Teachers
+  // teach the levels of their groups plus the next one up, so the seeded
+  // timetable is a valid assignment and the editor shows no level warnings.
+  const rankOf = new Map<string, number>(LEVELS.map((l) => [l.code, l.rank]));
+  const teacherLevels = new Map<string, Set<string>>();
+  const weeklyMinutes = new Map<string, number>();
+  for (const group of GROUPS) {
+    const current = group.slots.filter((s) => !s.validUntil);
+    const levels = teacherLevels.get(group.teacher) ?? new Set<string>();
+    levels.add(group.level);
+    const next = LEVELS.find((l) => l.rank === rankOf.get(group.level)! + 1);
+    if (next) levels.add(next.code);
+    teacherLevels.set(group.teacher, levels);
+    for (const s of current) {
+      weeklyMinutes.set(
+        group.teacher,
+        (weeklyMinutes.get(group.teacher) ?? 0) + s.end - s.start,
+      );
+      const rowId = id(
+        "lesson-time",
+        group.key,
+        String(s.weekday),
+        String(s.start),
+      );
+      const data = {
+        groupId: groupIds.get(group.key)!,
+        weekday: s.weekday,
+        startMinute: s.start,
+        endMinute: s.end,
+        roomId: roomIds.get(group.room)!,
+      };
+      await db.groupLessonTime.upsert({
+        where: { id: rowId },
+        update: data,
+        create: { id: rowId, schoolId, ...data },
+      });
+    }
+  }
+  for (const [teacher, levels] of teacherLevels) {
+    const teacherId = teacherIds.get(teacher)!;
+    for (const code of levels) {
+      const levelId = levelIds.get(code)!;
+      await db.teacherLevel.upsert({
+        where: { schoolId_teacherId_levelId: { schoolId, teacherId, levelId } },
+        update: {},
+        create: {
+          id: id("teacher-level", teacher, code),
+          schoolId,
+          teacherId,
+          levelId,
+        },
+      });
+    }
+  }
+  // A weekly maximum on some teachers: their current load plus one lesson.
+  for (const teacher of TEACHERS_WITH_MAX_HOURS) {
+    await db.teacherProfile.update({
+      where: { id: teacherIds.get(teacher)! },
+      data: { maxMinutesPerWeek: (weeklyMinutes.get(teacher) ?? 0) + 90 },
+    });
   }
 
   // --- Timetable (published) & generated lessons --------------------------

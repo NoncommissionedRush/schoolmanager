@@ -50,6 +50,8 @@ export const USER_RELATION_FIELDS: ReadonlySet<string> = new Set([
   "reportedBy",
   "reviewedBy",
   "actor",
+  "createdBy",
+  "startedBy",
 ]);
 
 const USER_SCALARS: ReadonlySet<string> = new Set(

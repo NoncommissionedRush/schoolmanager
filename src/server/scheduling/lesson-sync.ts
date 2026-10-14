@@ -5,7 +5,7 @@ import {
   type LessonOccurrence,
   occurrenceOf,
 } from "./generate-lessons";
-import { addDays, type IsoDate, isoWeekday } from "./time";
+import { addDays, type IsoDate, isoWeekday, toZonedDateTime } from "./time";
 import type { HolidayInfo, LessonInfo, SlotInfo, TermInfo } from "./types";
 
 /** A stored lesson plus whether anything else points at it. */
@@ -343,4 +343,159 @@ export function planSlotCarryOver({
     });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Teacher-only change of a group from a date (generator.md §5.6)
+// ---------------------------------------------------------------------------
+
+export type GroupTeacherChangeInput = {
+  /** The group's slots in the term, ended ones included. */
+  slots: readonly SlotInfo[];
+  /**
+   * Every lesson of those slots (any date and status) and the group's
+   * ad-hoc lessons (`timetableSlotId` null) from `from` on.
+   */
+  lessons: readonly ExistingLesson[];
+  /** The group's current teacher; null when its slots have different ones. */
+  oldTeacherId: string | null;
+  newTeacherId: string;
+  /** First date with the new teacher. */
+  from: IsoDate;
+  /** Lessons starting at or before this instant keep their teacher. */
+  now?: Date;
+  timeZone: string;
+};
+
+export type GroupTeacherChangePlan = {
+  /**
+   * Per slot in effect on or after `from` with another teacher: `update`
+   * (it starts on or after `from` and keeps no lesson of its own: change the
+   * teacher in place) or `split` (end it the day before, continue with a
+   * copy with the new teacher).
+   */
+  slots: (
+    | { kind: "update"; slot: SlotInfo }
+    | { kind: "split"; ended: SlotInfo; next: Omit<SlotInfo, "id"> }
+  )[];
+  /**
+   * Lessons that move to the new slot of `fromSlotId` (the same slot for
+   * `update`), same `occurrenceDate`, whatever their status. `setTeacher`:
+   * SCHEDULED and not started, gets `teacherId` = the new teacher;
+   * `clearSubstitute`: the substitute was the new teacher.
+   */
+  repoint: {
+    lessonId: string;
+    fromSlotId: string;
+    setTeacher: boolean;
+    clearSubstitute: boolean;
+  }[];
+  /** The group's ad-hoc lessons the old teacher was going to give. */
+  adHoc: { lessonId: string; clearSubstitute: boolean }[];
+  /**
+   * Lessons with their own time or room (moved or re-roomed by hand, and
+   * ad-hoc ones) that get the new teacher: check each with `checkLesson`.
+   */
+  checkLessons: string[];
+};
+
+/**
+ * Gives a group a new teacher from `from` without touching its lessons'
+ * time, room or students (generator.md §5.6). Every lesson of the group's
+ * slots dated on or after `from` is re-pointed to the new
+ * slot, so absences, bookings, credits, notes and cancellations stay on the
+ * same row and `planLessonSync` creates no second occurrence for its date.
+ * Nothing is cancelled or deleted, lessons before `from` are left alone,
+ * and one already started (moved by hand to an earlier time) keeps its
+ * teacher. Pure and deterministic: sorted by slot, then date, then id.
+ */
+export function planGroupTeacherChange({
+  slots,
+  lessons,
+  oldTeacherId,
+  newTeacherId,
+  from,
+  now,
+  timeZone,
+}: GroupTeacherChangeInput): GroupTeacherChangePlan {
+  const started = (startsAt: Date) => now !== undefined && startsAt <= now;
+  const plan: GroupTeacherChangePlan = {
+    slots: [],
+    repoint: [],
+    adHoc: [],
+    checkLessons: [],
+  };
+  const sortedLessons = [...lessons].sort(
+    (a, b) =>
+      compareStrings(a.occurrenceDate ?? "", b.occurrenceDate ?? "") ||
+      a.startsAt.getTime() - b.startsAt.getTime() ||
+      compareStrings(a.id, b.id),
+  );
+  const changing = [...slots]
+    .filter(
+      (slot) =>
+        slot.teacherId !== newTeacherId &&
+        (!slot.validUntil || slot.validUntil >= from),
+    )
+    .sort((a, b) => compareStrings(a.id, b.id));
+
+  for (const slot of changing) {
+    const own = sortedLessons.filter((l) => l.timetableSlotId === slot.id);
+    // Every lesson dated from `from` moves, so no second occurrence is
+    // created for its date; one moved by hand to a time that has started
+    // keeps its teacher.
+    const moving = own.filter(
+      (l) => l.occurrenceDate !== null && l.occurrenceDate >= from,
+    );
+    const nextFrom =
+      slot.validFrom && slot.validFrom > from ? slot.validFrom : from;
+    const next = { ...slot, teacherId: newTeacherId, validFrom: nextFrom };
+    if (nextFrom === slot.validFrom && moving.length === own.length) {
+      plan.slots.push({ kind: "update", slot: next });
+    } else {
+      const copy: Omit<SlotInfo, "id"> & { id?: string } = { ...next };
+      delete copy.id;
+      plan.slots.push({
+        kind: "split",
+        ended: { ...slot, validUntil: addDays(nextFrom, -1) },
+        next: copy,
+      });
+    }
+    for (const lesson of moving) {
+      const scheduled =
+        lesson.status === "SCHEDULED" && !started(lesson.startsAt);
+      plan.repoint.push({
+        lessonId: lesson.id,
+        fromSlotId: slot.id,
+        setTeacher: scheduled,
+        clearSubstitute:
+          scheduled && lesson.substituteTeacherId === newTeacherId,
+      });
+      const expected = occurrenceOf(next, lesson.occurrenceDate!, timeZone);
+      const ownTimeOrRoom =
+        lesson.roomId !== expected.roomId ||
+        lesson.startsAt.getTime() !== expected.startsAt.getTime() ||
+        lesson.endsAt.getTime() !== expected.endsAt.getTime();
+      if (scheduled && ownTimeOrRoom) plan.checkLessons.push(lesson.id);
+    }
+  }
+
+  for (const lesson of sortedLessons) {
+    if (
+      lesson.timetableSlotId !== null ||
+      lesson.status !== "SCHEDULED" ||
+      oldTeacherId === null ||
+      lesson.teacherId !== oldTeacherId ||
+      started(lesson.startsAt) ||
+      toZonedDateTime(lesson.startsAt, timeZone).date < from
+    ) {
+      continue;
+    }
+    plan.adHoc.push({
+      lessonId: lesson.id,
+      clearSubstitute: lesson.substituteTeacherId === newTeacherId,
+    });
+    plan.checkLessons.push(lesson.id);
+  }
+  return plan;
 }

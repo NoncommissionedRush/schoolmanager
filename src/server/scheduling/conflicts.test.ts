@@ -11,6 +11,7 @@ import {
   checkLesson,
   checkSlot,
   checkTimetable,
+  UNASSIGNED_TEACHER,
 } from "./conflicts";
 import {
   context,
@@ -366,6 +367,63 @@ describe("checkSlot", () => {
         check(candidate({ validFrom: "2026-10-20", validUntil: "2026-10-19" })),
       ),
     ).toEqual(["OUTSIDE_TERM"]);
+  });
+
+  it("skips every teacher rule for UNASSIGNED_TEACHER (generator.md §4.3)", () => {
+    const ctx = {
+      slots: [slot("busy", { groupId: "g2", teacherId: "t1", roomId: "r1" })],
+      availability: [
+        {
+          id: "w",
+          teacherId: "t1",
+          kind: "WEEKLY_UNAVAILABLE" as const,
+          weekday: 1,
+          date: null,
+          startMinute: h(8),
+          endMinute: h(12),
+        },
+      ],
+    };
+    const mine = { groupId: "g1", teacherId: "t1", roomId: "r1" };
+    expect(types(check(candidate(mine), ctx))).toEqual([
+      "TEACHER_DOUBLE_BOOKED",
+      "ROOM_DOUBLE_BOOKED",
+      "TEACHER_UNAVAILABLE_WEEKLY",
+    ]);
+    expect(
+      types(check(candidate({ ...mine, teacherId: UNASSIGNED_TEACHER }), ctx)),
+    ).toEqual(["ROOM_DOUBLE_BOOKED"]);
+  });
+
+  it("warns when the teacher doesn't teach the group's level", () => {
+    const levels = {
+      groups: [group("g1", ["s1", "s2"], { levelId: "b1" })],
+      levels: [{ id: "b1", name: "B1" }],
+    };
+    const mine = candidate({ groupId: "g1", teacherId: "t1", roomId: "r1" });
+    // Without teacher levels in the context there is no check.
+    expect(types(check(mine, levels))).toEqual([]);
+    const conflicts = check(mine, {
+      ...levels,
+      teacherLevels: [
+        { teacherId: "t1", levelId: "a1" },
+        { teacherId: "t2", levelId: "b1" },
+      ],
+    });
+    expect(conflicts).toEqual([
+      expect.objectContaining({
+        type: "TEACHER_LEVEL_NOT_TAUGHT",
+        severity: "overridable",
+        params: { teacher: "Anna", level: "B1" },
+        refs: { teacherId: "t1", groupId: "g1" },
+      }),
+    ]);
+    // A teacher without any level rows gets no warning.
+    expect(
+      types(
+        check({ ...mine, teacherId: "t3" }, { ...levels, teacherLevels: [] }),
+      ),
+    ).toEqual([]);
   });
 
   it("warns when a slot would never produce a lesson", () => {

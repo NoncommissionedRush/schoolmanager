@@ -68,6 +68,29 @@ enum ReplacementStatus {
   CANCELLED
 }
 
+/// How a generator draft applies (docs/architecture/generator.md §5.2).
+enum DraftMode {
+  /// Unpublished term: the draft replaces the term's slots.
+  REPLACE
+  /// Published term: only groups without live slots from `effectiveFrom`.
+  FILL
+  /// Published term: every group is reconsidered from `effectiveFrom`.
+  REPLAN_FROM
+}
+
+enum DraftAssignmentOrigin {
+  GENERATED
+  MANUAL
+  IMPORTED
+}
+
+enum GeneratorRunStatus {
+  RUNNING
+  DONE
+  CANCELLED
+  FAILED
+}
+
 enum MakeupCreditStatus {
   AVAILABLE
   USED
@@ -118,6 +141,12 @@ model School {
   replacementRequests ReplacementRequest[]
   makeupCredits       MakeupCredit[]
   auditLogs           AuditLog[]
+  groupLessonTimes    GroupLessonTime[]
+  teacherLevels       TeacherLevel[]
+  groupTermSkips      GroupTermSkip[]
+  timetableDrafts     TimetableDraft[]
+  draftAssignments    TimetableDraftAssignment[]
+  generatorRuns       GeneratorRun[]
 
   @@map("schools")
 }
@@ -149,6 +178,9 @@ model User {
   reportedAbsences     AbsenceReport[]
   reviewedReplacements ReplacementRequest[]
   auditLogs            AuditLog[]
+  groupTermSkips       GroupTermSkip[]
+  timetableDrafts      TimetableDraft[]
+  generatorRuns        GeneratorRun[]
 
   @@map("users")
 }
@@ -212,25 +244,30 @@ model VerificationToken {
 }
 
 model TeacherProfile {
-  id        String   @id @default(uuid()) @db.Uuid
-  schoolId  String   @map("school_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  bio       String?
+  id                String   @id @default(uuid()) @db.Uuid
+  schoolId          String   @map("school_id") @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  bio               String?
   /// Hex color used for the teacher's lessons in timetable views.
-  color     String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  color             String?
+  /// Hard weekly maximum for the generator, a warning for manual choices;
+  /// null = none (CHECK 15–6000; docs/architecture/generator.md §2.3).
+  maxMinutesPerWeek Int?     @map("max_minutes_per_week")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   availability      TeacherAvailability[]
   timetableSlots    TimetableSlot[]
-  lessons           Lesson[]              @relation("LessonTeacher")
-  substituteLessons Lesson[]              @relation("LessonSubstitute")
-  lessonLogs        LessonLog[]           @relation("LessonLogAuthor")
-  editedLessonLogs  LessonLog[]           @relation("LessonLogEditor")
+  lessons           Lesson[]                   @relation("LessonTeacher")
+  substituteLessons Lesson[]                   @relation("LessonSubstitute")
+  lessonLogs        LessonLog[]                @relation("LessonLogAuthor")
+  editedLessonLogs  LessonLog[]                @relation("LessonLogEditor")
   notes             TeacherNote[]
+  levels            TeacherLevel[]
+  draftAssignments  TimetableDraftAssignment[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -284,6 +321,7 @@ model Level {
   students StudentProfile[]
   courses  Course[]
   groups   Group[]
+  teachers TeacherLevel[]
 
   @@unique([schoolId, code])
   @@unique([schoolId, rank])
@@ -323,18 +361,65 @@ model Group {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  school         School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  course         Course?           @relation(fields: [schoolId, courseId], references: [schoolId, id], onDelete: Restrict)
-  level          Level             @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
-  memberships    GroupMembership[]
-  timetableSlots TimetableSlot[]
-  lessons        Lesson[]
-  teacherNotes   TeacherNote[]
+  school           School                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  course           Course?                    @relation(fields: [schoolId, courseId], references: [schoolId, id], onDelete: Restrict)
+  level            Level                      @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  memberships      GroupMembership[]
+  timetableSlots   TimetableSlot[]
+  lessons          Lesson[]
+  teacherNotes     TeacherNote[]
+  lessonTimes      GroupLessonTime[]
+  termSkips        GroupTermSkip[]
+  draftAssignments TimetableDraftAssignment[]
 
   @@unique([schoolId, name])
   @@unique([schoolId, id])
   @@index([schoolId, levelId])
   @@map("groups")
+}
+
+/// A group's regular weekly lesson; applies to every term the group runs in.
+/// Read by the generator; saving it never changes live slots
+/// (docs/architecture/generator.md §2.1).
+model GroupLessonTime {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  groupId     String   @map("group_id") @db.Uuid
+  /// ISO weekday 1–7.
+  weekday     Int
+  startMinute Int      @map("start_minute")
+  endMinute   Int      @map("end_minute")
+  roomId      String   @map("room_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  group  Group  @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Cascade)
+  room   Room   @relation(fields: [schoolId, roomId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, groupId])
+  @@index([schoolId, roomId, weekday])
+  @@map("group_lesson_times")
+}
+
+/// "Skip this term": the group takes no part in this term's assignment.
+model GroupTermSkip {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  groupId     String   @map("group_id") @db.Uuid
+  termId      String   @map("term_id") @db.Uuid
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  group     Group  @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Cascade)
+  term      Term   @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Cascade)
+  createdBy User?  @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, groupId, termId])
+  @@unique([schoolId, id])
+  @@map("group_term_skips")
 }
 
 /// Enrolment of a student in a group. `leftAt` keeps history.
@@ -376,9 +461,10 @@ model Room {
   updatedAt  DateTime  @updatedAt @map("updated_at")
   archivedAt DateTime? @map("archived_at")
 
-  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school         School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   timetableSlots TimetableSlot[]
   lessons        Lesson[]
+  lessonTimes    GroupLessonTime[]
 
   @@unique([schoolId, name])
   @@unique([schoolId, id])
@@ -399,10 +485,13 @@ model Term {
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school         School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   holidays       Holiday[]
   timetableSlots TimetableSlot[]
   lessons        Lesson[]
+  groupSkips     GroupTermSkip[]
+  drafts         TimetableDraft[]
+  generatorRuns  GeneratorRun[]
 
   @@unique([schoolId, name])
   @@unique([schoolId, id])
@@ -453,6 +542,24 @@ model TeacherAvailability {
   @@unique([schoolId, id])
   @@index([schoolId, teacherId])
   @@map("teacher_availability")
+}
+
+/// A level the teacher may be given by the generator
+/// (docs/architecture/generator.md §2.2).
+model TeacherLevel {
+  id        String @id @default(uuid()) @db.Uuid
+  schoolId  String @map("school_id") @db.Uuid
+  teacherId String @map("teacher_id") @db.Uuid
+  levelId   String @map("level_id") @db.Uuid
+
+  school  School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher TeacherProfile @relation(fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Cascade)
+  level   Level          @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, teacherId, levelId])
+  @@unique([schoolId, id])
+  @@index([schoolId, levelId])
+  @@map("teacher_levels")
 }
 
 // ---------------------------------------------------------------------------
@@ -605,6 +712,103 @@ model TeacherNote {
   @@index([schoolId, groupId])
   @@index([schoolId, lessonId])
   @@map("teacher_notes")
+}
+
+// ---------------------------------------------------------------------------
+// Timetable generator (Phase 4, docs/architecture/generator.md)
+// ---------------------------------------------------------------------------
+
+/// The generator's proposed teachers for a term (one per term). Read only by
+/// the generator service; never by timetable views or the conflict checker.
+model TimetableDraft {
+  id               String    @id @default(uuid()) @db.Uuid
+  schoolId         String    @map("school_id") @db.Uuid
+  termId           String    @map("term_id") @db.Uuid
+  mode             DraftMode
+  /// FILL and REPLAN_FROM: changes apply from this date (CHECK).
+  effectiveFrom    DateTime? @map("effective_from") @db.Date
+  /// Optimistic concurrency for runs and edits.
+  version          Int       @default(0)
+  /// SHA-256 of the canonical generator input of the last run (out of date).
+  inputFingerprint String?   @map("input_fingerprint")
+  generatedAt      DateTime? @map("generated_at")
+  /// Objective after construction and at the end, workload per teacher,
+  /// previous run's range.
+  summary          Json?
+  /// Groups without a teacher: group reason, per-teacher reasons, suggestions.
+  unassigned       Json      @default("[]")
+  /// Overridable conflicts and warnings per group, from the last run or check.
+  warnings         Json      @default("[]")
+  /// iterations, durationMs, stoppedBy, budget.
+  runStats         Json?     @map("run_stats")
+  createdById      String?   @map("created_by_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  school      School                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  term        Term                       @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Cascade)
+  createdBy   User?                      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  assignments TimetableDraftAssignment[]
+  runs        GeneratorRun[]
+
+  @@unique([schoolId, termId])
+  @@unique([schoolId, id])
+  @@map("timetable_drafts")
+}
+
+/// One included group's teacher in a draft.
+model TimetableDraftAssignment {
+  id        String                @id @default(uuid()) @db.Uuid
+  schoolId  String                @map("school_id") @db.Uuid
+  draftId   String                @map("draft_id") @db.Uuid
+  groupId   String                @map("group_id") @db.Uuid
+  /// Null = no teacher.
+  teacherId String?               @map("teacher_id") @db.Uuid
+  locked    Boolean               @default(false)
+  origin    DraftAssignmentOrigin
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+
+  school  School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  draft   TimetableDraft  @relation(fields: [schoolId, draftId], references: [schoolId, id], onDelete: Cascade)
+  group   Group           @relation(fields: [schoolId, groupId], references: [schoolId, id], onDelete: Restrict)
+  teacher TeacherProfile? @relation(fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([draftId, groupId])
+  @@unique([schoolId, id])
+  @@index([schoolId, teacherId])
+  @@map("timetable_draft_assignments")
+}
+
+/// One generator run; progress while RUNNING, result summary after. One
+/// RUNNING run per term (partial unique index in the migration).
+model GeneratorRun {
+  id              String             @id @default(uuid()) @db.Uuid
+  schoolId        String             @map("school_id") @db.Uuid
+  termId          String             @map("term_id") @db.Uuid
+  draftId         String             @map("draft_id") @db.Uuid
+  status          GeneratorRunStatus @default(RUNNING)
+  cancelRequested Boolean            @default(false) @map("cancel_requested")
+  maxIterations   Int                @map("max_iterations")
+  timeLimitMs     Int                @map("time_limit_ms")
+  /// { phase, assigned, total, elapsedMs } while running.
+  progress        Json?
+  heartbeatAt     DateTime           @default(now()) @map("heartbeat_at")
+  /// iterations, durationMs, stoppedBy, assigned, unassigned, workload range.
+  result          Json?
+  errorCode       String?            @map("error_code")
+  startedById     String?            @map("started_by_id") @db.Uuid
+  startedAt       DateTime           @default(now()) @map("started_at")
+  finishedAt      DateTime?          @map("finished_at")
+
+  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  term      Term           @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Cascade)
+  draft     TimetableDraft @relation(fields: [schoolId, draftId], references: [schoolId, id], onDelete: Cascade)
+  startedBy User?          @relation(fields: [startedById], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, termId, startedAt])
+  @@map("generator_runs")
 }
 
 // ---------------------------------------------------------------------------

@@ -74,7 +74,25 @@ export type Calendar = {
   absentByLesson: ReadonlyMap<string, ReadonlySet<string>>;
   /** Students booked into each lesson as active replacements, by lesson id. */
   replacementsByLesson: ReadonlyMap<string, readonly string[]>;
+  /** Levels per teacher; null when the context has no `teacherLevels`. */
+  teacherLevels: ReadonlyMap<string, ReadonlySet<string>> | null;
 };
+
+/**
+ * Sentinel teacher id: `checkSlot` / `checkLesson` with it skip every
+ * teacher rule and report only the conflicts of the time itself (room,
+ * group, students, term, school hours). Used by the generator's readiness
+ * check and the group form's live check (generator.md §4.3).
+ */
+export const UNASSIGNED_TEACHER = "__unassigned__";
+
+/** Conflict types about the teacher; never reported for `UNASSIGNED_TEACHER`. */
+export const TEACHER_CONFLICT_TYPES: readonly ConflictType[] = [
+  "TEACHER_DOUBLE_BOOKED",
+  "TEACHER_UNAVAILABLE_WEEKLY",
+  "TEACHER_UNAVAILABLE_ON_DATE",
+  "TEACHER_LEVEL_NOT_TAUGHT",
+];
 
 const byId = <T extends { id: string }>(items: readonly T[]) =>
   new Map(items.map((item) => [item.id, item]));
@@ -201,8 +219,19 @@ export function buildCalendar(context: SchedulingContext): Calendar {
     }
   }
 
+  let teacherLevels: Map<string, Set<string>> | null = null;
+  if (context.teacherLevels) {
+    teacherLevels = new Map();
+    for (const { teacherId, levelId } of context.teacherLevels) {
+      const set = teacherLevels.get(teacherId);
+      if (set) set.add(levelId);
+      else teacherLevels.set(teacherId, new Set([levelId]));
+    }
+  }
+
   return {
     context,
+    teacherLevels,
     bookingsByDate,
     terms,
     slots: byId(context.slots),
@@ -302,6 +331,12 @@ function lookup<T>(map: ReadonlyMap<string, T>, id: string, what: string): T {
   return value;
 }
 
+function teacherOf(calendar: Calendar, id: string): PersonInfo {
+  return id === UNASSIGNED_TEACHER
+    ? { id, name: "" }
+    : lookup(calendar.teachers, id, "teacher");
+}
+
 /** Checks shared by slots and lessons: resources, people, rooms, availability. */
 function collect(calendar: Calendar, subject: Subject, out: ConflictSet) {
   const { group, teacher, room, occurrences } = subject;
@@ -341,6 +376,20 @@ function collect(calendar: Calendar, subject: Subject, out: ConflictSet) {
     );
   }
 
+  const unassigned = teacher.id === UNASSIGNED_TEACHER;
+  // A teacher without any level rows gets no warning: the school may not
+  // use levels yet (generator.md §4.3).
+  const taught = calendar.teacherLevels?.get(teacher.id);
+  if (!unassigned && taught && group.levelId && !taught.has(group.levelId)) {
+    const level = context.levels?.find((l) => l.id === group.levelId);
+    out.add(
+      "TEACHER_LEVEL_NOT_TAUGHT",
+      `${teacher.id}:${group.levelId}`,
+      { teacher: teacher.name, level: level?.name ?? group.levelId },
+      { teacherId: teacher.id, groupId: group.id },
+    );
+  }
+
   const { dayStartMinute, dayEndMinute } = context.school;
   const attending = new Set(subject.attendees.studentIds);
 
@@ -358,13 +407,15 @@ function collect(calendar: Calendar, subject: Subject, out: ConflictSet) {
       );
     }
 
-    for (const rule of unavailabilityRules(
-      context.availability,
-      teacher.id,
-      occ.date,
-      occ.startMinute,
-      occ.endMinute,
-    )) {
+    for (const rule of unassigned
+      ? []
+      : unavailabilityRules(
+          context.availability,
+          teacher.id,
+          occ.date,
+          occ.startMinute,
+          occ.endMinute,
+        )) {
       const weekly = rule.kind === "WEEKLY_UNAVAILABLE";
       out.add(
         weekly ? "TEACHER_UNAVAILABLE_WEEKLY" : "TEACHER_UNAVAILABLE_ON_DATE",
@@ -394,7 +445,7 @@ function collect(calendar: Calendar, subject: Subject, out: ConflictSet) {
       };
       const counterpart = other.counterpart;
 
-      if (other.teacherId === teacher.id) {
+      if (!unassigned && other.teacherId === teacher.id) {
         out.add(
           "TEACHER_DOUBLE_BOOKED",
           counterpartKey,
@@ -508,7 +559,7 @@ export function checkSlot(
       group,
       // A weekly slot has no per-date absences or replacements.
       attendees: attendeesOf(calendar, null, group),
-      teacher: lookup(calendar.teachers, candidate.teacherId, "teacher"),
+      teacher: teacherOf(calendar, candidate.teacherId),
       room: candidate.roomId
         ? lookup(calendar.rooms, candidate.roomId, "room")
         : null,
@@ -591,10 +642,9 @@ export function checkLesson(
       group,
       // An existing lesson keeps its absences and replacement students.
       attendees: attendeesOf(calendar, selfId ?? null, group),
-      teacher: lookup(
-        calendar.teachers,
+      teacher: teacherOf(
+        calendar,
         candidate.substituteTeacherId ?? candidate.teacherId,
-        "teacher",
       ),
       room: candidate.roomId
         ? lookup(calendar.rooms, candidate.roomId, "room")

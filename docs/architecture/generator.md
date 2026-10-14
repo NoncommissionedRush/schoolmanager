@@ -1,8 +1,8 @@
 # Timetable generator: assign teachers (rules, CARM-53, revised CARM-58)
 
-**Status: Phase 4, proposed. Nothing here is implemented yet.** Stage 2
-(CARM-55) builds the schema, the engine and the service from this page;
-stage 3 (CARM-56) the admin screens. The screens are specified in
+**Status: Phase 4. Stage 2 (CARM-55) implements the schema, the engine,
+the service and the server actions; stage 3 (CARM-56) the admin screens.**
+Where the implementation settles a detail this page left open, §11 says so. The screens are specified in
 `docs/design/timetable-generator.md` (CARM-54); §9 lists how the two fit.
 Where they still disagree, raise it on the issue rather than picking one.
 
@@ -120,8 +120,8 @@ choices (§5.3).
 What counts toward it: the weekly minutes of the teacher's lessons **in
 this term** from the run's start date (term start, or _D_ in the published
 modes): kept live slots of the term in effect then, locked assignments and
-the draft's assignments. Lessons in other, overlapping terms block time
-(§3.1) but do not count toward the maximum (open question 1).
+the draft's assignments. Terms never overlap (CARM-60), so lessons of other
+terms never count (decided 2026-10-14, §10 Q1).
 
 ### 2.4 Which times a group needs staffed in a run
 
@@ -147,6 +147,7 @@ anything (`checkReadiness(termId)`).
 | Status            | When                                                                                                                                                                                   | In the run?                                 |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `SKIPPED`         | A `GroupTermSkip` row exists for this term ("Skip this term")                                                                                                                          | No                                          |
+| `KEPT`            | FILL only: the group has live slots from _D_; they stay as they are (§5.2)                                                                                                             | No                                          |
 | `NO_LESSON_TIMES` | §2.4 gives it no times                                                                                                                                                                 | No                                          |
 | `NO_ROOM`         | A lesson time's room is archived (a live slot already in an archived room is fine, as in the editor)                                                                                   | No                                          |
 | `TIMES_CLASH`     | One of its times has a **blocking** conflict that no teacher can fix: `ROOM_DOUBLE_BOOKED`, `GROUP_DOUBLE_BOOKED`, `OUTSIDE_TERM`, `INVALID_TIME`. Both groups of a room clash get it. | No                                          |
@@ -331,11 +332,19 @@ No new runtime dependency is needed.
    overlapping unlocked group(s) to another free teacher, recursively,
    depth ≤ 3 and ≤ 2 000 nodes per group, in a fixed order; on failure undo
    and leave the group without a teacher.
-5. **Improvement.** Deterministic first-improvement descent over three
+5. **Improvement.** Deterministic first-improvement descent over four
    moves, in canonical order (groups by id, then teachers by id):
    **relocate** a group to another free eligible teacher; **swap** the
    teachers of two groups when both stay eligible; **insert** a group
-   without a teacher with the repair of step 4. A move is taken when it
+   without a teacher with the repair of step 4; **eject** (only while some
+   group has no teacher): take one group out, re-insert every group without
+   a teacher with repair (most constrained first, and smallest first; the
+   better of the two), the ejected one last. Eject reaches "one out, two
+   in", which insert's chains can't: they only eject groups that fit
+   elsewhere. Without it the engine missed the oracle's staffing on 10.5 %
+   of the small instances of §6.3 property 9. Eject never leaves a group
+   with live slots without a teacher (its lessons would end, §5.2). A move
+   is taken when it
    improves the objective (§3.3) lexicographically; passes repeat until one
    makes no move or the budget (§4.4) is used. Only unlocked groups move.
    Deltas are O(1) for the workload keys (two teachers change).
@@ -379,8 +388,8 @@ an engine bug can never reach the live timetable.
 
 - Same input → the same draft, byte for byte, whatever the order of the
   input arrays. No seed: nothing is random.
-- The budget is **iterations** (moves evaluated, `maxIterations`, default
-  200 000), which is deterministic, plus a wall-time safety cap
+- The budget is **iterations** (construction placements and moves
+  evaluated, `maxIterations`, default 200 000), which is deterministic, plus a wall-time safety cap
   (`timeLimitMs`, default 10 s) for very large schools. No presets; the UX
   spec has none.
 - A run ends by `stoppedBy`: `"converged"` (a pass without a move; normal),
@@ -398,13 +407,13 @@ teach its level, a **reason list per teacher**. Same shape as a
 `Conflict`: code, ICU params (`scheduling.generator.reasons.<CODE>` /
 `.teacherReasons.<CODE>`) and refs to link.
 
-| Group reason            | When                                                                   |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `LEVEL_UNCOVERED`       | No non-archived teacher teaches the level ("Nobody teaches {level}.")  |
-| `NO_TEACHER_FITS`       | Teachers teach the level, none could take it; see the per-teacher list |
-| `REMOVED_BY_ADMIN`      | The admin set "No teacher" and it is locked (§5.3)                     |
-| `TIME_LIMIT`            | The time cap fired before construction reached the group               |
-| `INTERNAL_CHECK_FAILED` | Step 6 found a generator-hard conflict (a bug; never expected)         |
+| Group reason            | When                                                                    |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `LEVEL_UNCOVERED`       | No non-archived teacher teaches the level ("Nobody teaches {level}.")   |
+| `NO_TEACHER_FITS`       | Teachers teach the level, none could take it; see the per-teacher list  |
+| `REMOVED_BY_ADMIN`      | The admin set "No teacher" and it is locked (§5.3)                      |
+| `TIME_LIMIT`            | The time cap (or `maxIterations`) stopped construction before the group |
+| `INTERNAL_CHECK_FAILED` | Step 6 found a generator-hard conflict (a bug; never expected)          |
 
 Per teacher who teaches the level (archived ones too, last), **every**
 reason that applies, in this order:
@@ -643,8 +652,8 @@ re-pointing the row is the carry-over, with nothing to move and no
 successor to create. `planGroupTeacherChange` therefore does not call
 `planSlotCarryOver`, and it never cancels or deletes a lesson.
 
-The editor keeps its current rule for slot edits; whether its teacher-only
-edits should use the same plan is open question 3.
+The editor keeps its current rule for slot edits for now; its teacher-only
+edits move to the same plan in CARM-61 (§10 Q3).
 
 **Preview.** `previewApply(draftId)` runs steps 1–5 in a transaction that
 is always rolled back and returns the counts plus the affected teachers,
@@ -798,7 +807,10 @@ Error codes the UI must handle: `RUN_IN_PROGRESS`, `RUN_INTERRUPTED`,
 `DRAFT_CHANGED`, `BLOCKING_CONFLICTS`, `UNACKNOWLEDGED_CONFLICTS`,
 `EFFECTIVE_DATE_PASSED`, `TERM_PUBLISHED` (REPLACE requested on a published
 term), `TEACHER_ARCHIVED`, `NOTHING_TO_ASSIGN` (no included group),
-`LESSON_TIMES_OVERLAP`.
+`LESSON_TIMES_OVERLAP`, plus `EFFECTIVE_DATE_OUTSIDE_TERM`,
+`TERM_NOT_PUBLISHED` (FILL / REPLAN_FROM on a draft term),
+`GROUP_NOT_IN_DRAFT` (an edit for a group the last run didn't include) and
+the run's `INTERNAL_ERROR`.
 
 ## 8. Schema changes
 
@@ -1065,17 +1077,69 @@ Points the spec should reflect (small):
 - Run: progress phases are `checking`, `assigning`, `balancing`; cancel
   only.
 
-## 10. Open questions for the owner
+## 10. Owner decisions (2026-10-14, CARM-58)
 
-1. **Max hours across terms:** should lessons in an overlapping term (e.g.
-   a summer intensive running alongside) count toward a teacher's weekly
-   maximum? Proposed: no, this term only; the other term's lessons still
-   block the time.
-2. **Published term, "Reconsider every group":** proposed meaning is "keep
-   current teachers unless a change gives more groups a teacher" (the UX
-   spec's wording). Is that right, or should it also rebalance workloads,
-   changing more teachers mid-term?
-3. **Teacher-only changes in the editor:** the generator re-points future
-   lessons to the new teacher instead of cancelling those with absences or
-   bookings (§5.6). Should the editor's "change teacher from a date" do the
-   same? Proposed: yes, as a follow-up issue.
+1. **Max hours across terms:** terms can't overlap (CARM-60,
+   `data-model.md` "Terms never overlap"), so a teacher's maximum counts
+   only lessons in the term being planned (§2.3).
+2. **Published term, "Reconsider every group":** keeps current teachers
+   unless a change gives more groups a teacher. It does not rebalance
+   workloads (keys 3–4 of §3.3 rank above the workload).
+3. **Teacher-only changes in the editor:** handled later, in CARM-61, which
+   reuses `planGroupTeacherChange` (§5.6).
+
+## 11. Implementation notes (CARM-55)
+
+Details the implementation settled, for review against the rules above:
+
+- **Where things are.** Engine: `src/server/scheduling/generator/`
+  (`generate.ts` exports `assignTeachers`, `assignTeachersSteps`,
+  `evaluateDraft` for review, edits and Check draft, `checkGeneratorReadiness`,
+  `draftTeacherOptions` and `fingerprintPayload`). Service:
+  `src/server/timetable/generator-service.ts`; zod schemas:
+  `generator-schema.ts`; actions: `src/app/admin/timetable/generator-actions.ts`
+  (not used by a page until CARM-56, so the e2e "every admin action"
+  check lists the file in `NOT_WIRED_YET` until then).
+- **Readiness.** FILL marks groups with live slots `KEPT` (§2.5). The
+  `hours` check subtracts the minutes kept live slots already use from each
+  teacher's capacity. A reconsidered group that ends up `TIMES_CLASH` keeps
+  its live slots in the fixed context.
+- **Kept live minutes** (§2.3) count every live slot of the term in effect on
+  or after the start date, so a slot ending soon and its successor both
+  count until the first one ends; in REPLAN_FROM a group's own times
+  double the same way. This errs on the safe side for rule 5 (never over a
+  maximum) but can refuse a teacher who would fit. TODO in `readiness.ts`.
+- **REPLAN_FROM fixed context.** The reconsidered groups' slots end on
+  _D_ − 1 and their slot lessons from _D_ leave the context; their ad-hoc
+  lessons stay in it (they keep their own time and are re-checked with
+  `checkLesson` on apply).
+- **Ids and keys.** Draft times are checked as slots with id
+  `draft:<time key>` (`lt:<lesson time id>` or `slot:<live slot id>`), in
+  the engine and in apply's would-be calendar alike, so a conflict's key in
+  the review is the key apply asks to acknowledge:
+  `<groupId>|<weekday>|<start>|<end>|<conflict key>`; re-pointed lessons
+  with their own time or room: `lesson:<lessonId>|<conflict key>`;
+  `maxHours:<teacherId>`.
+- **Runs.** `startRun` stores the draft version in the run's progress; the
+  run saves only if the draft is still at that version (§5.7). Budgets are
+  not client-settable. Draft edits are not audited (§7); runs, skip flags,
+  discard and apply are.
+- **Apply.** REPLACE deletes all of the term's editor slots (also those of
+  groups not in the draft), then creates one slot per lesson time of each
+  assigned group. A slot that starts on or after _D_ and keeps no lesson of
+  its own gets the new teacher in place instead of being split. In
+  REPLAN_FROM a group with live slots and no teacher in the draft keeps its
+  slots unless the admin set "No teacher" (locked, `MANUAL`); a group nobody
+  could take (e.g. `MIXED_TEACHERS`) is not ended.
+- **Teacher change.** `planGroupTeacherChange` re-points every lesson of the
+  group's slots dated on or after _D_, also one moved by hand to a time that
+  has already started (it keeps its teacher), so no second occurrence is
+  created for its date.
+- **Verify** strips only assignments the engine chose: locked, fallback
+  and groups still with their current teacher keep their conflicts as
+  warnings (they come from live data).
+- **Measured** (Node 23, Apple Silicon, seeds 1–5, `generator.performance.test.ts`):
+  whole run 27–43 ms, eligibility 20–35 ms, 60/60 groups staffed on every
+  seed of both variants, workload range below the planted assignment's.
+  Oracle (property 9): same staffing on 200/200 instances, workload penalty
+  within 10 % on 198/200. CP-SAT is not needed (§4.1).
