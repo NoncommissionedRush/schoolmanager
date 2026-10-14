@@ -9,18 +9,18 @@ and how admins configure, monitor and review all of it. Builds on
 `docs/design/lessons.md` (lesson pages). Clickable wireframe:
 `docs/design/wireframes/absences.html`.
 
-The booking rules (eligibility, room capacity, reschedule slots, credit
+The booking rules (eligibility, room capacity, reschedule times, credit
 lifecycle, concurrency) are owned by the Scheduling Engineer in
-`docs/architecture/replacements.md` (CARM-40). This spec only states what the
-UI shows and assumes; §12 lists every assumption CARM-40 must confirm or
-correct. Where the two disagree, `replacements.md` wins and this spec is
-updated.
+`docs/architecture/replacements.md` (CARM-40, PR #23). This spec states what
+the UI shows and links to the rule sections it relies on. §12 lists where the
+owner's answers on this spec change that doc.
 
 ## Owner decisions this spec follows (2026-10-14, CARM-38)
 
-1. **Only the student reports their own absence.** Teachers and admins
-   don't. The admin sets, per school, how long before the lesson a student
-   can still cancel and earn a credit.
+1. **The student reports their own absence.** Teachers don't. The admin
+   sets, per school, how long before the lesson a student can still cancel
+   and earn a credit. _Amended on CARM-39:_ an admin can also cancel on a
+   student's behalf (§7.5).
 2. **Makeup credits expire.** The admin sets the expiry per school.
 3. **Group lessons:** a replacement must be at the **same level**. It is
    auto-approved, and an admin can review and override it.
@@ -28,6 +28,17 @@ updated.
 5. **A 1-on-1 lesson is simply rescheduled.** It doesn't become a
    replacement in another student's lesson.
 6. **Every user belongs to exactly one school.**
+
+Owner answers on this spec (2026-10-14, CARM-39 review):
+
+7. Credit validity counts from the **missed lesson's date**.
+8. An **admin can cancel a lesson on a student's behalf**, e.g. when the
+   student phones the office.
+9. A booking cancelled **after its cutoff** spends the credit.
+10. A credit released by an admin reject (or a school-cancelled target)
+    gets **at least 7 more days**.
+11. 1-on-1 **"cancel now, reschedule later"** with a credit is allowed.
+12. **No cap** on credits or bookings for now.
 
 Earlier decisions still apply: no attendance tracking (`lessons.md`
 decision 1), TeacherNotes never reach students, all strings go through
@@ -47,18 +58,18 @@ next-intl.
 
 ## 2. Roles and access
 
-| Role    | Screens                                                                                                                                          | Can read                                                                                                                   | Can do                                                                                                                                                            |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Student | _Can't attend?_ (timetable sheet, lesson page, home) · Absences tab `/student/absences` · Book `/student/absences/book` · Reschedule sheet       | Their own cancellations, credits and bookings. For an eligible lesson: date, time, group, level, teacher, room, free seats | Cancel / undo their own upcoming lesson; book a replacement or reschedule a 1-on-1 with their own credit; cancel their own booking                                |
-| Teacher | Lesson page `/teacher/lessons/[id]` (new _Students_ card) · timetable details sheet                                                              | For their lessons (regular or substitute): who cancelled (name, when, reason) and who joins as a replacement               | Nothing in P3 (decision 1)                                                                                                                                        |
-| Admin   | Settings › Absences & credits `/admin/settings/absences` · Absences & replacements `/admin/absences` (tabs _Review_, _Replacements_, _Absences_) | Everything in the school                                                                                                   | Change the two settings; approve, reject or override a replacement or reschedule, with a reason. Admins can't cancel a lesson for a student (decision 1, §13 Q2). |
+| Role    | Screens                                                                                                                                          | Can read                                                                                                                   | Can do                                                                                                                                               |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Student | _Can't attend?_ (timetable sheet, lesson page, home) · Absences tab `/student/absences` · Book `/student/absences/book` · Reschedule sheet       | Their own cancellations, credits and bookings. For an eligible lesson: date, time, group, level, teacher, room, free seats | Cancel their own upcoming lesson (final, §5.6); book a replacement or reschedule a 1-on-1 with their own credit; cancel their own booking            |
+| Teacher | Lesson page `/teacher/lessons/[id]` (new _Students_ card) · timetable details sheet                                                              | For their lessons (regular or substitute): who cancelled (name, when, reason) and who joins as a replacement               | Nothing in P3 (decision 1)                                                                                                                           |
+| Admin   | Settings › Absences & credits `/admin/settings/absences` · Absences & replacements `/admin/absences` (tabs _Review_, _Replacements_, _Absences_) | Everything in the school                                                                                                   | Change the two settings; cancel a lesson on a student's behalf; delete a mistaken absence; approve, reject or override a replacement, with a reason. |
 
 **Server-side rules** (the UI only mirrors them; QA covers them in CARM-44):
 
 - Every query is scoped by `schoolId`. Student actions also check
   `studentId = me`. An id the user may not see returns **404**, as in
   `lessons.md` §2.
-- Cancel, undo, book, reschedule and cancel-booking are server actions that
+- Cancel, book, reschedule, cancel-booking and the admin actions are server actions that
   re-check every rule (cutoff, eligibility, seats, clash, credit state) at
   submit time. The lists in the UI are only a preview.
 - A student booked onto a lesson as a replacement can open that lesson's
@@ -71,14 +82,14 @@ next-intl.
 
 ## 3. Concepts shown in the UI
 
-| Concept                                    | UI word (key)                                       | Meaning for the user                                                                                                                                                     |
-| ------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `AbsenceReport`                            | **Cancellation** (`absences.cancellation`)          | "I won't come to this lesson." Made by the student only. The word "absence" is kept for the nav and the admin page, because that is what admins call it.                 |
-| Cutoff                                     | **Cancel by {dateTime}** (`absences.cutoff.by`)     | Lesson start minus the school's cutoff hours. Before it a cancellation earns a credit; after it, it doesn't. Always shown as an absolute date and time, never as "24 h". |
-| `MakeupCredit`                             | **Makeup credit** (`credits.title`), short _credit_ | One lesson to make up. Valid until a date. Spent on one replacement or one reschedule.                                                                                   |
-| `ReplacementRequest` (group lesson)        | **Replacement** (`replacements.title`)              | A seat in another group's lesson at the student's level, booked with a credit.                                                                                           |
-| `ReplacementRequest` / reschedule (1-on-1) | **Rescheduled lesson** (`reschedule.title`)         | The same 1-on-1 (same teacher) at a new time, booked with a credit. Data shape is CARM-40's call (§12).                                                                  |
-| Booking                                    | **Booking** (`bookings.*`)                          | Umbrella word on the student's Absences tab for "a replacement or a rescheduled lesson".                                                                                 |
+| Concept                             | UI word (key)                                       | Meaning for the user                                                                                                                                                         |
+| ----------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AbsenceReport`                     | **Cancellation** (`absences.cancellation`)          | "I won't come to this lesson." Made by the student, or by an admin for them. The word "absence" is kept for the nav and the admin page, because that is what admins call it. |
+| Cutoff                              | **Cancel by {dateTime}** (`absences.cutoff.by`)     | Lesson start minus the school's cutoff hours. Before it a cancellation earns a credit; after it, it doesn't. Always shown as an absolute date and time, never as "24 h".     |
+| `MakeupCredit`                      | **Makeup credit** (`credits.title`), short _credit_ | One lesson to make up. Valid until a date. Spent on one replacement or one reschedule.                                                                                       |
+| `ReplacementRequest` (group lesson) | **Replacement** (`replacements.title`)              | A seat in another group's lesson at the student's level, booked with a credit.                                                                                               |
+| Reschedule (1-on-1)                 | **Rescheduled lesson** (`reschedule.title`)         | The same 1-on-1 (same teacher) at a new time, booked with a credit. Stored as a new ad-hoc `Lesson` with `rescheduledFromId` (`replacements.md` §7).                         |
+| Booking                             | **Booking** (`bookings.*`)                          | Umbrella word on the student's Absences tab for "a replacement or a rescheduled lesson".                                                                                     |
 
 ### 3.1 One model for both lesson types
 
@@ -90,15 +101,18 @@ once:
    pick a new time with the same teacher.
 3. The booking shows in the timetable. It can be **cancelled** with the same
    cutoff rule: before the cutoff the credit comes back, after it the credit
-   is spent.
+   is spent (decision 9).
 
 For a 1-on-1 the dialog offers steps 1 and 2 together (_Reschedule now_),
 plus _Cancel and reschedule later_ when the student doesn't know a time yet
 (§5.3).
 
 A credit remembers what it came from: a group-lesson credit can only book a
-group replacement, a 1-on-1 credit can only reschedule with the same
-teacher (§12 A6).
+group replacement, a 1-on-1 credit can only reschedule in the same 1-on-1
+group (`replacements.md` §6 `CREDIT_UNAVAILABLE`, §7).
+
+A cancellation is **final** for the student (`replacements.md` §3): there's
+no _Undo_. A mistaken one is deleted by an admin (§7.5).
 
 ### 3.2 Status badges
 
@@ -120,16 +134,16 @@ review is the school's business, not theirs.
 
 Admin-facing (`ReplacementStatus`):
 
-| Status              | Badge                            | Token     |
-| ------------------- | -------------------------------- | --------- |
-| `AUTO_APPROVED`     | **Needs review** (auto-approved) | `info`    |
-| `APPROVED`          | **Approved**                     | `success` |
-| `REJECTED`          | **Rejected**                     | `danger`  |
-| `OVERRIDDEN`        | **Overridden**                   | `warning` |
-| (student cancelled) | **Cancelled by student**         | muted     |
+| Status          | Badge                                                            | Token     |
+| --------------- | ---------------------------------------------------------------- | --------- |
+| `AUTO_APPROVED` | **Needs review** (auto-approved)                                 | `info`    |
+| `CANCELLED`     | **Cancelled by student** / **Lesson cancelled** (`cancelReason`) | muted     |
+| `APPROVED`      | **Approved**                                                     | `success` |
+| `REJECTED`      | **Rejected**                                                     | `danger`  |
+| `OVERRIDDEN`    | **Overridden**                                                   | `warning` |
 
 Absence (admin list): **Credit earned** (`success`) · **Late — no credit**
-(`warning`).
+(`warning`), plus a muted **By {admin}** chip when an admin reported it.
 
 ## 4. User flows
 
@@ -149,7 +163,6 @@ flowchart TD
   B --> L[Eligible lessons by day] --> CF[Confirm dialog] --> R[Booked: shows in timetable]
   R -->|Cancel booking before cutoff| CB[Credit back]
   R -->|after cutoff| CS[Credit spent]
-  OK1 -->|Undo before the lesson starts| U[Attending again, credit removed]
 ```
 
 ### 4.2 Student — 1-on-1 lesson
@@ -161,7 +174,8 @@ flowchart TD
   RS -->|pick a time| RN[Lesson moved to the new time]
   RS -->|Cancel and reschedule later| CR[Cancelled + credit]
   CR --> A["Absences tab: Reschedule"] --> RS2[Reschedule sheet] --> RN
-  Q -->|no| NC[Dialog: too late, cancel without credit]
+  RN -->|Can't attend? before cutoff| RS3[Reschedule again with the same credit, or cancel: credit back]
+  Q -->|no| NC[Dialog: too late, cancel without credit; lesson stays booked for the teacher]
 ```
 
 ### 4.3 Admin
@@ -172,7 +186,9 @@ flowchart TD
   DASH[Dashboard: Needs attention · N replacements to review] --> RQ["/admin/absences?tab=review"]
   RQ -->|Approve / Approve selected| AP[Approved]
   RQ -->|Reject + reason| RJ[Booking removed, credit back to student]
-  RQ -->|Override + reason| OV[Pick another lesson, warnings shown] --> OD[Booking moved]
+  RQ -->|Override + reason| OV[Keep or pick another lesson, acknowledge each reason] --> OD[Booking overridden]
+  PH[Student phones the office] --> AC["Report absence for a student"] --> CRD[Same cutoff rule: credit or not]
+  AB[Absences tab row] -->|Delete absence| DEL[Absence and unused credit removed]
 ```
 
 ## 5. Student (mobile-first)
@@ -192,10 +208,11 @@ The caption under the button always states the cutoff as an absolute time:
 - After the cutoff (`warning` text): "It's after the cutoff (Sun 19 Oct,
   17:00). You can still cancel, but you won't get a credit."
 
-For a lesson already cancelled by the student, the sheet shows the
-**Not attending** badge, "You cancelled this lesson on {date}." plus either
+For a lesson already cancelled, the sheet shows the **Not attending** badge,
+"You cancelled this lesson on {date}." (or "The school office cancelled
+this lesson for you on {date}." when an admin did it, §7.5) plus either
 "You got a makeup credit." or "No credit — cancelled after the cutoff.",
-and an _Undo_ button (§5.6).
+and the hint "Changed your mind? Contact the school office." (§5.6).
 
 For a booking (replacement / rescheduled lesson) the same button reads
 _Cancel booking_ (§5.7).
@@ -225,14 +242,19 @@ A bottom `Sheet` on mobile, a `Dialog` on desktop. One screen, no steps.
 
 - **Before the cutoff:** `success` Alert with `ticket` icon: "You'll get a
   makeup credit, valid until {date}. Use it to join another {level} lesson."
+  The date is the missed lesson's date plus the validity days (decision 7,
+  `replacements.md` §4).
 - **After the cutoff:** `warning` Alert with `alert-triangle`: "It's less
   than {hours} hours before the lesson, so you won't get a makeup credit.
   Your teacher will still know you're not coming." The primary button reads
   _Cancel without credit_.
 - **Reason** is optional, plain text, ≤ 300 characters, visible to the
   teacher and admins. Hint: "Your teacher sees the reason."
+- A caption under the buttons: "You can't undo this yourself. If you
+  change your mind, contact the school office." Cancellations are final
+  for students (`replacements.md` §3).
 - The primary button is not destructive-red: cancelling is a normal,
-  expected action, and it can be undone.
+  expected action.
 - **Success** closes the dialog and shows a toast:
   - with credit: "Lesson cancelled. You have a makeup credit until {date}."
     with action _Book a replacement_;
@@ -259,12 +281,12 @@ desktop):
 │ 1-on-1 with Tomas Horvat     │
 │ Now: Tue 21 Oct · 18:00–18:45│ struck through after pick
 │ Pick a new time (until 20 Nov)│
-│ ‹ 20 – 26 Oct ›              │ week nav, 44 px
+│ Tue 28 Oct                   │ h3
+│ [18:00 · usual time]         │ same weekday & time first
 │ Wed 22 Oct                   │ h3
 │ [16:00] [16:30] [19:00]      │ ToggleGroup chips, 44 px
 │ Thu 23 Oct                   │
-│ [17:00] [17:30]              │
-│ Fri 24 Oct · no free times   │ muted
+│ [17:00] [17:15] [17:30]      │
 │ ─────────────────────────────│
 │ New time: Wed 22 Oct, 16:00– │ summary, aria-live
 │ 16:45 · Room 2               │
@@ -274,20 +296,25 @@ desktop):
 └──────────────────────────────┘
 ```
 
-- **Times offered** come from the server (CARM-40): same teacher, same
-  length, teacher available, a free room, no clash with the student's other
-  lessons, inside school days and hours, not on a holiday, at least the
-  cutoff ahead of now, and before the credit's expiry. Start times on a
-  30-minute grid (§12 A8).
-- One week at a time, Monday first, opening on the week of the original
-  lesson. `‹ ›` move between weeks up to the expiry. Days with no times show
-  "No free times" so the student doesn't think the list is broken.
+- **Times offered** come from `rescheduleOptions` (`replacements.md` §7):
+  same teacher, same length, no conflict of any kind in the timetable
+  checker, no clash with the student's other lessons, in a published term,
+  at least the cutoff ahead of now, and before the credit's expiry. Starts
+  are on a 15-minute grid. The server returns **up to 20** times: the
+  missed lesson's weekday and time first, then the nearest dates.
+- The sheet shows them grouped by day in date order (h3 per day). A time on
+  the lesson's usual weekday and start gets the caption "usual time". There
+  is no week navigation; the list is the full offer.
 - Picking a chip fills the summary line, including the room (the server
   picks it). The _Reschedule_ button is enabled from the start; pressing it
   with nothing picked shows the field error "Pick a new time."
 - **Success:** toast "Lesson moved to {dateTime}." The timetable shows the
-  new lesson with the **Rescheduled** badge (§5.8); the old slot shows
+  new lesson with the **Rescheduled** badge (§5.8); the old lesson shows
   **Not attending**.
+- **On a rescheduled lesson**, _Can't attend?_ before the cutoff opens the
+  same sheet: picking a time moves it again with the **same** credit, and
+  _Cancel and reschedule later_ releases that credit with its original
+  expiry. No new credit is ever created (`replacements.md` §3).
 - **_Cancel and reschedule later_** opens the group-style cancel dialog
   (§5.2) with the copy "You'll get a credit to reschedule this lesson with
   {teacher}, valid until {date}." The credit then appears on the Absences
@@ -299,7 +326,9 @@ desktop):
   contact the school office." with _Cancel and reschedule later_ as the
   primary button.
 - **After the cutoff:** _Can't attend?_ opens the cancel dialog in its
-  after-cutoff state (§5.2) — no reschedule, no credit.
+  after-cutoff state (§5.2) — no reschedule, no credit. For a 1-on-1 the
+  `warning` text adds "Your teacher keeps this time for you, so the lesson
+  counts as taken." (the lesson stays scheduled, `replacements.md` §3).
 
 ### 5.4 Absences tab (`/student/absences`, bottom tab ★ "Absences")
 
@@ -331,7 +360,7 @@ things first.
 │ │ [Cancel booking]          │ │
 │ Upcoming cancellations (1)   │ h2
 │ │ Mon 27 Oct · B1 Evening   │ │
-│ │ Credit earned · [Undo]    │ │
+│ │ Credit earned             │ │
 │ History                      │ h2, collapsed list
 │ ▸ Used and expired credits, │ │
 │   past cancellations (6)     │
@@ -350,12 +379,13 @@ things first.
   started, soonest first, with _Cancel booking_ (§5.7). A booking changed or
   removed by the school shows its badge and the school's reason
   ("Removed by school: Group B1 Morning moved to a smaller room.").
-- **Upcoming cancellations** — the student's own cancellations of lessons
-  that haven't started, with **Credit earned** / **No credit** and _Undo_
-  (§5.6).
+- **Upcoming cancellations** — the student's cancellations of lessons that
+  haven't started, with **Credit earned** / **No credit**, and "By the
+  school office" when an admin reported it. No _Undo_ (§5.6).
 - **History** — a `Collapsible`, closed by default, with the count. Rows,
   newest first, 20 at a time with _Load more_:
   - "Credit from Mon 13 Oct — used for B1 Morning, Thu 23 Oct" (`Used`)
+  - "Credit from Tue 14 Oct — rescheduled to Wed 22 Oct, 16:00" (`Used`)
   - "Credit from Mon 6 Oct — expired on Thu 6 Nov" (`Expired`)
   - "Mon 29 Sep · B1 Evening — cancelled, no credit"
   - "Booking for Wed 1 Oct — removed by school: {reason}"
@@ -409,23 +439,26 @@ button.
 
 - **Header:** which credit is used and until when. A student with several
   group credits can switch with a `Select` "Use credit from {date}".
-- **List:** lessons the server says are eligible for this credit (CARM-40):
-  the student's level, a free seat in the room, no clash, not started, not
-  cancelled, before the credit's expiry, and not a lesson of the student's
-  own group. Grouped by day, one week at a time, opening on the current
+- **List:** lessons for which `checkReplacement` returns no reasons
+  (`replacements.md` §6): the student's level, a free seat in the room, no
+  clash, published, not started, not cancelled, starting before the
+  credit's expiry, and not a lesson the student already attends. Grouped by day, one week at a time, opening on the current
   week. `‹ ›` move up to the expiry week; earlier weeks aren't reachable.
 - **Card:** time, group name with the group icon, room (online rooms say
   "Online"), teacher, and the seat count: "{n} seats left" (`warning`
-  text at 1: "1 seat left"). Rooms without a capacity show no count (§12
-  A3). The card is not a link; _Book_ is the only action.
+  text at 1: "1 seat left"). Rooms without a capacity have no limit and
+  show no count (`replacements.md` §5). The card is not a link; _Book_ is the only action.
 - **Book** opens a confirm `Dialog`:
   "Book B1 Morning on Wed 22 Oct, 10:00?" / "This uses your makeup credit
   from Mon 13 Oct. You can cancel the booking until {cutoff} and keep the
   credit." Buttons _Book_ (primary) and _Back_.
 - **Success:** redirect to the Absences tab and toast "Replacement booked
   for {dateTime}." with action _View in timetable_.
-- **Race — seat taken:** the dialog shows `warning` "Someone just took the
-  last seat. Pick another lesson." and closes to the refreshed list.
+- **Race — seat taken:** the server returns fresh reasons
+  (`replacements.md` §8). On `ROOM_FULL` the dialog shows `warning`
+  "Someone just took the last seat. Pick another lesson." and closes to the
+  refreshed list. Any other reason shows its `replacements.reasons.<CODE>`
+  message the same way.
 - **Credit expired or already used meanwhile:** `danger` Alert at the top
   of the page: "This credit expired on {date}." / "This credit has already
   been used." with _Back to Absences_. The list is hidden.
@@ -438,22 +471,13 @@ button.
   we can't find replacement lessons. Ask the school office." No list.
 - **Loading:** skeleton cards. **Error:** Alert + _Try again_.
 
-### 5.6 Undo a cancellation
+### 5.6 No undo for students
 
-- Allowed while the lesson **hasn't started** (CARM-42).
-- `AlertDialog` "Attend B1 Evening on Mon 20 Oct after all?" /
-  - credit unused: "Your makeup credit from this lesson will be removed."
-  - no credit: "You'll be back on the lesson list."
-    Buttons _Yes, I'll attend_ / _Back_.
-- **Credit already spent on a booking:** _Undo_ is replaced by the text
-  "You used the credit from this lesson for {booking}. Cancel that booking
-  first to undo." (§12 A5).
-- Undo after the cutoff is allowed: the student loses nothing, because the
-  credit, if any, is simply removed. Cancelling again later follows the
-  cutoff at that moment.
-- If the room has filled up with replacements meanwhile, undo is still
-  allowed: the student's own group seat comes first (§12 A4).
-- Toast: "You're attending {group} on {date} again."
+A cancellation is final for the student (`replacements.md` §3): a
+replacement student may already hold the freed seat, and a cancelled 1-on-1
+time may already be taken. Wherever a cancellation is shown to the student
+there is the muted hint "Changed your mind? Contact the school office." An
+admin can then delete the absence (§7.5).
 
 ### 5.7 Cancel a booking (replacement or rescheduled 1-on-1)
 
@@ -462,15 +486,15 @@ button.
   - Before the cutoff: `success` "Your credit from {sourceDate} comes back,
     valid until {expiry}." Button _Cancel booking_.
   - After the cutoff: `warning` "It's after the cutoff, so your credit is
-    used up." Button _Cancel booking anyway_.
+    used up." Button _Cancel booking anyway_ (decision 9). The teacher then
+    sees the student under _Not coming_.
   - Before the cutoff, but the credit has passed its expiry date
     meanwhile: `warning` "Your credit expired on {date}, so it won't come
     back."
 - Cancelling a booking never creates a **new** credit; it only returns or
   spends the original one. This stops credit chains.
-- A rescheduled 1-on-1 is cancelled the same way. It can't be rescheduled
-  again directly: cancel it (credit back), then reschedule from the
-  Absences tab.
+- A rescheduled 1-on-1 uses the Reschedule sheet instead (§5.3): move it
+  again with the same credit, or cancel it to get the credit back.
 - Toast: "Booking cancelled. Your credit is back." / "Booking cancelled."
 
 ### 5.8 Timetable and lesson page changes
@@ -514,7 +538,8 @@ that isn't cancelled by the school. Admin's read-only lesson page
 ```
 
 - **Header:** h2 "Students" and, for rooms with a capacity, "{room} ·
-  {taken} of {capacity} seats" (`tabular-nums`). Over capacity (§12 A4)
+  {taken} of {capacity} seats" (`tabular-nums`), counted as `seatsTaken`
+  (`replacements.md` §5). Over capacity
   turns this into `warning` text "{taken} of {capacity} seats — over
   capacity".
 - **Coming** — group members active on the lesson date minus cancellations,
@@ -524,8 +549,10 @@ that isn't cancelled by the school. Admin's read-only lesson page
   Text and icon, never color alone.
 - **Not coming** — students who cancelled: name, when they cancelled
   (relative date, full time in the `<time>` title), the reason in quotes
-  if given, and a `warning` badge **Late** when it was after the cutoff
-  (useful when it's 10 minutes before the lesson).
+  if given, a `warning` badge **Late** when it was after the cutoff
+  (useful when it's 10 minutes before the lesson), and "via office" when an
+  admin reported it. Replacement students who cancelled their booking
+  after its cutoff are listed here too, with "Replacement" on their row.
 - Empty lists: "Everyone in the group is coming." (no cancellations) is
   shown as a muted line instead of the _Not coming_ list.
 - Teachers can't edit anything here (decision 1).
@@ -575,30 +602,33 @@ Absences & credits                                          h1
 ```
 
 - **Cancellation cutoff** — whole hours, `Input type="number"` inline in
-  the sentence, 0–168. Default **24**. 0 means "until the lesson starts".
+  the sentence, 0–336 (14 days). Default **24**. Stored as
+  `School.absenceCutoffMinutes` (`replacements.md` §2). 0 means "until the lesson starts".
   Label for screen readers: "Cancellation cutoff, in hours before the
   lesson".
 - **Credit validity** — whole days, 1–365. Default **30**. Counted from the
-  **missed lesson's date** (not the day the student cancelled), and the
-  credit is valid until the end of that day in the school's timezone
-  (§12 A2).
+  **missed lesson's date** (decision 7), and the credit is valid until the
+  end of that day in the school's timezone. Stored as
+  `School.makeupCreditValidDays`.
 - Both examples update live as the admin types, using real dates.
 - `info` Alert: "Changes apply to new cancellations. Existing credits keep
   their dates."
+- The cutoff also sets how much notice a booking cancel and a 1-on-1
+  reschedule need. Hint under the field: "The same notice applies to
+  cancelling a replacement and to rescheduling a 1-on-1."
 - Validation: `validation.integerRange` "Enter a whole number from {min} to
-  {max}." Toast "Settings saved."
-- Storage is CARM-40's call (§12 A1).
+  {max}." Toast "Settings saved." Audited as `school.settings.updated`.
 
 ### 7.2 Absences & replacements (`/admin/absences`, nav _Absences & replacements_)
 
 Desktop-first list page (`app-layout.md` §4.4) with three `Tabs`; the tab
 is in the URL (`?tab=review`).
 
-| Tab              | Default filter                     | Columns                                                                                                                                                              |
-| ---------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Review ({n})** | Needs review, lesson not started   | ☐ · Booked (relative) · Student · From (original lesson) · To (target lesson) · Seats (room) · actions                                                               |
-| **Replacements** | Lesson date: next 14 days          | Student · Type (Replacement / Rescheduled) · From · To · Status badge · Reviewed by · Booked at · actions                                                            |
-| **Absences**     | Lesson date: last 7 + next 14 days | Lesson (date, time, group) · Student · Cancelled at · Reason · Credit (Credit earned / Late — no credit) · Credit status (Available until … / Used → link / Expired) |
+| Tab              | Default filter                     | Columns                                                                                                                                                                                                          |
+| ---------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Review ({n})** | Needs review, lesson not started   | ☐ · Booked (relative) · Student · From (original lesson) · To (target lesson) · Seats (room) · Issues (live reasons) · actions                                                                                   |
+| **Replacements** | Lesson date: next 14 days          | Student · From · To · Status badge · Reviewed by · Booked at · actions                                                                                                                                           |
+| **Absences**     | Lesson date: last 7 + next 14 days | Lesson (date, time, group, type) · Student · Cancelled at (+ "By {admin}") · Reason · Credit (Credit earned / Late — no credit) · Credit status (Available until … / Used → link / Rescheduled → link / Expired) |
 
 - **Filters** (filter bar): lesson date range (`Calendar` range, presets
   _This week_, _Next 14 days_, _Last 30 days_), Student (`Combobox`), Group,
@@ -607,8 +637,13 @@ is in the URL (`?tab=review`).
 - From / To cells show "Mon 13 Oct, 17:00 · B1 Evening" as links to the
   admin lesson page.
 - Row menu (`more-horizontal`): _Approve_, _Reject…_, _Override…_,
-  _Open student_. On the _Absences_ tab: _Open lesson_, _Open student_ only
-  (admins don't cancel or undo for students, decision 1).
+  _Open student_. On the _Absences_ tab: _Open lesson_, _Open student_,
+  _Delete absence…_ (§7.5).
+- The _Absences_ tab has a primary button **Report absence** (§7.5).
+- 1-on-1 reschedules aren't replacements (`replacements.md` §7), so they
+  aren't reviewed. They show on the _Absences_ tab as "Rescheduled →
+  {lesson}" in the credit status; an admin changes them with the normal
+  lesson tools.
 - Pagination 25 per page. Sorting by lesson date (default ascending on
   _Review_, so the most urgent is on top).
 - **Empty states:**
@@ -622,50 +657,112 @@ is in the URL (`?tab=review`).
 
 ### 7.3 Review actions
 
-Every replacement and reschedule is auto-approved when it's booked. The
-_Review_ tab lists the `AUTO_APPROVED` ones whose lesson hasn't started.
-Reviewing is optional: an unreviewed booking stays valid.
+Every replacement is auto-approved when it's booked. The _Review_ tab
+lists the `AUTO_APPROVED` ones whose lesson hasn't started. Reviewing is
+optional: an unreviewed booking stays valid.
 
-- **Approve** — one click, no dialog, toast "Approved." Also a bulk action:
-  select rows with checkboxes, then _Approve selected ({n})_ in a bar above
-  the table. A reason is optional and not asked for.
+The **Issues** column shows the reasons `reviewReplacement` returns **now**
+(`replacements.md` §6, _Admin review_), as `warning` badges using
+`replacements.reasons.<CODE>`: e.g. "Room full (15/14)", "Different level
+(B2)", "Clashes with {lesson}". These are problems that appeared after the
+booking (room changed, level changed, new lesson). Rows with issues sort to
+the top. A booking into a room without a capacity shows the muted note "No
+room limit".
+
+- **Approve** — only for rows without issues. One click, no dialog, toast
+  "Approved." Also a bulk action: select rows with checkboxes, then
+  _Approve selected ({n})_ in a bar above the table; rows with issues
+  can't be selected. A reason is optional and not asked for. On a row with
+  issues the row action is _Override…_ instead.
 - **Reject…** — `AlertDialog`:
   - Title "Reject Jana Malá's replacement on Wed 22 Oct?"
   - Body "The booking is removed and the credit goes back to the student,
-    valid until {expiry}." If the credit has expired since: "The credit
-    expired on {date}. It will be returned with a new expiry of {date}."
-    (§12 A7)
+    valid until {expiry}." The new expiry is the later of the old one and
+    7 days from now (decision 10). When that extends it, the body adds: "The
+    credit gets extra days, so it's valid until {expiry}."
   - `Textarea` **Reason (required)** with hint "The student sees this
     reason." ≤ 300 characters.
   - Buttons _Reject_ (destructive) / _Cancel_.
-- **Override…** — `Dialog` (desktop, `max-w-2xl`): move the booking to
-  another lesson.
-  - Shows the current booking at the top.
-  - A lesson picker: the eligible list from §5.5 for this student, plus a
-    switch **Show all lessons** that also lists lessons outside the rules
-    (other level, full room, clash). Those rows carry the reason as a
-    `warning` badge: "Different level (B2)", "Room full (14/14)",
-    "Clashes with {lesson}". Choosing one requires ticking "I'm making an
-    exception to the rules" (same pattern as the timetable editor's
-    overridable conflicts, `timetable.md` §3.1). Lessons that have started
-    or are cancelled are never offered.
+- **Override…** — `Dialog` (desktop, `max-w-2xl`): keep the booking
+  despite its issues, or move it to another lesson.
+  - The first option is **Keep {current lesson}**, with its current issues.
+  - Then a lesson picker: the eligible list from §5.5 for this student, plus
+    a switch **Show all lessons** that also lists lessons with
+    **overridable** reasons (`CREDIT_EXPIRES_FIRST`, `NO_LEVEL`,
+    `LEVEL_MISMATCH`, `ROOM_FULL`, `STUDENT_CLASH`). Those rows carry each
+    reason as a `warning` badge. Lessons with a blocking reason (started,
+    cancelled, unpublished, 1-on-1, already attending) are never offered.
+  - When the chosen option has reasons, each one is listed with its own
+    checkbox, "I've checked: {reason}" (the same per-conflict acknowledgement
+    as the timetable editor, `timetable.md` §3.1). All must be ticked.
   - `Textarea` **Reason (required)**, "The student sees this reason."
-  - Button _Move booking_. Toast "Booking moved to {dateTime}."
+  - Button _Save override_. Toast "Booking kept." / "Booking moved to
+    {dateTime}." Status becomes `OVERRIDDEN`; the credit stays used.
 - After any action the row leaves the _Review_ tab, and the status shows on
   the _Replacements_ tab with _Reviewed by {name}, {dateTime}_.
 - Approve, reject and override write `reviewedBy*`, `reviewNote` and an
   `AuditLog` entry (CARM-43). Rejecting or overriding an already approved
   booking is allowed from the _Replacements_ tab while its lesson hasn't
   started.
-- **Conflicts:** if the student cancelled the booking, or another admin
-  reviewed it, while the dialog was open: `warning` Alert "This booking
+- **Conflicts:** if the student cancelled the booking, another admin
+  reviewed it, or its reasons changed while the dialog was open: `warning` Alert "This booking
   changed while you were reviewing it. Reload to see the current state."
 
 ### 7.4 Admin lesson page and timetable
 
-The admin lesson page gets the _Students_ card from §6.1 (read-only), with
-each replacement row linking to its review actions. The admin timetable
-sheet gets the same counts as §6.2.
+The admin lesson page gets the _Students_ card from §6.1, with each
+replacement row linking to its review actions, and a row menu on each
+_Coming_ group member: _Report absence…_ (§7.5). The admin timetable sheet
+gets the same counts as §6.2.
+
+### 7.5 Report an absence for a student, delete an absence
+
+Owner decision 8: an admin can cancel on a student's behalf, e.g. when the
+student phones the office. Teachers still can't.
+
+**Report absence** (`Dialog`), from the _Absences_ tab button or the
+lesson page row menu (lesson and student pre-filled):
+
+```
+Report an absence                                           title
+Student   [ Jana Malá                      ▾ ]   Combobox
+Lesson    [ Mon 20 Oct, 17:00 · B1 Evening ▾ ]   her upcoming lessons
+┌ 🎟 Jana Malá gets a makeup credit, valid until Wed 19 Nov. ┐
+Reason (optional)  [ Phoned the office: ill            ]
+The student and the teacher see the reason.
+                                  [ Cancel ] [ Report absence ]
+```
+
+- **Lesson** lists the student's upcoming lessons (next 30 days) where they
+  are a member and that haven't started. Lessons they attend as a
+  replacement aren't listed: reject the replacement instead (§7.3).
+- The **same rule as for students**: the cutoff is checked when the admin
+  saves. Before it, `success` "{name} gets a makeup credit, valid until
+  {date}."; after it, `warning` "It's after the cutoff, so {name} won't get
+  a makeup credit." Admins can't grant a credit outside the rule
+  (`replacements.md` §4, no minting in v1).
+- For a 1-on-1 before the cutoff, the lesson is cancelled and the student
+  gets a credit to reschedule later. The admin doesn't pick a new time here;
+  admins move lessons with the normal lesson tools.
+- Toast "Absence reported for {name}." The student sees it on their
+  Absences tab and in the timetable as "The school office cancelled this
+  lesson for you on {date}."
+- Audited as `absence.reported` with the admin as the actor.
+
+**Delete absence…** (`AlertDialog`, _Absences_ tab row menu) for a report
+made by mistake (`replacements.md` §3):
+
+- Title "Delete {name}'s absence on {date}?" Body: "{name} is back on the
+  lesson list. Their unused makeup credit from this lesson is removed."
+- If the credit is used, the menu item is replaced by the text "The credit
+  from this absence is used for {booking}. Reject that replacement or
+  cancel the rescheduled lesson first."
+- For a 1-on-1 whose time has been taken meanwhile, the server refuses with
+  the timetable checker's conflict message; overridable conflicts need an
+  acknowledgement, as in the lesson move.
+- If the group lesson is now over capacity, the toast adds "B1 Evening is
+  now over capacity (15/14)."
+- Toast "Absence deleted." Audited as `absence.deleted`.
 
 ## 8. Copy (i18n keys, English source)
 
@@ -700,19 +797,18 @@ next-intl from values, never put together by hand.
 | `absences.notAttending`              | Not attending                                                                                                                                                           |
 | `absences.youCancelled`              | You cancelled this lesson on {date}.                                                                                                                                    |
 | `absences.gotCredit`                 | You got a makeup credit.                                                                                                                                                |
+| `absences.byOffice`                  | The school office cancelled this lesson for you on {date}.                                                                                                              |
+| `absences.changedMind`               | Changed your mind? Contact the school office.                                                                                                                           |
+| `absences.cancel.final`              | You can't undo this yourself. If you change your mind, contact the school office.                                                                                       |
+| `absences.cancel.oneOnOneLate`       | Your teacher keeps this time for you, so the lesson counts as taken.                                                                                                    |
+| `absences.status.byOffice`           | By the school office                                                                                                                                                    |
 | `absences.noCreditLate`              | No credit — cancelled after the cutoff.                                                                                                                                 |
-| `absences.undo`                      | Undo                                                                                                                                                                    |
-| `absences.undo.title`                | Attend {group} on {date} after all?                                                                                                                                     |
-| `absences.undo.removesCredit`        | Your makeup credit from this lesson will be removed.                                                                                                                    |
-| `absences.undo.noCredit`             | You'll be back on the lesson list.                                                                                                                                      |
-| `absences.undo.confirm`              | Yes, I'll attend                                                                                                                                                        |
-| `absences.undo.creditUsed`           | You used the credit from this lesson for {booking}. Cancel that booking first to undo.                                                                                  |
-| `absences.undo.done`                 | You're attending {group} on {date} again.                                                                                                                               |
 | `absences.section.credits`           | Makeup credits ({count})                                                                                                                                                |
 | `absences.section.bookings`          | Upcoming bookings ({count})                                                                                                                                             |
 | `absences.section.cancellations`     | Upcoming cancellations ({count})                                                                                                                                        |
 | `absences.section.history`           | History ({count})                                                                                                                                                       |
 | `absences.history.creditUsed`        | Credit from {sourceDate} — used for {group}, {date}                                                                                                                     |
+| `absences.history.rescheduled`       | Credit from {sourceDate} — rescheduled to {dateTime}                                                                                                                    |
 | `absences.history.creditExpired`     | Credit from {sourceDate} — expired on {date}                                                                                                                            |
 | `absences.history.cancelledNoCredit` | {date} · {group} — cancelled, no credit                                                                                                                                 |
 | `absences.history.bookingRemoved`    | Booking for {date} — removed by school: {reason}                                                                                                                        |
@@ -746,33 +842,34 @@ next-intl from values, never put together by hand.
 
 ### replacements (student booking)
 
-| Key                               | Copy                                                                                                                                            |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `replacements.title`              | Replacement                                                                                                                                     |
-| `replacements.book.title`         | Book a replacement                                                                                                                              |
-| `replacements.book.usingCredit`   | Using your credit from {sourceDate} · valid until {expiry}                                                                                      |
-| `replacements.book.switchCredit`  | Use credit from {date}                                                                                                                          |
-| `replacements.book.listTitle`     | {level} lessons with free seats                                                                                                                 |
-| `replacements.book.seatsLeft`     | {count, plural, one {# seat left} other {# seats left}}                                                                                         |
-| `replacements.book.online`        | Online                                                                                                                                          |
-| `replacements.book.action`        | Book                                                                                                                                            |
-| `replacements.book.clashHint`     | Lessons that clash with your timetable aren't shown.                                                                                            |
-| `replacements.book.confirmTitle`  | Book {group} on {dateTime}?                                                                                                                     |
-| `replacements.book.confirmBody`   | This uses your makeup credit from {sourceDate}. You can cancel the booking until {cutoff} and keep the credit.                                  |
-| `replacements.book.back`          | Back                                                                                                                                            |
-| `replacements.book.done`          | Replacement booked for {dateTime}.                                                                                                              |
-| `replacements.book.viewTimetable` | View in timetable                                                                                                                               |
-| `replacements.book.seatTaken`     | Someone just took the last seat. Pick another lesson.                                                                                           |
-| `replacements.book.emptyWeek`     | No {level} lessons with free seats this week.                                                                                                   |
-| `replacements.book.nextWeek`      | Next week                                                                                                                                       |
-| `replacements.book.emptyAll`      | No {level} lessons with free seats before {date}. New seats free up when other students cancel, so check again later, or ask the school office. |
-| `replacements.book.noLevel`       | Your level isn't set yet, so we can't find replacement lessons. Ask the school office.                                                          |
-| `replacements.badge`              | Replacement                                                                                                                                     |
-| `replacements.forYourLesson`      | For your lesson on {date}                                                                                                                       |
-| `replacements.joiningBanner`      | You're joining this lesson as a replacement.                                                                                                    |
-| `replacements.removedBySchool`    | Removed by school                                                                                                                               |
-| `replacements.changedBySchool`    | Changed by school                                                                                                                               |
-| `replacements.schoolReason`       | {status}: {reason}                                                                                                                              |
+| Key                               | Copy                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `replacements.title`              | Replacement                                                                                                                                                                                                                                                                                                                                     |
+| `replacements.book.title`         | Book a replacement                                                                                                                                                                                                                                                                                                                              |
+| `replacements.book.usingCredit`   | Using your credit from {sourceDate} · valid until {expiry}                                                                                                                                                                                                                                                                                      |
+| `replacements.book.switchCredit`  | Use credit from {date}                                                                                                                                                                                                                                                                                                                          |
+| `replacements.book.listTitle`     | {level} lessons with free seats                                                                                                                                                                                                                                                                                                                 |
+| `replacements.book.seatsLeft`     | {count, plural, one {# seat left} other {# seats left}}                                                                                                                                                                                                                                                                                         |
+| `replacements.book.online`        | Online                                                                                                                                                                                                                                                                                                                                          |
+| `replacements.book.action`        | Book                                                                                                                                                                                                                                                                                                                                            |
+| `replacements.book.clashHint`     | Lessons that clash with your timetable aren't shown.                                                                                                                                                                                                                                                                                            |
+| `replacements.book.confirmTitle`  | Book {group} on {dateTime}?                                                                                                                                                                                                                                                                                                                     |
+| `replacements.book.confirmBody`   | This uses your makeup credit from {sourceDate}. You can cancel the booking until {cutoff} and keep the credit.                                                                                                                                                                                                                                  |
+| `replacements.book.back`          | Back                                                                                                                                                                                                                                                                                                                                            |
+| `replacements.book.done`          | Replacement booked for {dateTime}.                                                                                                                                                                                                                                                                                                              |
+| `replacements.book.viewTimetable` | View in timetable                                                                                                                                                                                                                                                                                                                               |
+| `replacements.book.seatTaken`     | Someone just took the last seat. Pick another lesson.                                                                                                                                                                                                                                                                                           |
+| `replacements.book.emptyWeek`     | No {level} lessons with free seats this week.                                                                                                                                                                                                                                                                                                   |
+| `replacements.book.nextWeek`      | Next week                                                                                                                                                                                                                                                                                                                                       |
+| `replacements.book.emptyAll`      | No {level} lessons with free seats before {date}. New seats free up when other students cancel, so check again later, or ask the school office.                                                                                                                                                                                                 |
+| `replacements.book.noLevel`       | Your level isn't set yet, so we can't find replacement lessons. Ask the school office.                                                                                                                                                                                                                                                          |
+| `replacements.badge`              | Replacement                                                                                                                                                                                                                                                                                                                                     |
+| `replacements.forYourLesson`      | For your lesson on {date}                                                                                                                                                                                                                                                                                                                       |
+| `replacements.joiningBanner`      | You're joining this lesson as a replacement.                                                                                                                                                                                                                                                                                                    |
+| `replacements.removedBySchool`    | Removed by school                                                                                                                                                                                                                                                                                                                               |
+| `replacements.changedBySchool`    | Changed by school                                                                                                                                                                                                                                                                                                                               |
+| `replacements.schoolReason`       | {status}: {reason}                                                                                                                                                                                                                                                                                                                              |
+| `replacements.reasons.<CODE>`     | One message per reason code, owned by `replacements.md` §6–7 (`messages/en-GB/replacements.json`). The UI uses e.g. `ROOM_FULL` "Room full ({taken}/{capacity})", `LEVEL_MISMATCH` "Different level ({level})", `STUDENT_CLASH` "Clashes with {lesson}", `NO_LEVEL` "No level set", `CREDIT_EXPIRES_FIRST` "After the credit expires ({date})". |
 
 ### reschedule (1-on-1)
 
@@ -782,7 +879,7 @@ next-intl from values, never put together by hand.
 | `reschedule.with`          | 1-on-1 with {teacher}                                                                                                         |
 | `reschedule.now`           | Now: {dateTime}                                                                                                               |
 | `reschedule.pick`          | Pick a new time (until {date})                                                                                                |
-| `reschedule.noTimesDay`    | No free times                                                                                                                 |
+| `reschedule.usualTime`     | usual time                                                                                                                    |
 | `reschedule.summary`       | New time: {dateTime} · {room}                                                                                                 |
 | `reschedule.confirm`       | Reschedule                                                                                                                    |
 | `reschedule.pickRequired`  | Pick a new time.                                                                                                              |
@@ -792,6 +889,7 @@ next-intl from values, never put together by hand.
 | `reschedule.taken`         | That time was just taken. Pick another one.                                                                                   |
 | `reschedule.emptyAll`      | No free times with {teacher} before {date}. Cancel now to keep your credit and try again later, or contact the school office. |
 | `reschedule.badge`         | Rescheduled                                                                                                                   |
+| `reschedule.again`         | Pick a new time. Your credit from {sourceDate} moves with it.                                                                 |
 | `reschedule.teacherBanner` | Rescheduled by {student} from {dateTime}.                                                                                     |
 
 ### bookings (cancel a booking)
@@ -820,6 +918,7 @@ next-intl from values, never put together by hand.
 | `lessonStudents.notComing`         | Not coming ({count})                                                   |
 | `lessonStudents.replacementFrom`   | Replacement · from {group}                                             |
 | `lessonStudents.cancelledAt`       | cancelled {when}                                                       |
+| `lessonStudents.viaOffice`         | via office                                                             |
 | `lessonStudents.late`              | Late                                                                   |
 | `lessonStudents.everyoneComing`    | Everyone in the group is coming.                                       |
 | `lessonStudents.sheetSummary`      | {coming} coming · {notComing} not coming · {replacements} replacements |
@@ -828,88 +927,109 @@ next-intl from values, never put together by hand.
 
 ### adminAbsences
 
-| Key                                       | Copy                                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------------------- |
-| `adminAbsences.title`                     | Absences & replacements                                                               |
-| `adminAbsences.tab.review`                | Review ({count})                                                                      |
-| `adminAbsences.tab.replacements`          | Replacements                                                                          |
-| `adminAbsences.tab.absences`              | Absences                                                                              |
-| `adminAbsences.col.booked`                | Booked                                                                                |
-| `adminAbsences.col.student`               | Student                                                                               |
-| `adminAbsences.col.type`                  | Type                                                                                  |
-| `adminAbsences.col.from`                  | From                                                                                  |
-| `adminAbsences.col.to`                    | To                                                                                    |
-| `adminAbsences.col.seats`                 | Seats                                                                                 |
-| `adminAbsences.col.status`                | Status                                                                                |
-| `adminAbsences.col.reviewedBy`            | Reviewed by                                                                           |
-| `adminAbsences.col.lesson`                | Lesson                                                                                |
-| `adminAbsences.col.cancelledAt`           | Cancelled at                                                                          |
-| `adminAbsences.col.reason`                | Reason                                                                                |
-| `adminAbsences.col.credit`                | Credit                                                                                |
-| `adminAbsences.col.creditStatus`          | Credit status                                                                         |
-| `adminAbsences.type.replacement`          | Replacement                                                                           |
-| `adminAbsences.type.reschedule`           | Rescheduled                                                                           |
-| `adminAbsences.status.needsReview`        | Needs review                                                                          |
-| `adminAbsences.status.approved`           | Approved                                                                              |
-| `adminAbsences.status.rejected`           | Rejected                                                                              |
-| `adminAbsences.status.overridden`         | Overridden                                                                            |
-| `adminAbsences.status.cancelledByStudent` | Cancelled by student                                                                  |
-| `adminAbsences.status.creditEarned`       | Credit earned                                                                         |
-| `adminAbsences.status.lateNoCredit`       | Late — no credit                                                                      |
-| `adminAbsences.creditAvailableUntil`      | Available until {date}                                                                |
-| `adminAbsences.creditUsedFor`             | Used → {lesson}                                                                       |
-| `adminAbsences.preset.thisWeek`           | This week                                                                             |
-| `adminAbsences.preset.next14`             | Next 14 days                                                                          |
-| `adminAbsences.preset.last30`             | Last 30 days                                                                          |
-| `adminAbsences.reviewedBy`                | Reviewed by {name}, {dateTime}                                                        |
-| `adminAbsences.empty.review.title`        | Nothing to review                                                                     |
-| `adminAbsences.empty.review.description`  | Replacements are approved automatically. Ones you haven't checked yet appear here.    |
-| `adminAbsences.empty.replacements`        | No replacements in this period.                                                       |
-| `adminAbsences.empty.absences`            | No cancellations in this period.                                                      |
-| `adminAbsences.approve`                   | Approve                                                                               |
-| `adminAbsences.approveSelected`           | Approve selected ({count})                                                            |
-| `adminAbsences.approved`                  | {count, plural, one {Approved.} other {# replacements approved.}}                     |
-| `adminAbsences.reject`                    | Reject…                                                                               |
-| `adminAbsences.reject.title`              | Reject {student}'s replacement on {date}?                                             |
-| `adminAbsences.reject.body`               | The booking is removed and the credit goes back to the student, valid until {expiry}. |
-| `adminAbsences.reject.bodyExpired`        | The credit expired on {date}. It will be returned with a new expiry of {newDate}.     |
-| `adminAbsences.reject.confirm`            | Reject                                                                                |
-| `adminAbsences.reject.done`               | Replacement rejected. The student has their credit back.                              |
-| `adminAbsences.reason`                    | Reason (required)                                                                     |
-| `adminAbsences.reasonHint`                | The student sees this reason.                                                         |
-| `adminAbsences.override`                  | Override…                                                                             |
-| `adminAbsences.override.title`            | Move {student}'s booking                                                              |
-| `adminAbsences.override.current`          | Current booking: {lesson}                                                             |
-| `adminAbsences.override.showAll`          | Show all lessons                                                                      |
-| `adminAbsences.override.otherLevel`       | Different level ({level})                                                             |
-| `adminAbsences.override.roomFull`         | Room full ({taken}/{capacity})                                                        |
-| `adminAbsences.override.clash`            | Clashes with {lesson}                                                                 |
-| `adminAbsences.override.ack`              | I'm making an exception to the rules                                                  |
-| `adminAbsences.override.confirm`          | Move booking                                                                          |
-| `adminAbsences.override.done`             | Booking moved to {dateTime}.                                                          |
-| `adminAbsences.changedMeanwhile`          | This booking changed while you were reviewing it. Reload to see the current state.    |
-| `adminAbsences.openStudent`               | Open student                                                                          |
-| `adminAbsences.openLesson`                | Open lesson                                                                           |
-| `dashboard.admin.toReview`                | {count, plural, one {# replacement to review} other {# replacements to review}}       |
+| Key                                       | Copy                                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `adminAbsences.title`                     | Absences & replacements                                                                                             |
+| `adminAbsences.tab.review`                | Review ({count})                                                                                                    |
+| `adminAbsences.tab.replacements`          | Replacements                                                                                                        |
+| `adminAbsences.tab.absences`              | Absences                                                                                                            |
+| `adminAbsences.col.booked`                | Booked                                                                                                              |
+| `adminAbsences.col.student`               | Student                                                                                                             |
+| `adminAbsences.col.from`                  | From                                                                                                                |
+| `adminAbsences.col.to`                    | To                                                                                                                  |
+| `adminAbsences.col.seats`                 | Seats                                                                                                               |
+| `adminAbsences.col.status`                | Status                                                                                                              |
+| `adminAbsences.col.reviewedBy`            | Reviewed by                                                                                                         |
+| `adminAbsences.col.lesson`                | Lesson                                                                                                              |
+| `adminAbsences.col.cancelledAt`           | Cancelled at                                                                                                        |
+| `adminAbsences.col.reason`                | Reason                                                                                                              |
+| `adminAbsences.col.credit`                | Credit                                                                                                              |
+| `adminAbsences.col.creditStatus`          | Credit status                                                                                                       |
+| `adminAbsences.status.needsReview`        | Needs review                                                                                                        |
+| `adminAbsences.status.approved`           | Approved                                                                                                            |
+| `adminAbsences.status.rejected`           | Rejected                                                                                                            |
+| `adminAbsences.status.overridden`         | Overridden                                                                                                          |
+| `adminAbsences.status.cancelledByStudent` | Cancelled by student                                                                                                |
+| `adminAbsences.status.creditEarned`       | Credit earned                                                                                                       |
+| `adminAbsences.status.lateNoCredit`       | Late — no credit                                                                                                    |
+| `adminAbsences.creditAvailableUntil`      | Available until {date}                                                                                              |
+| `adminAbsences.creditUsedFor`             | Used → {lesson}                                                                                                     |
+| `adminAbsences.preset.thisWeek`           | This week                                                                                                           |
+| `adminAbsences.preset.next14`             | Next 14 days                                                                                                        |
+| `adminAbsences.preset.last30`             | Last 30 days                                                                                                        |
+| `adminAbsences.reviewedBy`                | Reviewed by {name}, {dateTime}                                                                                      |
+| `adminAbsences.empty.review.title`        | Nothing to review                                                                                                   |
+| `adminAbsences.empty.review.description`  | Replacements are approved automatically. Ones you haven't checked yet appear here.                                  |
+| `adminAbsences.empty.replacements`        | No replacements in this period.                                                                                     |
+| `adminAbsences.empty.absences`            | No cancellations in this period.                                                                                    |
+| `adminAbsences.approve`                   | Approve                                                                                                             |
+| `adminAbsences.approveSelected`           | Approve selected ({count})                                                                                          |
+| `adminAbsences.approved`                  | {count, plural, one {Approved.} other {# replacements approved.}}                                                   |
+| `adminAbsences.reject`                    | Reject…                                                                                                             |
+| `adminAbsences.reject.title`              | Reject {student}'s replacement on {date}?                                                                           |
+| `adminAbsences.reject.body`               | The booking is removed and the credit goes back to the student, valid until {expiry}.                               |
+| `adminAbsences.reject.bodyGrace`          | The credit gets extra days, so it's valid until {expiry}.                                                           |
+| `adminAbsences.reject.confirm`            | Reject                                                                                                              |
+| `adminAbsences.reject.done`               | Replacement rejected. The student has their credit back.                                                            |
+| `adminAbsences.reason`                    | Reason (required)                                                                                                   |
+| `adminAbsences.reasonHint`                | The student sees this reason.                                                                                       |
+| `adminAbsences.override`                  | Override…                                                                                                           |
+| `adminAbsences.override.title`            | Override {student}'s booking                                                                                        |
+| `adminAbsences.override.keep`             | Keep {lesson}                                                                                                       |
+| `adminAbsences.override.ack`              | I've checked: {reason}                                                                                              |
+| `adminAbsences.override.confirm`          | Save override                                                                                                       |
+| `adminAbsences.override.kept`             | Booking kept.                                                                                                       |
+| `adminAbsences.override.moved`            | Booking moved to {dateTime}.                                                                                        |
+| `adminAbsences.col.issues`                | Issues                                                                                                              |
+| `adminAbsences.noRoomLimit`               | No room limit                                                                                                       |
+| `adminAbsences.status.lessonCancelled`    | Lesson cancelled                                                                                                    |
+| `adminAbsences.creditRescheduled`         | Rescheduled → {lesson}                                                                                              |
+| `adminAbsences.byAdmin`                   | By {name}                                                                                                           |
+| `adminAbsences.report`                    | Report absence                                                                                                      |
+| `adminAbsences.report.title`              | Report an absence                                                                                                   |
+| `adminAbsences.report.student`            | Student                                                                                                             |
+| `adminAbsences.report.lesson`             | Lesson                                                                                                              |
+| `adminAbsences.report.credit`             | {name} gets a makeup credit, valid until {date}.                                                                    |
+| `adminAbsences.report.noCredit`           | It's after the cutoff, so {name} won't get a makeup credit.                                                         |
+| `adminAbsences.report.reasonHint`         | The student and the teacher see the reason.                                                                         |
+| `adminAbsences.report.noLessons`          | {name} has no upcoming lessons in the next 30 days.                                                                 |
+| `adminAbsences.report.alreadyCancelled`   | {name} already cancelled this lesson.                                                                               |
+| `adminAbsences.report.done`               | Absence reported for {name}.                                                                                        |
+| `adminAbsences.delete`                    | Delete absence…                                                                                                     |
+| `adminAbsences.delete.title`              | Delete {name}'s absence on {date}?                                                                                  |
+| `adminAbsences.delete.body`               | {name} is back on the lesson list. Their unused makeup credit from this lesson is removed.                          |
+| `adminAbsences.delete.creditUsed`         | The credit from this absence is used for {booking}. Reject that replacement or cancel the rescheduled lesson first. |
+| `adminAbsences.delete.overCapacity`       | {group} is now over capacity ({taken}/{capacity}).                                                                  |
+| `adminAbsences.delete.done`               | Absence deleted.                                                                                                    |
+| `adminAbsences.override.current`          | Current booking: {lesson}                                                                                           |
+| `adminAbsences.override.showAll`          | Show all lessons                                                                                                    |
+| `adminAbsences.override.otherLevel`       | Different level ({level})                                                                                           |
+| `adminAbsences.override.roomFull`         | Room full ({taken}/{capacity})                                                                                      |
+| `adminAbsences.override.clash`            | Clashes with {lesson}                                                                                               |
+| `adminAbsences.changedMeanwhile`          | This booking changed while you were reviewing it. Reload to see the current state.                                  |
+| `adminAbsences.openStudent`               | Open student                                                                                                        |
+| `adminAbsences.openLesson`                | Open lesson                                                                                                         |
+| `dashboard.admin.toReview`                | {count, plural, one {# replacement to review} other {# replacements to review}}                                     |
 
 ### settings (absences)
 
-| Key                                  | Copy                                                                            |
-| ------------------------------------ | ------------------------------------------------------------------------------- |
-| `settings.absences.nav`              | Absences & credits                                                              |
-| `settings.absences.title`            | Absences & credits                                                              |
-| `settings.absences.cutoff`           | Cancellation cutoff                                                             |
-| `settings.absences.cutoffSentence`   | Students who cancel at least {input} hours before a lesson get a makeup credit. |
-| `settings.absences.cutoffLabel`      | Cancellation cutoff, in hours before the lesson                                 |
-| `settings.absences.cutoffExample`    | Example: for a lesson on {lessonDateTime}, cancel by {cutoffDateTime}.          |
-| `settings.absences.cutoffZero`       | Students get a credit until the lesson starts.                                  |
-| `settings.absences.validity`         | Credit validity                                                                 |
-| `settings.absences.validitySentence` | A makeup credit is valid for {input} days after the missed lesson.              |
-| `settings.absences.validityLabel`    | Credit validity, in days after the missed lesson                                |
-| `settings.absences.validityExample`  | Example: a credit for {lessonDate} is valid until {expiryDate}.                 |
-| `settings.absences.appliesToNew`     | Changes apply to new cancellations. Existing credits keep their dates.          |
-| `settings.absences.saved`            | Settings saved.                                                                 |
-| `validation.integerRange`            | Enter a whole number from {min} to {max}.                                       |
+| Key                                  | Copy                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| `settings.absences.nav`              | Absences & credits                                                                |
+| `settings.absences.title`            | Absences & credits                                                                |
+| `settings.absences.cutoff`           | Cancellation cutoff                                                               |
+| `settings.absences.cutoffSentence`   | Students who cancel at least {input} hours before a lesson get a makeup credit.   |
+| `settings.absences.cutoffLabel`      | Cancellation cutoff, in hours before the lesson                                   |
+| `settings.absences.cutoffExample`    | Example: for a lesson on {lessonDateTime}, cancel by {cutoffDateTime}.            |
+| `settings.absences.cutoffZero`       | Students get a credit until the lesson starts.                                    |
+| `settings.absences.validity`         | Credit validity                                                                   |
+| `settings.absences.validitySentence` | A makeup credit is valid for {input} days after the missed lesson.                |
+| `settings.absences.validityLabel`    | Credit validity, in days after the missed lesson                                  |
+| `settings.absences.validityExample`  | Example: a credit for {lessonDate} is valid until {expiryDate}.                   |
+| `settings.absences.cutoffHint`       | The same notice applies to cancelling a replacement and to rescheduling a 1-on-1. |
+| `settings.absences.appliesToNew`     | Changes apply to new cancellations. Existing credits keep their dates.            |
+| `settings.absences.saved`            | Settings saved.                                                                   |
+| `validation.integerRange`            | Enter a whole number from {min} to {max}.                                         |
 
 ## 9. Accessibility
 
@@ -918,7 +1038,9 @@ next-intl from values, never put together by hand.
 - Dialog result states (cutoff passed, seat taken) are announced: the Alert
   inside the dialog has `role="alert"` and focus moves to it.
 - Reschedule time chips are a `ToggleGroup` (`role="radiogroup"` semantics):
-  arrow keys move between times in a day, `Tab` moves between days. Each
+  arrow keys move between times in a day, `Tab` moves between days.
+- Override acknowledgements are one labelled checkbox per reason, as in the
+  timetable editor. Each
   chip's accessible name is the full date and time ("Wednesday 22 October,
   16:00 to 16:45"). The summary line is `aria-live="polite"`.
 - Seat counts read "3 seats left in Room 1", not just "3".
@@ -928,33 +1050,39 @@ next-intl from values, never put together by hand.
   (`settings.absences.cutoffLabel`) and the live example is
   `aria-live="polite"`.
 - Bulk approve: the select-all checkbox has a label and announces "{n}
-  selected". The bar's button isn't the only way: every row has _Approve_.
+  selected". The bar's button isn't the only way: every row without issues
+  has _Approve_.
 - Student screens: 16 px text, 44 px targets, bottom sheets with a visible
   _Close_ button, no swipe-only dismissal.
 
 ## 10. Loading, empty and error states (summary)
 
-| Screen                | Loading          | Empty                                              | Error / special                                                   |
-| --------------------- | ---------------- | -------------------------------------------------- | ----------------------------------------------------------------- |
-| Cancel dialog         | Button spinner   | —                                                  | Cutoff passed · lesson started · network (`common.error.network`) |
-| Absences tab          | 2 card skeletons | `absences.empty.*`; credits section `credits.none` | `common.error.*` + _Try again_                                    |
-| Book a replacement    | Card skeletons   | Empty week · nothing until expiry · no level       | Credit expired · credit used · seat taken                         |
-| Reschedule sheet      | Chip skeletons   | Day "No free times" · nothing until expiry         | Time taken · cutoff passed · credit expired                       |
-| Teacher Students card | Row skeletons    | `lessonStudents.everyoneComing`                    | Over capacity (warning)                                           |
-| Admin settings        | Form skeleton    | —                                                  | Field validation · save error Alert                               |
-| Admin list            | Table skeleton   | Per tab (§7.2)                                     | `common.noResults` + _Clear filters_ · changed meanwhile (§7.3)   |
+| Screen                 | Loading          | Empty                                              | Error / special                                                   |
+| ---------------------- | ---------------- | -------------------------------------------------- | ----------------------------------------------------------------- |
+| Cancel dialog          | Button spinner   | —                                                  | Cutoff passed · lesson started · network (`common.error.network`) |
+| Absences tab           | 2 card skeletons | `absences.empty.*`; credits section `credits.none` | `common.error.*` + _Try again_                                    |
+| Book a replacement     | Card skeletons   | Empty week · nothing until expiry · no level       | Credit expired · credit used · seat taken                         |
+| Reschedule sheet       | Chip skeletons   | No times until expiry                              | Time taken · cutoff passed · credit expired                       |
+| Report absence (admin) | Button spinner   | `adminAbsences.report.noLessons`                   | Cutoff passed (switches to no-credit) · lesson started            |
+| Teacher Students card  | Row skeletons    | `lessonStudents.everyoneComing`                    | Over capacity (warning)                                           |
+| Admin settings         | Form skeleton    | —                                                  | Field validation · save error Alert                               |
+| Admin list             | Table skeleton   | Per tab (§7.2)                                     | `common.noResults` + _Clear filters_ · changed meanwhile (§7.3)   |
 
 ## 11. Edge cases
 
-- **School cancels a lesson the student already cancelled:** the student's
-  credit stays (it was earned). (§12 A9)
+- **School cancels a lesson the student already cancelled:** the credit
+  stays (`replacements.md` §3).
 - **School cancels a lesson a replacement student booked:** the booking is
-  void and the credit returns automatically, with its expiry extended to at
-  least 7 days from now if it would expire sooner. The student sees
-  "Removed by school: Lesson cancelled" in History. (§12 A9)
+  released and the credit returns with at least 7 more days (decision 10).
+  The student sees "Removed by school: Lesson cancelled" in History.
+- **Timetable slot edited after cancellations or bookings:** absences and
+  bookings move to the same week's new lesson when there is one
+  (`replacements.md` §5, _Slot splits_); the student sees no change except
+  the new time.
 - **Lesson time or room changes after booking:** the booking follows the
   lesson. If the new room is smaller than the seats taken, nobody is
-  removed; the teacher and admin see "over capacity". (§12 A4)
+  removed; the teacher sees "over capacity" and the admin review queue
+  flags the booking.
 - **Student leaves the group:** future cancellations of that group's
   lessons disappear with the membership; credits already earned stay until
   they expire.
@@ -963,68 +1091,54 @@ next-intl from values, never put together by hand.
 - **Several credits, same week:** each is spent separately. A student can
   hold at most one booking per target lesson.
 - **Booking in the student's own group:** not offered (they're already in
-  it). If they cancelled a lesson and want it back, that's _Undo_.
+  it). If they cancelled a lesson and want it back, the office deletes the
+  absence (§7.5).
+- **Replacement lesson the student can't attend:** _Can't attend?_ on it is
+  _Cancel booking_ (§5.7); they can't report an absence on it.
+- **Admin reports an absence while the student is booking with the same
+  lesson's credit:** impossible — the credit only exists after the report.
+  Two admins reporting the same absence: the second gets "{name} already
+  cancelled this lesson."
 - **Cutoff 0:** captions read "Cancel any time before the lesson starts to
   get a makeup credit."
 - **Timezone:** cutoff, "has started" and expiry use the school's timezone.
 - **Archived student:** can't sign in; their credits stay visible to admins
   and expire normally.
 
-## 12. Assumptions to align with CARM-40 (`docs/architecture/replacements.md`)
+## 12. Alignment with `docs/architecture/replacements.md` (CARM-40)
 
-The rules doc is written in parallel. These are the UI's assumptions; each
-needs a yes or a correction there.
+This spec follows PR #23 for eligibility, reason codes, seat counting,
+credit expiry and release, reschedule times, slot splits and concurrency.
+The owner's answers on CARM-39 (decisions 7–12) change three points in
+that doc:
 
-- **A1 — Settings storage:** two integers on `School` (e.g.
-  `cancellationCutoffHours`, default 24; `makeupCreditValidityDays`, default
-  30).
-- **A2 — Expiry:** `expiresAt` = end of (missed lesson's local date +
-  validity days) in the school timezone, fixed when the credit is created.
-  A booking's target lesson must **start** before `expiresAt`.
-- **A3 — Rooms without capacity** (online): no seat limit, so no seat count
-  is shown.
-- **A4 — Over capacity:** undo of a cancellation and room changes are
-  always allowed even if they push seats over capacity; the UI warns but
-  never removes anyone.
-- **A5 — Undo when the credit is spent:** blocked until the booking is
-  cancelled.
-- **A6 — Credit kind:** a credit from a group lesson books only group
-  replacements; a credit from a 1-on-1 reschedules only with the same
-  teacher (same 1-on-1 group). The UI decides which button to show from
-  this.
-- **A7 — Reject after expiry:** a rejected booking returns the credit; if it
-  has expired, its expiry becomes at least 7 days from now. Same for a
-  school-cancelled target lesson (A9).
-- **A8 — Reschedule slots:** a server function returns free start times on
-  a 30-minute grid for a week, using the timetable conflict checker; the
-  new time must be at least the cutoff ahead of now. How a reschedule is
-  stored (moved `Lesson` vs a new `Lesson` + `ReplacementRequest`) is up to
-  CARM-40; the UI only needs "original lesson shows as Not attending, new
-  one shows as Rescheduled" and the same cancel/return rules as a
-  replacement.
-- **A9 — School-cancelled lessons:** see §11.
-- **A10 — Cancelled bookings:** a student-cancelled booking stays visible
-  to admins as "Cancelled by student" (needs a status or a `cancelledAt`
-  on `ReplacementRequest`).
-- **A11 — Reason fields:** `AbsenceReport.reason` ≤ 300 characters;
-  `reviewNote` required for reject and override, ≤ 300.
+- **R1 — Admin reports an absence for a student** (decision 8). Keep
+  `AbsenceReport.reportedById` instead of dropping it (`replacements.md`
+  §9). It holds the admin's user id when an admin reported it, and the
+  student's user id otherwise. §3's "only the student may report" becomes
+  "the student, or an admin of the school"; the cutoff and credit rules are
+  the same. Teachers still can't.
+- **R2 — Late booking cancel** (decision 9). A student can cancel a
+  replacement **after** its cutoff, until the lesson starts. The booking
+  becomes `CANCELLED` (reason `STUDENT`) and the credit stays `USED`.
+  `replacements.md` §6 currently says "after that the booking stands". The
+  same applies to a rescheduled 1-on-1 after its cutoff: the lesson stays
+  scheduled, the student is shown as not coming, and the credit stays used.
+- **R3 — Grace on release** (decision 10): fixed at 7 days, as a constant
+  (answers `replacements.md` open question 1).
 
-## 13. Open questions for the owner
+Two small points to settle in PR #23:
 
-1. **Q1 — Expiry start:** validity counted from the **missed lesson's
-   date** (proposed) or from the day the student cancelled? Counting from
-   the lesson means cancelling early doesn't shorten the credit.
-2. **Q2 — Admin cancels for a student:** decision 1 says only students
-   report absences. Should an admin still be able to cancel on a student's
-   behalf when the student phones the office (e.g. young learners)? This
-   spec offers no such action.
-3. **Q3 — Credit back after a late booking cancel:** proposed: a booking
-   cancelled after its cutoff spends the credit, the same rule as a normal
-   lesson. Alternative: always return it.
-4. **Q4 — Rejected after expiry:** proposed: give the student at least 7
-   more days (A7). Alternative: the credit stays expired.
-5. **Q5 — 1-on-1 "reschedule later":** proposed: allowed, using a credit
-   with the normal expiry. Alternative: 1-on-1 lessons can only be moved
-   in one step, no credit.
-6. **Q6 — Limits:** should there be a cap on credits per term or bookings
-   per week? This spec has none.
+- The review-queue reason for an over-full lesson is `ROOM_FULL` in the §6
+  table, but §5 and the CARM-39 comment say `OVER_CAPACITY`. The UI uses
+  `ROOM_FULL` for both until PR #23 picks one.
+- The teacher's _Not coming_ list shows replacement students who cancelled
+  late (§6.1), so the roster needs those `CANCELLED` replacements as well
+  as the active ones.
+
+## 13. Owner decisions on this spec (2026-10-14)
+
+Recorded as decisions 7–12 at the top. There are no open questions left for
+this spec. The rules doc's own open questions 2–4 (late 1-on-1 cancel,
+physical rooms without capacity, booking until the lesson starts) stay on
+PR #23.

@@ -183,7 +183,7 @@
         else if (st === "cancelled")
           body = `${sheetHead("B1 Evening")}<div>${badge("📅✕ Not attending")}</div>${rows("")}
             <p>You cancelled this lesson on 17 Oct.<br/>🎟 You got a makeup credit.</p>
-            ${mbtn("Undo", "outline")}`;
+            <p class="text-muted-foreground">Changed your mind? Contact the school office.</p>`;
         else
           body = `${sheetHead("B1 Morning")}<div>${badge("⟳ Replacement", "repl")}</div>
             ${rows(`<div><dt class="text-muted-foreground text-sm">Booking</dt><dd>Replacement for your lesson on Mon 13 Oct</dd></div>`)}
@@ -262,11 +262,10 @@
         const days =
           st === "no times"
             ? `<div class="text-center space-y-3 py-6"><p>No free times with Tomas Horvat before 20 Nov. Cancel now to keep your credit and try again later, or contact the school office.</p>${mbtn("Cancel and reschedule later")}</div>`
-            : `<p class="flex items-center justify-between"><button class="h-11 w-11" aria-label="Previous week">‹</button><span class="tnum font-medium">20 – 26 Oct</span><button class="h-11 w-11" aria-label="Next week">›</button></p>
-              ${st === "taken" ? alert("That time was just taken. Pick another one.", "warning") : ""}
+            : `${st === "taken" ? alert("That time was just taken. Pick another one.", "warning") : ""}
               <h3 class="font-semibold">Wed 22 Oct</h3>${chips(st === "taken" ? ["16:30", "19:00"] : ["16:00", "16:30", "19:00"], sel)}
-              <h3 class="font-semibold">Thu 23 Oct</h3>${chips(["17:00", "17:30"])}
-              <h3 class="font-semibold">Fri 24 Oct</h3>${chips([])}
+              <h3 class="font-semibold">Thu 23 Oct</h3>${chips(["17:00", "17:15", "17:30"])}
+              <h3 class="font-semibold">Tue 28 Oct</h3>${chips(["18:00 · usual time"])}
               <hr/>
               <p aria-live="polite" class="tnum ${sel ? "font-medium" : "text-muted-foreground"}">${sel ? "New time: Wed 22 Oct, 16:00–16:45 · Room 2" : "No time picked yet"}</p>
               ${mbtn("Reschedule")}
@@ -316,17 +315,16 @@
         const rest = `<h2 class="text-lg font-semibold">Upcoming bookings (1)</h2>
           <div class="l-replacement rounded-md p-3 space-y-1"><div class="tnum font-medium">Thu 23 Oct · 18:00–19:30</div><div>B1 Morning ${badge("⟳ Replacement", "repl")}</div><div class="text-sm">For your lesson on 13 Oct</div>${btn("Cancel booking", "outline", "h-11 mt-1")}</div>
           <h2 class="text-lg font-semibold">Upcoming cancellations (1)</h2>
-          <div class="l-notattending rounded-md p-3 space-y-1"><div class="tnum font-medium">Mon 27 Oct · 17:00 · B1 Evening</div><div>${badge("Credit earned", "success")}</div>${btn("Undo", "outline", "h-11 mt-1")}</div>
+          <div class="l-notattending rounded-md p-3 space-y-1"><div class="tnum font-medium">Mon 27 Oct · 17:00 · B1 Evening</div><div>${badge("Credit earned", "success")}</div><p class="text-sm text-muted-foreground">Changed your mind? Contact the school office.</p></div>
           <details class="rounded-lg border border-border p-3"><summary class="font-semibold cursor-pointer min-h-[44px] flex items-center">History (4)</summary>
             <ul class="mt-2 space-y-2 text-sm">
               <li>Credit from Mon 6 Oct — used for B1 Morning, Thu 9 Oct ${badge("Used")}</li>
+              <li>Credit from Tue 30 Sep — rescheduled to Thu 2 Oct, 17:15 ${badge("Used")}</li>
               <li>Credit from Mon 15 Sep — expired on Wed 15 Oct ${badge("Expired")}</li>
               <li>Mon 29 Sep · B1 Evening — cancelled, no credit</li>
               <li>Booking for Wed 1 Oct — ${badge("Removed by school", "danger")}: Group moved to a smaller room.</li>
             </ul></details>`;
         let overlay = "";
-        if (st === "undo dialog")
-          overlay = `${sheetHead("Attend B1 Evening on Mon 27 Oct after all?")}<p>Your makeup credit from this lesson will be removed.</p>${mbtn("Yes, I'll attend")}${mbtn("Back", "outline")}`;
         if (st === "cancel booking")
           overlay = `${sheetHead("Cancel your booking for B1 Morning on Thu 23 Oct?")}${alert("🎟 Your credit from Mon 13 Oct comes back, valid until 12 Nov.", "success")}${mbtn("Cancel booking")}${mbtn("Keep booking", "outline")}`;
         return phone(head + credits + rest, { overlay });
@@ -423,7 +421,7 @@
               : `<h3 class="font-semibold mt-4">Not coming (2)</h3>
                 <ul class="divide-y divide-border">
                   <li class="py-2 flex flex-wrap gap-2 items-center"><span>Peter Horák</span><span class="text-muted-foreground">cancelled 2 days ago · “Doctor's appointment”</span></li>
-                  <li class="py-2 flex flex-wrap gap-2 items-center"><span>Lucia Bielik</span><span class="text-muted-foreground">cancelled today, 15:10</span>${badge("Late", "warning")}</li>
+                  <li class="py-2 flex flex-wrap gap-2 items-center"><span>Lucia Bielik</span><span class="text-muted-foreground">cancelled today, 15:10 · via office</span>${badge("Late", "warning")}</li>
                 </ul>`;
           students =
             card(`<div class="flex items-center justify-between mb-2"><h2 class="text-lg font-semibold">Students</h2>
@@ -458,7 +456,8 @@
           <div class="max-w-2xl flex-1">${card(`
             <h2 class="font-semibold">Cancellation cutoff</h2>
             <p class="mt-2">Students who cancel at least <input aria-label="Cancellation cutoff, in hours before the lesson" class="w-16 h-9 rounded-md border ${err ? "border-destructive" : "border-input"} px-2 text-center tnum" value="${err ? "200" : "24"}"/> hours before a lesson get a makeup credit.</p>
-            ${err ? `<p class="text-sm text-red-700 mt-1">Enter a whole number from 0 to 168.</p>` : ""}
+            <p class="text-sm text-muted-foreground mt-1">The same notice applies to cancelling a replacement and to rescheduling a 1-on-1.</p>
+            ${err ? `<p class="text-sm text-red-700 mt-1">Enter a whole number from 0 to 336.</p>` : ""}
             <p class="text-sm text-muted-foreground mt-1" aria-live="polite">Example: for a lesson on Mon 20 Oct, 17:00, cancel by Sun 19 Oct, 17:00.</p>
             <h2 class="font-semibold mt-6">Credit validity</h2>
             <p class="mt-2">A makeup credit is valid for <input aria-label="Credit validity, in days after the missed lesson" class="w-16 h-9 rounded-md border border-input px-2 text-center tnum" value="30"/> days after the missed lesson.</p>
@@ -475,7 +474,7 @@
         const tab =
           st === "replacements"
             ? "Replacements"
-            : st === "absences"
+            : ["absences", "report absence", "delete absence"].includes(st)
               ? "Absences"
               : "Review";
         const tabs = ["Review (3)", "Replacements", "Absences"]
@@ -487,7 +486,7 @@
         const filters = `<div class="flex flex-wrap gap-2 items-center">
           ${btn("📅 " + (tab === "Review" ? "Upcoming" : tab === "Absences" ? "13 Oct – 3 Nov" : "Next 14 days") + " ▾", "outline")}
           ${["Student", "Group", "Teacher", "Level", ...(tab === "Review" ? [] : ["Status"])].map((f) => btn(f + " ▾", "outline")).join("")}
-          <a href="#" class="text-primary ml-2">Clear filters</a></div>`;
+          <a href="#" class="text-primary ml-2">Clear filters</a>${tab === "Absences" ? `<span class="ml-auto">${btn("Report absence")}</span>` : ""}</div>`;
         const th = (cols) =>
           `<thead class="bg-muted text-left"><tr>${cols.map((c) => `<th class="px-3 py-2 font-medium">${c}</th>`).join("")}</tr></thead>`;
         const td = (cells) =>
@@ -498,24 +497,25 @@
           table = `<div class="text-center py-16 space-y-2"><div class="text-4xl" aria-hidden="true">✓</div><h2 class="text-lg font-semibold">Nothing to review</h2><p class="text-muted-foreground">Replacements are approved automatically. Ones you haven't checked yet appear here.</p></div>`;
         else if (tab === "Review")
           table = `<div class="flex items-center gap-3 px-3 py-2 bg-accent text-accent-foreground"><span>2 selected</span>${btn("Approve selected (2)")}</div>
-            <table class="w-full">${th(["<input type=checkbox aria-label='Select all'/>", "Booked", "Student", "From", "To", "Seats", ""])}<tbody class="tnum">
-            ${td(["<input type=checkbox checked aria-label='Select Jana Malá'/>", "2 h ago", "Jana Malá", "<a class='text-primary' href='#'>Mon 13 Oct, 17:00 · B1 Evening</a>", "<a class='text-primary' href='#'>Wed 22 Oct, 10:00 · B1 Morning</a>", "12 / 14 · Room 1", `<div class="flex gap-1">${btn("Approve", "outline", "h-8")}${menu}</div>`])}
-            ${td(["<input type=checkbox checked aria-label='Select Ivan Polák'/>", "5 h ago", "Ivan Polák", "<a class='text-primary' href='#'>Tue 14 Oct, 18:00 · B1 Afternoon</a>", "<a class='text-primary' href='#'>Thu 23 Oct, 18:00 · B1 Evening</a>", "14 / 14 · Room 3", `<div class="flex gap-1">${btn("Approve", "outline", "h-8")}${menu}</div>`])}
-            ${td(["<input type=checkbox aria-label='Select Jana Malá'/>", "yesterday", "Jana Malá " + badge("Rescheduled", "repl"), "<a class='text-primary' href='#'>Tue 21 Oct, 18:00 · 1-on-1 Tomas</a>", "<a class='text-primary' href='#'>Wed 22 Oct, 16:00 · 1-on-1 Tomas</a>", "—", `<div class="flex gap-1">${btn("Approve", "outline", "h-8")}${menu}</div>`])}
+            <table class="w-full">${th(["<input type=checkbox aria-label='Select all'/>", "Booked", "Student", "From", "To", "Seats", "Issues", ""])}<tbody class="tnum">
+            ${td(["<input type=checkbox checked aria-label='Select Jana Malá'/>", "2 h ago", "Jana Malá", "<a class='text-primary' href='#'>Mon 13 Oct, 17:00 · B1 Evening</a>", "<a class='text-primary' href='#'>Wed 22 Oct, 10:00 · B1 Morning</a>", "12 / 14 · Room 1", "—", `<div class="flex gap-1">${btn("Approve", "outline", "h-8")}${menu}</div>`])}
+            ${td(["", "5 h ago", "Ivan Polák", "<a class='text-primary' href='#'>Tue 14 Oct, 18:00 · B1 Afternoon</a>", "<a class='text-primary' href='#'>Thu 23 Oct, 18:00 · B1 Evening</a>", "15 / 14 · Room 3", badge("⚠ Room full (15/14)", "warning"), `<div class="flex gap-1">${btn("Override…", "outline", "h-8")}${menu}</div>`])}
+            ${td(["<input type=checkbox checked aria-label='Select Marek Šimko'/>", "yesterday", "Marek Šimko", "<a class='text-primary' href='#'>Mon 13 Oct, 17:00 · B1 Evening</a>", "<a class='text-primary' href='#'>Fri 24 Oct, 18:00 · B1 Online</a>", "<span class='text-muted-foreground'>No room limit</span>", "—", `<div class="flex gap-1">${btn("Approve", "outline", "h-8")}${menu}</div>`])}
             </tbody></table>`;
         else if (tab === "Replacements")
-          table = `<table class="w-full">${th(["Student", "Type", "From", "To", "Status", "Reviewed by", "Booked at", ""])}<tbody class="tnum">
-            ${td(["Jana Malá", "Replacement", "Mon 13 Oct · B1 Evening", "Wed 22 Oct · B1 Morning", badge("Needs review", "info"), "—", "20 Oct, 09:12", menu])}
-            ${td(["Marek Šimko", "Replacement", "Mon 6 Oct · B1 Evening", "Thu 16 Oct · B1 Afternoon", badge("Approved", "success"), "Eva Admin, 15 Oct", "14 Oct, 18:40", menu])}
-            ${td(["Lucia Bielik", "Replacement", "Wed 8 Oct · A2 Morning", "Fri 17 Oct · A2 Evening", badge("Rejected", "danger") + "<div class='text-xs text-muted-foreground'>Group moved to a smaller room.</div>", "Eva Admin, 16 Oct", "15 Oct, 07:02", menu])}
-            ${td(["Ben Novák", "Replacement", "Mon 13 Oct · B1 Evening", "Tue 21 Oct · B1 Morning → Wed 22 Oct · B1 Evening 2", badge("Overridden", "warning"), "Eva Admin, 18 Oct", "17 Oct, 11:30", menu])}
-            ${td(["Anna Kováč", "Rescheduled", "Thu 9 Oct · 1-on-1 Peter", "Fri 10 Oct · 1-on-1 Peter", badge("Cancelled by student"), "—", "8 Oct, 12:00", menu])}
+          table = `<table class="w-full">${th(["Student", "From", "To", "Status", "Reviewed by", "Booked at", ""])}<tbody class="tnum">
+            ${td(["Jana Malá", "Mon 13 Oct · B1 Evening", "Wed 22 Oct · B1 Morning", badge("Needs review", "info"), "—", "20 Oct, 09:12", menu])}
+            ${td(["Marek Šimko", "Mon 6 Oct · B1 Evening", "Thu 16 Oct · B1 Afternoon", badge("Approved", "success"), "Eva Admin, 15 Oct", "14 Oct, 18:40", menu])}
+            ${td(["Lucia Bielik", "Wed 8 Oct · A2 Morning", "Fri 17 Oct · A2 Evening", badge("Rejected", "danger") + "<div class='text-xs text-muted-foreground'>Group moved to a smaller room.</div>", "Eva Admin, 16 Oct", "15 Oct, 07:02", menu])}
+            ${td(["Ben Novák", "Mon 13 Oct · B1 Evening", "Tue 21 Oct · B1 Morning → Wed 22 Oct · B1 Evening 2", badge("Overridden", "warning"), "Eva Admin, 18 Oct", "17 Oct, 11:30", menu])}
+            ${td(["Anna Kováč", "Thu 9 Oct · A2 Morning", "Fri 10 Oct · A2 Evening", badge("Cancelled by student"), "—", "8 Oct, 12:00", menu])}
             </tbody></table>`;
         else
           table = `<table class="w-full">${th(["Lesson", "Student", "Cancelled at", "Reason", "Credit", "Credit status", ""])}<tbody class="tnum">
             ${td(["Mon 20 Oct, 17:00 · B1 Evening", "Peter Horák", "18 Oct, 09:00", "Doctor's appointment", badge("Credit earned", "success"), "Available until 19 Nov", menu])}
-            ${td(["Mon 20 Oct, 17:00 · B1 Evening", "Lucia Bielik", "20 Oct, 15:10", "—", badge("Late — no credit", "warning"), "—", menu])}
+            ${td(["Mon 20 Oct, 17:00 · B1 Evening", "Lucia Bielik", "20 Oct, 15:10 " + badge("By Eva Admin"), "Phoned the office: ill", badge("Late — no credit", "warning"), "—", menu])}
             ${td(["Mon 13 Oct, 17:00 · B1 Evening", "Jana Malá", "12 Oct, 20:41", "Business trip", badge("Credit earned", "success"), "<a class='text-primary' href='#'>Used → Wed 22 Oct · B1 Morning</a>", menu])}
+            ${td(["Tue 21 Oct, 18:00 · 1-on-1 Tomas", "Jana Malá", "17 Oct, 10:02", "—", badge("Credit earned", "success"), "<a class='text-primary' href='#'>Rescheduled → Wed 22 Oct, 16:00</a>", menu])}
             ${td(["Mon 15 Sep, 17:00 · B1 Evening", "Ben Novák", "14 Sep, 10:00", "—", badge("Credit earned", "success"), "Expired 15 Oct", menu])}
             </tbody></table>`;
         let overlay = "";
@@ -528,23 +528,39 @@
             <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Reject", "destructive")}</div></div>`;
         if (st === "override dialog")
           overlay = `<div class="w-[720px] rounded-lg bg-white p-6 space-y-4" role="dialog" aria-labelledby="ov">
-            <h2 id="ov" class="text-lg font-semibold">Move Ivan Polák's booking</h2>
+            <h2 id="ov" class="text-lg font-semibold">Override Ivan Polák's booking</h2>
             <p class="text-muted-foreground">Current booking: Thu 23 Oct, 18:00 · B1 Evening</p>
             <label class="flex items-center gap-2"><span class="inline-block h-5 w-9 rounded-full bg-primary relative"><span class="absolute right-0.5 top-0.5 h-4 w-4 rounded-full bg-white"></span></span>Show all lessons</label>
             <div role="radiogroup" class="divide-y divide-border rounded-md border border-border tnum">
+              <label class="flex items-center gap-3 p-3 bg-accent"><input type="radio" name="t" checked/>Keep Thu 23 Oct, 18:00 · B1 Evening · Room 3 ${badge("⚠ Room full (15/14)", "warning")}</label>
               <label class="flex items-center gap-3 p-3"><input type="radio" name="t"/>Fri 24 Oct, 10:00 · B1 Morning · Room 1 · 9/14</label>
-              <label class="flex items-center gap-3 p-3 bg-accent"><input type="radio" name="t" checked/>Fri 24 Oct, 18:00 · B2 Evening · Room 3 ${badge("⚠ Different level (B2)", "warning")}</label>
-              <label class="flex items-center gap-3 p-3"><input type="radio" name="t"/>Sat 25 Oct, 09:00 · B1 Weekend · Room 2 ${badge("⚠ Room full (10/10)", "warning")}</label>
+              <label class="flex items-center gap-3 p-3"><input type="radio" name="t"/>Fri 24 Oct, 18:00 · B2 Evening · Room 3 ${badge("⚠ Different level (B2)", "warning")}</label>
+              <label class="flex items-center gap-3 p-3"><input type="radio" name="t"/>Sat 25 Oct, 09:00 · B1 Weekend · Room 2 ${badge("⚠ Room full (10/10)", "warning")} ${badge("⚠ Clashes with B1 Evening, Sat 9:00", "warning")}</label>
             </div>
-            <label class="flex items-center gap-2"><input type="checkbox" checked/> I'm making an exception to the rules</label>
-            <label class="block"><span class="font-medium">Reason (required)</span><textarea class="mt-1 w-full rounded-md border border-input p-2" rows="2">Ivan is moving up to B2 next month; agreed with his teacher.</textarea>
+            <fieldset class="space-y-1"><legend class="font-medium">Acknowledge each issue</legend>
+              <label class="flex items-center gap-2"><input type="checkbox" checked/> I've checked: Room full (15/14)</label></fieldset>
+            <label class="block"><span class="font-medium">Reason (required)</span><textarea class="mt-1 w-full rounded-md border border-input p-2" rows="2">Room 3 has a spare chair; agreed with the teacher.</textarea>
             <span class="text-sm text-muted-foreground">The student sees this reason.</span></label>
-            <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Move booking")}</div></div>`;
+            <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Save override")}</div></div>`;
+        if (st === "report absence")
+          overlay = `<div class="w-[560px] rounded-lg bg-white p-6 space-y-4" role="dialog" aria-labelledby="ra">
+            <h2 id="ra" class="text-lg font-semibold">Report an absence</h2>
+            <label class="block"><span class="font-medium">Student</span>${btn("Jana Malá ▾", "outline", "w-full justify-between mt-1")}</label>
+            <label class="block"><span class="font-medium">Lesson</span>${btn("Mon 20 Oct, 17:00 · B1 Evening ▾", "outline", "w-full justify-between mt-1 tnum")}</label>
+            ${alert("🎟 Jana Malá gets a makeup credit, valid until Wed 19 Nov.", "success")}
+            <label class="block"><span class="font-medium">Reason (optional)</span><textarea class="mt-1 w-full rounded-md border border-input p-2" rows="2">Phoned the office: ill</textarea>
+            <span class="text-sm text-muted-foreground">The student and the teacher see the reason.</span></label>
+            <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Report absence")}</div></div>`;
+        if (st === "delete absence")
+          overlay = `<div class="w-[520px] rounded-lg bg-white p-6 space-y-4" role="alertdialog" aria-labelledby="da">
+            <h2 id="da" class="text-lg font-semibold">Delete Peter Horák's absence on Mon 20 Oct?</h2>
+            <p>Peter Horák is back on the lesson list. Their unused makeup credit from this lesson is removed.</p>
+            <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Delete absence", "destructive")}</div></div>`;
         const page = desktop(
           "Absences & replacements",
           `<div class="inline-flex rounded-lg bg-slate-200 p-1">${tabs}</div>${st === "review empty" ? "" : filters}
           <div class="rounded-lg border border-border bg-white overflow-hidden">${table}</div>
-          ${st === "review empty" ? "" : `<p class="text-muted-foreground text-right">1–${tab === "Replacements" ? 5 : tab === "Absences" ? 4 : 3} of ${tab === "Replacements" ? 5 : tab === "Absences" ? 4 : 3}</p>`}`,
+          ${st === "review empty" ? "" : `<p class="text-muted-foreground text-right">1–${tab === "Absences" ? 5 : tab === "Replacements" ? 5 : 3} of ${tab === "Absences" ? 5 : tab === "Replacements" ? 5 : 3}</p>`}`,
         );
         return `<div class="relative">${page}${overlay ? `<div class="absolute inset-0 bg-black/40 flex items-start justify-center pt-24 rounded-lg">${overlay}</div>` : ""}</div>`;
       }
@@ -598,7 +614,6 @@
             "empty",
             "loading",
             "error",
-            "undo dialog",
             "cancel booking",
           ],
           fn: (i) =>
@@ -609,7 +624,6 @@
                 "empty",
                 "loading",
                 "error",
-                "undo dialog",
                 "cancel booking",
               ][i],
             ),
@@ -678,6 +692,8 @@
             "absences",
             "reject dialog",
             "override dialog",
+            "report absence",
+            "delete absence",
           ],
           fn: (i) =>
             adminList(
@@ -688,6 +704,8 @@
                 "absences",
                 "reject dialog",
                 "override dialog",
+                "report absence",
+                "delete absence",
               ][i],
             ),
         },
