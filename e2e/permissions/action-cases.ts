@@ -513,6 +513,66 @@ export function crossSchoolCases(
       action: [ABSENCES, "cancelRescheduledLessonAction"],
       args: [target.lesson],
     },
+    // Spending a student's credit for them (CARM-47)
+    {
+      name: "list lessons to book with their student's credit",
+      action: [ABSENCES, "loadAdminBookingOptionsAction"],
+      args: [target.credit, true],
+    },
+    {
+      name: "book a replacement with their student's credit",
+      action: [ABSENCES, "bookReplacementForStudentAction"],
+      args: [
+        {
+          creditId: target.credit,
+          targetLessonId: own.lesson,
+          acknowledgedKeys: [],
+          note: null,
+        },
+      ],
+    },
+    {
+      name: "book own student into their lesson",
+      action: [ABSENCES, "bookReplacementForStudentAction"],
+      args: [
+        {
+          creditId: own.credit,
+          targetLessonId: target.lesson,
+          acknowledgedKeys: [],
+          note: null,
+        },
+      ],
+    },
+    {
+      name: "book a 1-on-1 with their student's credit",
+      action: [ABSENCES, "rescheduleFromCreditAction"],
+      args: [
+        {
+          creditId: target.credit,
+          date: DATE,
+          startMinute: 18 * 60,
+          durationMinutes: 45,
+          roomId: null,
+          acknowledgedKeys: [],
+          note: null,
+        },
+      ],
+    },
+    {
+      name: "book a 1-on-1 with own student's credit in their room",
+      action: [ABSENCES, "rescheduleFromCreditAction"],
+      args: [
+        {
+          creditId: own.credit,
+          date: DATE,
+          startMinute: 18 * 60,
+          durationMinutes: 45,
+          roomId: target.room,
+          acknowledgedKeys: [],
+          note: null,
+        },
+      ],
+    },
   ];
 }
 

@@ -57,6 +57,15 @@ import {
   StatusBadge,
 } from "./review-client";
 
+/**
+ * The missed lesson's date if it's still ahead, otherwise its weekday's
+ * next date after today: where a booked 1-on-1 usually goes.
+ */
+const nextOccurrence = (date: string, today: string) =>
+  date > today
+    ? date
+    : addDays(today, ((isoWeekday(date) - isoWeekday(today) + 6) % 7) + 1);
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuidParam = (value: string) => (UUID.test(value) ? value : undefined);
 
@@ -108,12 +117,20 @@ async function AdminAbsences({ searchParams }: PageProps<"/admin/absences">) {
     : undefined;
 
   await expireCredits(db, now);
-  const [list, options, reviewCount] = await Promise.all([
+  const [list, options, reviewCount, rooms] = await Promise.all([
     tab === "absences"
       ? listAdminAbsences(db, filters, now)
       : { total: 0, window: pageWindow(1, 0), rows: [] },
     loadAbsenceFilterOptions(db),
     countReviewQueue(db, now),
+    // For booking a 1-on-1 with a student's credit (CARM-47).
+    tab === "absences"
+      ? db.room.findMany({
+          where: { archivedAt: null },
+          select: { id: true, name: true },
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+        })
+      : [],
   ]);
   const ta = await getTranslations("adminAbsences.tab");
   const t = await getTranslations("adminAbsences");
@@ -337,7 +354,24 @@ async function AdminAbsences({ searchParams }: PageProps<"/admin/absences">) {
                               date: row.lesson.date,
                               oneOnOne: row.lesson.oneOnOne,
                               creditUsed: row.credit?.state === "USED",
+                              availableCredit:
+                                row.credit?.state === "AVAILABLE"
+                                  ? {
+                                      id: row.credit.id,
+                                      validUntil: row.credit.validUntil,
+                                      suggestedDate: nextOccurrence(
+                                        row.lesson.date,
+                                        today,
+                                      ),
+                                      startMinute: row.lesson.startMinute,
+                                      durationMinutes:
+                                        row.lesson.endMinute -
+                                        row.lesson.startMinute,
+                                      roomId: row.lesson.roomId,
+                                    }
+                                  : null,
                             }}
+                            rooms={rooms}
                           />
                         </TableCell>
                       </TableRow>

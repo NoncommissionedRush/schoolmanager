@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { buildRoster } from "@/server/scheduling";
+
 import {
   counterFrom,
   isStale,
@@ -8,6 +10,7 @@ import {
   logWrite,
   matchesFilter,
   parseLessonFilter,
+  rosterCounts,
   teacherRelation,
 } from "./rules";
 
@@ -116,4 +119,43 @@ describe("matchesFilter", () => {
 it("shows counters from 90 % of the limit", () => {
   expect(counterFrom(5000)).toBe(4500);
   expect(counterFrom(2000)).toBe(1800);
+});
+
+describe("rosterCounts (absences.md §6.3)", () => {
+  const student = (id: string) => ({ id, name: id.toUpperCase() });
+  const absence = (studentId: string, hasCredit = true) => ({
+    studentId,
+    reportedAt: at("10:00"),
+    reason: null,
+    viaOffice: false,
+    hasCredit,
+  });
+
+  it("counts absent members and late-cancelled bookings as not coming", () => {
+    const roster = buildRoster({
+      members: ["a", "b", "c"].map(student),
+      absences: [absence("a"), absence("b", false)],
+      replacements: [{ ...student("r"), fromGroup: "B1 Morning" }],
+      lateCancelled: [{ ...student("l"), cancelledAt: at("16:00") }],
+    });
+    expect(rosterCounts(roster)).toEqual({ notComing: 3, replacements: 1 });
+  });
+
+  it("is zero for a lesson everyone attends", () => {
+    const roster = buildRoster({
+      members: ["a", "b"].map(student),
+      absences: [],
+      replacements: [],
+    });
+    expect(rosterCounts(roster)).toEqual({ notComing: 0, replacements: 0 });
+  });
+
+  it("ignores absences of students who aren't members", () => {
+    const roster = buildRoster({
+      members: [student("a")],
+      absences: [absence("gone")],
+      replacements: [],
+    });
+    expect(rosterCounts(roster)).toEqual({ notComing: 0, replacements: 0 });
+  });
 });

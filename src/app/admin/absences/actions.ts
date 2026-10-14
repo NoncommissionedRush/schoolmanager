@@ -7,7 +7,11 @@ import { type ActionResult, msg, ok } from "@/server/admin/result";
 import { assertIds } from "@/server/admin/shared";
 import { parseInput } from "@/server/admin/validation";
 import {
+  type AdminBookingOptions,
   approveReplacements,
+  type BookResult,
+  bookReplacementForStudent,
+  listAdminBookingOptions,
   listOverrideOptions,
   type OverrideOption,
   overrideReplacement,
@@ -20,6 +24,10 @@ import {
   rescheduleByAdmin,
 } from "@/server/replacements/reschedule";
 import {
+  type AdminBookReplacementInput,
+  adminBookReplacementSchema,
+  type AdminCreditRescheduleFormInput,
+  adminCreditRescheduleSchema,
   type AdminRescheduleFormInput,
   adminRescheduleSchema,
   type OverrideReplacementInput,
@@ -211,6 +219,64 @@ export async function cancelRescheduledLessonAction(
       new Date(),
     );
     revalidatePath("/", "layout");
+    return ok(result);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Spending a student's credit for them (CARM-47, replacements.md §6, §7)
+// ---------------------------------------------------------------------------
+
+/** The Book replacement dialog's lesson picker for a group credit. */
+export async function loadAdminBookingOptionsAction(
+  creditId: string,
+  showAll: boolean,
+): Promise<ActionResult<AdminBookingOptions>> {
+  return runAdminAction(async ({ db }) => {
+    assertIds(creditId);
+    const result = await listAdminBookingOptions(
+      db,
+      creditId,
+      showAll === true,
+      new Date(),
+    );
+    if (!result) return { ok: false, formError: msg("common.error.notFound") };
+    return ok(result);
+  });
+}
+
+/** Books a replacement for the student with their group credit. */
+export async function bookReplacementForStudentAction(
+  input: AdminBookReplacementInput,
+): Promise<ActionResult<BookResult>> {
+  return runAdminAction(async ({ db, viewer }) => {
+    const parsed = parseInput(adminBookReplacementSchema, input);
+    if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
+    const result = await bookReplacementForStudent(
+      db,
+      { userId: viewer.userId },
+      parsed.data,
+      new Date(),
+    );
+    if (result.status === "booked") revalidatePath("/", "layout");
+    return ok(result);
+  });
+}
+
+/** Spends the student's 1-on-1 credit on a new lesson the admin picks. */
+export async function rescheduleFromCreditAction(
+  input: AdminCreditRescheduleFormInput,
+): Promise<ActionResult<AdminRescheduleResult>> {
+  return runAdminAction(async ({ db, viewer }) => {
+    const parsed = parseInput(adminCreditRescheduleSchema, input);
+    if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
+    const result = await rescheduleByAdmin(
+      db,
+      { userId: viewer.userId },
+      parsed.data,
+      new Date(),
+    );
+    if (result.status === "rescheduled") revalidatePath("/", "layout");
     return ok(result);
   });
 }

@@ -28,6 +28,7 @@ import { checkReschedule, isFreeTime, rescheduleOptions } from "./reschedule";
 import {
   placeGreedily,
   prng,
+  PROPERTY_TEST_TIMEOUT_MS,
   type Random,
   type RealisticSchool,
   realisticSchool,
@@ -73,6 +74,10 @@ class World {
   readonly absences = new Map<string, Set<string>>();
   readonly credits = new Map<string, Credit>();
   readonly bookings = new Map<string, Booking>();
+  // Indexes over `bookings`, so the per-step invariants stay cheap.
+  readonly bookingsInto = new Map<string, Booking[]>();
+  readonly bookingsOfStudent = new Map<string, Booking[]>();
+  readonly bookingsOfCredit = new Map<string, Booking[]>();
   readonly groups: ReadonlyMap<string, GroupInfo>;
   readonly levelOfGroup = new Map<string, string>();
   readonly levelOfStudent = new Map<string, string | null>();
@@ -139,14 +144,29 @@ class World {
     this.lessonsOfGroup.set(lesson.groupId, list);
   }
 
+  addBooking(booking: Booking) {
+    this.bookings.set(booking.id, booking);
+    for (const [index, key] of [
+      [this.bookingsInto, booking.targetLessonId],
+      [this.bookingsOfStudent, booking.studentId],
+      [this.bookingsOfCredit, booking.creditId],
+    ] as const) {
+      const list = index.get(key) ?? [];
+      list.push(booking);
+      index.set(key, list);
+    }
+  }
+
+  activeBookings(index: Map<string, Booking[]>, key: string) {
+    return (index.get(key) ?? []).filter((b) => b.active);
+  }
+
   isAbsent(lessonId: string, studentId: string) {
     return this.absences.get(lessonId)?.has(studentId) ?? false;
   }
 
   activeBookingsInto(lessonId: string) {
-    return [...this.bookings.values()].filter(
-      (b) => b.active && b.targetLessonId === lessonId,
-    );
+    return this.activeBookings(this.bookingsInto, lessonId);
   }
 
   seats(lesson: LessonInfo) {
@@ -171,12 +191,12 @@ class World {
         (l) => l.status !== "CANCELLED" && !this.isAbsent(l.id, studentId),
       ),
     );
-    const booked = [...this.bookings.values()]
-      .filter((b) => b.active && b.studentId === studentId)
-      .map((b) => ({
+    const booked = this.activeBookings(this.bookingsOfStudent, studentId).map(
+      (b) => ({
         ...this.lessons.get(b.targetLessonId)!,
         bookingId: b.id,
-      }));
+      }),
+    );
     return [
       ...own.map(({ id, startsAt, endsAt }) => ({ id, startsAt, endsAt })),
       ...booked.map(({ id, startsAt, endsAt, bookingId }) => ({
@@ -226,9 +246,9 @@ class World {
         levelId: this.levelOfStudent.get(studentId) ?? null,
         isMemberOfTarget: group.studentIds.includes(studentId),
       },
-      bookings: [...this.bookings.values()]
-        .filter((b) => b.active && b.studentId === studentId)
-        .map((b) => ({ id: b.id, targetLessonId: b.targetLessonId })),
+      bookings: this.activeBookings(this.bookingsOfStudent, studentId).map(
+        (b) => ({ id: b.id, targetLessonId: b.targetLessonId }),
+      ),
       credit: {
         id: credit.id,
         studentId: credit.studentId,
@@ -237,9 +257,7 @@ class World {
         sourceLessonId: credit.sourceLessonId,
         fromOneOnOne: credit.fromOneOnOne,
         bookingId:
-          [...this.bookings.values()].find(
-            (b) => b.active && b.creditId === credit.id,
-          )?.id ?? null,
+          this.activeBookings(this.bookingsOfCredit, credit.id)[0]?.id ?? null,
       },
       attending: this.attending(studentId),
     };
@@ -345,7 +363,7 @@ function book(w: World) {
     ).toEqual(reasons);
     if (reasons.length > 0) continue;
     const id = w.id("b");
-    w.bookings.set(id, {
+    w.addBooking({
       id,
       studentId: credit.studentId,
       creditId: credit.id,
@@ -491,21 +509,25 @@ function reschedule(w: World) {
 // Invariants
 // ---------------------------------------------------------------------------
 
+// The lesson and pair loops below run tens of thousands of times per seed:
+// they collect violations and assert once, since a per-item `expect` is what
+// made this test slow enough to time out on CI.
 function checkInvariants(w: World) {
   // Room size: no lesson ever holds more students than its room (§5). The
   // timetable starts within capacity; only rule-approved changes follow.
+  const overfull: string[] = [];
   for (const lesson of w.lessons.values()) {
     if (lesson.status === "CANCELLED") continue;
     const capacity = w.capacity(lesson);
-    if (capacity !== null) {
-      expect(w.seats(lesson), lesson.id).toBeLessThanOrEqual(capacity);
+    const seats = w.seats(lesson);
+    if (capacity !== null && seats > capacity) {
+      overfull.push(`${lesson.id}: ${seats} seats > capacity ${capacity}`);
     }
   }
+  expect(overfull).toEqual([]);
   // A credit backs at most one thing, and is USED exactly while it does.
   for (const credit of w.credits.values()) {
-    const active = [...w.bookings.values()].filter(
-      (b) => b.active && b.creditId === credit.id,
-    );
+    const active = w.activeBookings(w.bookingsOfCredit, credit.id);
     expect(active.length, credit.id).toBeLessThanOrEqual(1);
     if (active.length > 0 || credit.rescheduledLessonId) {
       expect(credit.status).toBe("USED");
@@ -515,17 +537,20 @@ function checkInvariants(w: World) {
     );
   }
   // No student is ever in two overlapping lessons.
+  const overlaps: string[] = [];
   for (const { id: studentId } of w.school.students) {
     const lessons = [...w.attending(studentId)].sort(
       (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
     );
     for (let i = 1; i < lessons.length; i++) {
-      expect(
-        lessons[i - 1].endsAt.getTime() <= lessons[i].startsAt.getTime(),
-        `${studentId}: ${lessons[i - 1].id} overlaps ${lessons[i].id}`,
-      ).toBe(true);
+      if (lessons[i - 1].endsAt.getTime() > lessons[i].startsAt.getTime()) {
+        overlaps.push(
+          `${studentId}: ${lessons[i - 1].id} overlaps ${lessons[i].id}`,
+        );
+      }
     }
   }
+  expect(overlaps).toEqual([]);
   // A booking the rules accepted stays clean under admin review: nothing
   // the rules allow later (absences, cancellations, room moves within
   // capacity, reschedules) makes it fail.
@@ -545,6 +570,7 @@ function checkInvariants(w: World) {
 
 describe.each(SEEDS)(
   "replacement rules on a realistic school, seed %i",
+  { timeout: PROPERTY_TEST_TIMEOUT_MS },
   (seed) => {
     it("keeps every invariant through a random sequence of actions", () => {
       const school = realisticSchool(seed);

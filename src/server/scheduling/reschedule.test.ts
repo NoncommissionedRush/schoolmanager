@@ -289,6 +289,81 @@ describe("decideAdminReschedule", () => {
       overriddenReasons: [expect.objectContaining({ code: "STUDENT_CLASH" })],
     });
   });
+
+  describe("spending the student's credit (CARM-47)", () => {
+    const fresh = request().credit!;
+
+    it("has no notice limit, and a time before the expiry passes", () => {
+      const check = checkReschedule(
+        calendarWith(),
+        admin({ credit: fresh }),
+        slotAt("2026-10-14", h(15)),
+        NOW,
+      );
+      expect(check).toMatchObject({ reasons: [], conflicts: [] });
+    });
+
+    it("asks to acknowledge a time on or after the expiry", () => {
+      // The credit expires at the start of 31 Oct; Monday 2 Nov is after.
+      const check = checkReschedule(
+        calendarWith(),
+        admin({ credit: fresh }),
+        slotAt("2026-11-02", h(16)),
+        NOW,
+      );
+      expect(check.reasons.map((r) => r.key)).toEqual(["CREDIT_EXPIRES_FIRST"]);
+      expect(decideAdminReschedule(check, [])).toMatchObject({
+        ok: false,
+        reason: "UNACKNOWLEDGED",
+        unacknowledged: ["CREDIT_EXPIRES_FIRST"],
+      });
+      expect(
+        decideAdminReschedule(check, ["CREDIT_EXPIRES_FIRST"]),
+      ).toMatchObject({
+        ok: true,
+        overriddenReasons: [
+          expect.objectContaining({ code: "CREDIT_EXPIRES_FIRST" }),
+        ],
+      });
+    });
+
+    it("refuses a credit that isn't usable", () => {
+      for (const credit of [
+        { ...fresh, status: "USED" as const },
+        { ...fresh, studentId: "s1" },
+        { ...fresh, sourceGroupId: "g1" },
+        // Expired by now, even if not marked yet.
+        { ...fresh, expiresAt: NOW },
+      ]) {
+        const check = checkReschedule(
+          calendarWith(),
+          admin({ credit }),
+          slotAt("2026-10-22", h(16)),
+          NOW,
+        );
+        expect(check.reasons[0]?.code).toBe("CREDIT_UNAVAILABLE");
+        expect(
+          decideAdminReschedule(
+            check,
+            check.reasons.map((r) => r.key),
+          ),
+        ).toMatchObject({ ok: false, reason: "BLOCKING" });
+      }
+    });
+
+    it("never checks the expiry of a credit moving with its lesson", () => {
+      const check = checkReschedule(
+        calendarWith(),
+        admin({
+          credit: { ...fresh, status: "USED", spentOnMoving: true },
+          movingLessonId: "moving",
+        }),
+        slotAt("2026-11-02", h(16)),
+        NOW,
+      );
+      expect(check.reasons).toEqual([]);
+    });
+  });
 });
 
 describe("rescheduleOptions", () => {
