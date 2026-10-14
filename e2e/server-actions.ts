@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   type APIRequestContext,
   type APIResponse,
+  type Page,
   test,
 } from "@playwright/test";
 
@@ -149,4 +150,52 @@ export function actionResult(body: string): unknown {
     .map((line) => line.slice(row!.length + 1))
     .findLast((chunk) => /^[{[]/.test(chunk));
   return value === undefined ? undefined : JSON.parse(value);
+}
+
+export type ActionResponse = {
+  status: number;
+  /** The action's return value (`ActionResult`), when it returned one. */
+  result: { ok: boolean; [key: string]: unknown } | null;
+  body: string;
+};
+
+/**
+ * Calls `file#name` as the user signed in on `page` (its cookies), on a page
+ * that serves it, and parses the reply. Takes at most one `FormFields`.
+ */
+export async function callAction(
+  page: Page,
+  [file, name]: readonly [string, string],
+  args: unknown[],
+): Promise<ActionResponse> {
+  const action = compiledServerActions().get(`${file}#${name}`);
+  if (!action) {
+    throw new Error(
+      `Server action ${file}#${name} not found in the manifest. ` +
+        "Build the app (`pnpm build`) or open a page that uses it first.",
+    );
+  }
+  if (args.filter((arg) => arg instanceof FormFields).length > 1) {
+    throw new Error("callAction encodes at most one FormFields argument.");
+  }
+  const response = await callServerAction(page.request, {
+    id: action.id,
+    path: action.path,
+    args,
+  });
+  const body = await response.text();
+  let result: unknown;
+  try {
+    result = actionResult(body);
+  } catch {
+    result = undefined;
+  }
+  return {
+    status: response.status(),
+    result:
+      result && typeof result === "object"
+        ? (result as ActionResponse["result"])
+        : null,
+    body,
+  };
 }

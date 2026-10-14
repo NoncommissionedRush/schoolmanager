@@ -33,7 +33,9 @@ need an `AUTH_SECRET` line (copy it from `.env.example`).
 `pnpm db:seed` is idempotent and creates "Demo Language School": 1 admin,
 8 teachers, 40 students, levels A1–C1, group and 1-on-1 lessons, rooms, the
 "Autumn 2026" term with holidays and a published timetable with generated
-lessons. Data model: `docs/architecture/data-model.md`.
+lessons. Data model: `docs/architecture/data-model.md`. It also seeds a
+small second school, "Northbridge Language Academy", used by the e2e
+permission suite (`docs/architecture/testing.md`).
 
 Sign in at http://localhost:3000/login — every seeded user has the password
 **`demo-password`**:
