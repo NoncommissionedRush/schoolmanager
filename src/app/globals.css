@@ -8,7 +8,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -39,6 +39,34 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-info-border: var(--info-border);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-danger-border: var(--danger-border);
+  --color-lesson-group: var(--lesson-group);
+  --color-lesson-group-surface: var(--lesson-group-surface);
+  --color-lesson-group-text: var(--lesson-group-text);
+  --color-lesson-individual: var(--lesson-individual);
+  --color-lesson-individual-surface: var(--lesson-individual-surface);
+  --color-lesson-individual-text: var(--lesson-individual-text);
+  --color-lesson-replacement: var(--lesson-replacement);
+  --color-lesson-replacement-surface: var(--lesson-replacement-surface);
+  --color-lesson-replacement-text: var(--lesson-replacement-text);
+  --color-lesson-substitute: var(--lesson-substitute);
+  --color-lesson-substitute-surface: var(--lesson-substitute-surface);
+  --color-lesson-substitute-text: var(--lesson-substitute-text);
+  --color-lesson-cancelled: var(--lesson-cancelled);
+  --color-lesson-cancelled-surface: var(--lesson-cancelled-surface);
+  --color-lesson-cancelled-text: var(--lesson-cancelled-text);
+  --color-lesson-now: var(--lesson-now);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,73 +76,72 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Light theme from docs/design/tokens.md (dark mode is not in v1). */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  --radius: 0.5rem;
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #475569;
+  --accent: #eff6ff;
+  --accent-foreground: #1e40af;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #64748b;
+  --ring: #2563eb;
+  --chart-1: #2563eb;
+  --chart-2: #7c3aed;
+  --chart-3: #d97706;
+  --chart-4: #0891b2;
+  --chart-5: #15803d;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --success: #15803d;
+  --success-surface: #f0fdf4;
+  --success-border: #86efac;
+  --warning: #b45309;
+  --warning-surface: #fffbeb;
+  --warning-border: #fcd34d;
+  --info: #1d4ed8;
+  --info-surface: #eff6ff;
+  --info-border: #93c5fd;
+  --danger: #b91c1c;
+  --danger-surface: #fef2f2;
+  --danger-border: #fca5a5;
+
+  --lesson-group: #2563eb;
+  --lesson-group-surface: #eff6ff;
+  --lesson-group-text: #1e3a8a;
+  --lesson-individual: #7c3aed;
+  --lesson-individual-surface: #f5f3ff;
+  --lesson-individual-text: #4c1d95;
+  --lesson-replacement: #d97706;
+  --lesson-replacement-surface: #fffbeb;
+  --lesson-replacement-text: #78350f;
+  --lesson-substitute: #0891b2;
+  --lesson-substitute-surface: #ecfeff;
+  --lesson-substitute-text: #164e63;
+  --lesson-cancelled: #94a3b8;
+  --lesson-cancelled-surface: #f8fafc;
+  --lesson-cancelled-text: #475569;
+  --lesson-now: #dc2626;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eff6ff;
+  --sidebar-accent-foreground: #1e40af;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #2563eb;
 }
 
 @layer base {
@@ -126,5 +153,8 @@
   }
   html {
     @apply font-sans;
+    /* Keep focused elements clear of the sticky header / bottom tab bar. */
+    scroll-padding-top: 4rem;
+    scroll-padding-bottom: 5rem;
   }
 }

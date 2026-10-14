@@ -1,11 +1,20 @@
-import { useTranslations } from "next-intl";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
+import { ROLE_HOME } from "@/server/auth/roles";
+import { requireViewer } from "@/server/auth/session";
+
+// The proxy already redirects "/" to the user's dashboard (or /login); this
+// is the fallback if the proxy is bypassed.
 export default function Home() {
-  const t = useTranslations("home");
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-      <h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1>
-      <p className="max-w-md text-muted-foreground">{t("tagline")}</p>
-    </main>
+    <Suspense>
+      <RedirectToDashboard />
+    </Suspense>
   );
+}
+
+async function RedirectToDashboard(): Promise<never> {
+  const viewer = await requireViewer();
+  redirect(ROLE_HOME[viewer.role]);
 }

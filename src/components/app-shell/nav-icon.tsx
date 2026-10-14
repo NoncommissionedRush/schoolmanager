@@ -1,0 +1,57 @@
+import {
+  BookOpen,
+  CalendarDays,
+  CalendarX,
+  ChartColumn,
+  ClipboardList,
+  GraduationCap,
+  House,
+  LayoutDashboard,
+  ListChecks,
+  NotebookPen,
+  Presentation,
+  Settings,
+  Signal,
+  Star,
+  UserRoundCog,
+  Users,
+  UsersRound,
+  Wallet,
+  WandSparkles,
+  type LucideIcon,
+} from "lucide-react";
+
+import type { NavIcon } from "@/lib/navigation";
+
+const ICONS: Record<NavIcon, LucideIcon> = {
+  "layout-dashboard": LayoutDashboard,
+  house: House,
+  "calendar-days": CalendarDays,
+  "calendar-x": CalendarX,
+  "user-round-cog": UserRoundCog,
+  "wand-sparkles": WandSparkles,
+  "graduation-cap": GraduationCap,
+  presentation: Presentation,
+  "users-round": UsersRound,
+  users: Users,
+  "book-open": BookOpen,
+  signal: Signal,
+  star: Star,
+  wallet: Wallet,
+  "chart-column": ChartColumn,
+  settings: Settings,
+  "notebook-pen": NotebookPen,
+  "clipboard-list": ClipboardList,
+  "list-checks": ListChecks,
+};
+
+export function NavIconGlyph({
+  icon,
+  className,
+}: {
+  icon: NavIcon;
+  className?: string;
+}) {
+  const Icon = ICONS[icon];
+  return <Icon aria-hidden="true" className={className} />;
+}
