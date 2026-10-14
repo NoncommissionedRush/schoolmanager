@@ -26,6 +26,7 @@ import {
 } from "@/server/replacements/reschedule";
 import {
   bookReplacementSchema,
+  cancelBookingSchema,
   type CancelLessonInput,
   cancelLessonSchema,
   rescheduleSchema,
@@ -100,14 +101,16 @@ export async function bookReplacementAction(input: {
 }
 
 /** Cancels one of the student's replacement bookings (§5.7). */
-export async function cancelBookingAction(
-  bookingId: string,
-): Promise<ActionResult<CancelBookingResult>> {
+export async function cancelBookingAction(input: {
+  bookingId: string;
+}): Promise<ActionResult<CancelBookingResult>> {
   return runStudentAction(async ({ db, userId }) => {
+    const parsed = parseInput(cancelBookingSchema, input);
+    if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const result = await cancelBooking(
       db,
       { userId },
-      String(bookingId),
+      parsed.data.bookingId,
       new Date(),
     );
     revalidatePath("/student", "layout");

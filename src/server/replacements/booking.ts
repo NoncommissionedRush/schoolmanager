@@ -826,6 +826,10 @@ export async function approveReplacements(
 ): Promise<ReviewResult & { count?: number }> {
   if (bookingIds.length === 0 || !bookingIds.every(isUuid)) throw notFound();
   return inLockedTransaction(db, async (tx, school) => {
+    // Check every booking before writing any: a booking reviewed, cancelled
+    // or with new issues meanwhile is "changed" for the whole batch
+    // (absences.md §7.3); the row then offers Override.
+    const checked: BookingRow[] = [];
     for (const id of new Set(bookingIds)) {
       const booking = await loadForReview(tx, id, "AUTO_APPROVED", now);
       if (booking === "changed") return { status: "changed" };
@@ -835,7 +839,10 @@ export async function approveReplacements(
         booking.targetLesson,
         now,
       );
-      if (reasons.length > 0) throw refusal("HAS_ISSUES");
+      if (reasons.length > 0) return { status: "changed" };
+      checked.push(booking);
+    }
+    for (const booking of checked) {
       await tx.replacementRequest.update({
         where: { id: booking.id },
         data: {
@@ -849,7 +856,7 @@ export async function approveReplacements(
         targetLessonId: booking.targetLessonId,
       });
     }
-    return { status: "done", count: new Set(bookingIds).size };
+    return { status: "done", count: checked.length };
   });
 }
 
@@ -1124,6 +1131,14 @@ export async function countReviewQueue(db: SchoolDb, now: Date) {
   });
 }
 
+const BOOKING_STATUSES: readonly AdminBookingRow["status"][] = [
+  "AUTO_APPROVED",
+  "APPROVED",
+  "REJECTED",
+  "OVERRIDDEN",
+  "CANCELLED",
+];
+
 export type AdminReplacementFilters = {
   from: Date;
   until: Date;
@@ -1147,9 +1162,10 @@ export async function listAdminReplacements(
   const school = await schoolOf(db);
   const where: Prisma.ReplacementRequestWhereInput = {
     ...(filters.studentId && { studentId: filters.studentId }),
-    ...(filters.status && {
-      status: filters.status as AdminBookingRow["status"],
-    }),
+    ...(filters.status &&
+      BOOKING_STATUSES.includes(
+        filters.status as AdminBookingRow["status"],
+      ) && { status: filters.status as AdminBookingRow["status"] }),
     targetLesson: {
       startsAt: { gte: filters.from, lt: filters.until },
       ...(filters.groupId && { groupId: filters.groupId }),

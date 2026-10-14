@@ -77,9 +77,9 @@ export function CancelBookingDialog({
   function submit() {
     setError(null);
     startTransition(async () => {
-      const result = await cancelBookingAction(booking.bookingId).catch(
-        () => null,
-      );
+      const result = await cancelBookingAction({
+        bookingId: booking.bookingId,
+      }).catch(() => null);
       if (!result) {
         setError({ key: "common.error.network" });
         return;

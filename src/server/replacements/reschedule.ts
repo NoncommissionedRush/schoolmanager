@@ -20,6 +20,7 @@ import {
   earnsCredit,
   isFreeTime,
   isoWeekday,
+  RESCHEDULE_GRID_MINUTES,
   RESCHEDULED,
   SCHOOL_CANCELLED,
   type RescheduleReason,
@@ -459,6 +460,15 @@ export async function rescheduleLesson(
   if (Number.isNaN(startsAt.getTime())) throw notFound();
   return inLockedTransaction(db, async (tx, school) => {
     const setup = await setupStudent(tx, school, actor.userId, input, now);
+    // Only times the sheet can offer: on the grid, never the lesson's own.
+    const local = toZonedDateTime(startsAt, school.timezone);
+    if (
+      local.minute % RESCHEDULE_GRID_MINUTES !== 0 ||
+      startsAt.getTime() % MINUTE_MS !== 0 ||
+      startsAt.getTime() === setup.lesson?.startsAt.getTime()
+    ) {
+      return { status: "taken", sheet: await sheetOf(tx, setup, school, now) };
+    }
     const endsAt = new Date(
       startsAt.getTime() + setup.request.durationMinutes * MINUTE_MS,
     );

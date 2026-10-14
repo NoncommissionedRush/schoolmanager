@@ -9,6 +9,7 @@ import {
 } from "../src/server/scheduling/time";
 import { mondayOf } from "../src/server/timetable/week";
 import { DEMO_LOGINS, signIn, sql } from "./helpers";
+import { callAction, serverActionsIn } from "./server-actions";
 
 // Happy path of CARM-43 (absences.md §4.1, §6.1, §7.3): a student cancels
 // a lesson in time, books a replacement in another group of their level
@@ -247,5 +248,43 @@ test.describe("replacements › cancel, book, teacher sees, admin overrides", ()
       [ids.student],
     );
     expect(booking).toEqual({ target: ids.moved, status: "OVERRIDDEN" });
+  });
+
+  test("teachers and admins can't run any student action", async ({
+    browser,
+  }) => {
+    const FILE = "src/app/student/absences/actions.ts";
+    const calls: [string, unknown[]][] = [
+      ["cancelLessonAction", [{ lessonId: ids.missed, reason: null }]],
+      [
+        "bookReplacementAction",
+        [{ creditId: ids.missed, targetLessonId: ids.target }],
+      ],
+      ["cancelBookingAction", [{ bookingId: ids.target }]],
+      ["loadRescheduleSheetAction", [{ lessonId: ids.missed }]],
+      [
+        "rescheduleLessonAction",
+        [{ lessonId: ids.missed, startsAt: new Date().toISOString() }],
+      ],
+    ];
+    // Every student action is listed here.
+    expect(calls.map(([name]) => `${FILE}#${name}`).sort()).toEqual(
+      serverActionsIn("src/app/student").sort(),
+    );
+    for (const [email, home] of [
+      [DEMO_LOGINS.teacher, "/teacher"],
+      [DEMO_LOGINS.admin, "/admin"],
+    ] as const) {
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      await signIn(page, email);
+      await page.waitForURL(home);
+      for (const [name, args] of calls) {
+        const { status, result } = await callAction(page, [FILE, name], args);
+        expect(status, `${email} ${name}`).toBeGreaterThanOrEqual(400);
+        expect(result, `${email} ${name}`).toBeNull();
+      }
+      await context.close();
+    }
   });
 });

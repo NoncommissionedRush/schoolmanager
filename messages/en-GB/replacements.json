@@ -56,7 +56,6 @@
     "CREDIT_UNAVAILABLE": "This credit can't be used any more.",
     "ALREADY_ATTENDING": "This student already attends that lesson.",
     "LESSON_STARTED": "The lesson has already started.",
-    "HAS_ISSUES": "This booking has issues now. Use Override instead.",
     "changed": "This booking changed while you were reviewing it. Reload to see the current state."
   }
 }

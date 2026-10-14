@@ -23,6 +23,9 @@ export type ReportAbsenceFormInput = z.input<typeof reportAbsenceSchema>;
 /** Longest review reason (absences.md §7.3, a DB CHECK too). */
 export const REVIEW_NOTE_MAX = 300;
 
+/** Cancel a booking (§5.7). */
+export const cancelBookingSchema = z.object({ bookingId: z.string() });
+
 /** Book a replacement (§5.5). */
 export const bookReplacementSchema = z.object({
   creditId: z.string(),
