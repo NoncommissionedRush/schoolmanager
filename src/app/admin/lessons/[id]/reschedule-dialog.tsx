@@ -42,6 +42,8 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { Message } from "@/server/admin/result";
 import type { AdminRescheduleResult } from "@/server/replacements/reschedule";
+// Pure rules, safe on the client: the dialog's "blocking" matches the server.
+import { ADMIN_OVERRIDABLE } from "@/server/scheduling/reschedule";
 
 export type AdminRescheduleInfo = {
   lessonId: string;
@@ -57,9 +59,6 @@ export type AdminRescheduleInfo = {
 };
 
 type Problems = Extract<AdminRescheduleResult, { status: "conflicts" }>;
-
-/** Reasons an admin can acknowledge (`decideAdminReschedule`). */
-const OVERRIDABLE_REASONS = new Set(["CREDIT_EXPIRES_FIRST", "STUDENT_CLASH"]);
 
 /** The student's AVAILABLE 1-on-1 credit an admin spends (CARM-47). */
 export type RescheduleCredit = {
@@ -170,7 +169,7 @@ export function RescheduleDialog({
         })),
         ...problems.reasons.map((r) => ({
           key: r.key,
-          blocking: !OVERRIDABLE_REASONS.has(r.code),
+          blocking: !ADMIN_OVERRIDABLE.has(r.code),
           text: reasonText(r),
         })),
       ]

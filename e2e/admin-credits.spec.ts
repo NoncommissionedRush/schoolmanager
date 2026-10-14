@@ -41,6 +41,8 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
   const today = toZonedDateTime(new Date(), TZ).date;
   const missedDate = addDays(today, 3);
   const newDate = addDays(today, 5);
+  // The credits are valid until the day before this (expiry at its start).
+  const expiryDate = addDays(today, 30);
   let school: string;
 
   test.beforeAll(async () => {
@@ -158,9 +160,11 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
         "CANCELLED",
       ],
       [
+        // On the spec's own teacher: the demo teacher's dashboard, which
+        // other specs open in parallel, never loads this spec's rows.
         ids.today,
         ids.own,
-        row.teacher,
+        ids.teacher,
         ids.room,
         zonedTimeToUtc(today, 23 * 60, TZ),
         45,
@@ -201,7 +205,7 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
           ids.student,
           lesson,
           absence,
-          zonedTimeToUtc(addDays(today, 30), 0, TZ),
+          zonedTimeToUtc(expiryDate, 0, TZ),
         ],
       );
     }
@@ -291,17 +295,27 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
     const dialog = page.getByRole("dialog", {
       name: `Book a 1-on-1 for ${STUDENT}`,
     });
-    await dialog.getByLabel("Date").fill(newDate);
+    const save = dialog.getByRole("button", { name: "Book lesson" });
+    const expiryTick = dialog.getByRole("checkbox", {
+      name: "I've checked: After the credit expires.",
+    });
+    // On the expiry day the admin has to acknowledge it …
+    await dialog.getByLabel("Date").fill(expiryDate);
     await dialog.getByLabel("Start time").fill("16:00");
-    await dialog.getByRole("button", { name: "Book lesson" }).click();
-    // The new teacher has no availability set: acknowledge whatever
-    // overridable problem comes back, then save again.
+    await save.click();
+    await expect(expiryTick).toBeVisible();
+
+    // … before it, not. The new teacher has no availability set, so other
+    // overridable problems may come back: acknowledge those and save again.
+    await dialog.getByLabel("Date").fill(newDate);
+    await save.click();
     const done = page.getByText(/^Lesson booked for /);
     const ticks = dialog.getByRole("checkbox");
     await expect(done.or(ticks.first())).toBeVisible();
     if (!(await done.isVisible())) {
+      await expect(expiryTick).toBeHidden();
       for (const tick of await ticks.all()) await tick.check();
-      await dialog.getByRole("button", { name: "Book lesson" }).click();
+      await save.click();
     }
     await expect(done).toBeVisible();
     await page.waitForURL(/\/admin\/lessons\//);
@@ -316,7 +330,7 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
   });
 
   test("the teacher's Today list shows who isn't coming", async ({ page }) => {
-    await signIn(page, DEMO_LOGINS.teacher);
+    await signIn(page, `e2e-credit-teacher-${suffix}@demo-school.test`);
     await page.waitForURL("/teacher");
     const card = page
       .getByRole("heading", { name: "Today", exact: true })
