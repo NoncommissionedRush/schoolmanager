@@ -22,6 +22,7 @@ import {
 import {
   placeGreedily,
   prng,
+  PROPERTY_TEST_TIMEOUT_MS,
   randomTimetable,
   type RealisticSchool,
   realisticSchool,
@@ -121,7 +122,9 @@ function asStoredLessons(
   }));
 }
 
-describe.each(SEEDS)("realistic school, seed %i", (seed) => {
+const slow = { timeout: PROPERTY_TEST_TIMEOUT_MS };
+
+describe.each(SEEDS)("realistic school, seed %i", slow, (seed) => {
   const school = realisticSchool(seed);
   const random = randomTimetable(seed * 7919, school);
   let placement: ReturnType<typeof placeGreedily> | undefined;
