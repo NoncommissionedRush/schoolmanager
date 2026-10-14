@@ -62,7 +62,7 @@ Terms used below:
 | `· assign.ts`                               | Construction with repair, then improvement (§4.2)                                            |
 | `· explain.ts`                              | Per-teacher reasons and suggestions for groups without a teacher (§4.5)                      |
 | `· generate.ts`                             | `assignTeachers(input)` and the step-wise `assignTeachersSteps(input)` (§4.6)                |
-| `src/server/scheduling/lesson-sync.ts`      | New `planSlotTeacherChange` (§5.6)                                                           |
+| `src/server/scheduling/lesson-sync.ts`      | New `planGroupTeacherChange` (§5.6)                                                          |
 | `src/server/timetable/generator-service.ts` | Database service: readiness, drafts, runs, apply. One transaction per action                 |
 | `messages/en-GB/scheduling.json`            | New `generator.reasons.<CODE>`, `generator.teacherReasons.<CODE>`, `generator.errors.<CODE>` |
 
@@ -221,18 +221,21 @@ not of the teacher: readiness reports them (§2.5).
 The engine compares two complete drafts by these keys, in order (smaller
 wins; all integers, so results are exactly reproducible):
 
-| #   | Key                 | Meaning                                                                                                                                |
-| --- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `unassignedGroups`  | Included groups without a teacher                                                                                                      |
-| 2   | `unassignedMinutes` | Their weekly minutes (prefers staffing groups with more lessons)                                                                       |
-| 3   | `changedTeachers`   | **REPLAN_FROM only** (§5.2): groups whose teacher differs from the live one. "Current teachers are kept where possible" (UX spec §6.3) |
-| 4   | `workloadPenalty`   | Σ over the pool of _m_ₜ², _m_ₜ = teacher _t_'s weekly minutes (§2.3)                                                                   |
-| 5   | `workloadRange`     | max _m_ₜ − min _m_ₜ over the pool                                                                                                      |
+| #   | Key                 | Meaning                                                                                                                         |
+| --- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `unassignedGroups`  | Included groups without a teacher                                                                                               |
+| 2   | `unassignedMinutes` | Their weekly minutes (prefers staffing groups with more lessons)                                                                |
+| 3   | `keptIneligible`    | **REPLAN_FROM only** (§5.2): groups kept with a current teacher who is no longer eligible (the fallback of §4.2 step 4)         |
+| 4   | `changedTeachers`   | **REPLAN_FROM only**: groups whose teacher differs from the live one. "Current teachers are kept where possible" (UX spec §6.3) |
+| 5   | `workloadPenalty`   | Σ over the pool of _m_ₜ², _m_ₜ = teacher _t_'s weekly minutes (§2.3)                                                            |
+| 6   | `workloadRange`     | max _m_ₜ − min _m_ₜ over the pool                                                                                               |
 
-**Even workload is the only preference** (owner decision 3). Keys 1–3 are
-not preferences: 1–2 say "staff as many groups as possible", 3 is what the
-REPLAN_FROM mode means (move as few teachers as possible in a published
-term).
+**Even workload is the only preference** (owner decision 3). Keys 1–4 are
+not preferences: 1–2 say "staff as many groups as possible", 3–4 are what
+the REPLAN_FROM mode means (replace a teacher who no longer fits when
+someone else does, otherwise move as few teachers as possible in a
+published term). A group kept with an ineligible current teacher counts as
+**assigned** for keys 1–2: it keeps its lessons.
 
 **The pool** is the non-archived teachers eligible by rules 1–3 for at
 least one included group. Teachers who could never get a group (no
@@ -250,7 +253,7 @@ flat for most moves, so it is only the tie-breaker. A teacher at their
 ("5–9 h a week"), the average over the pool, and the change since the
 previous run ("range was 4–10 h"). Per teacher: minutes, groups, teaching
 days, max. The draft stores `{ unassignedGroups, unassignedMinutes,
-changedTeachers, workloadPenalty, workloadRange, minMinutes, maxMinutes,
+keptIneligible, changedTeachers, workloadPenalty, workloadRange, minMinutes, maxMinutes,
 averageMinutes, perTeacher[] }` after construction and at the end, plus the
 previous run's range.
 
@@ -312,8 +315,15 @@ No new runtime dependency is needed.
    this is exact; a property test compares it with `checkSlot` (§6.3).
 4. **Construction** (`assign.ts`). Locked assignments first, as given (even
    if they now break a rule; their conflicts are shown, §5.3). In
-   REPLAN_FROM, each unlocked group starts with its current teacher if that
-   teacher is still eligible. Then the remaining groups by fewest eligible
+   REPLAN_FROM, each unlocked group with live slots starts with its
+   current teacher. If that teacher is no longer eligible (rules 1–3 or 5;
+   rule 4 cannot fail between live slots, the editor blocks it), the group
+   is a **fallback**: it keeps the current teacher as its `IMPORTED`
+   assignment, which occupies that teacher's time and minutes and counts
+   as assigned (key 3 records it). The engine may move a fallback group to
+   an eligible teacher (that lowers key 3), but never to another
+   ineligible one, and never back once it has left. Then the remaining
+   groups by fewest eligible
    teachers, then most weekly minutes, then group id. Each takes the
    eligible teacher, free by rules 4–5, with the smallest increase of the
    objective (ties: teacher id). If none is free, **repair**: search an
@@ -357,7 +367,7 @@ existing callers:
   fixtures still pass. `loadContext` loads them, so the **editor warns
   too** (UX spec §10). A teacher with no rows at all gets no warning (the
   school may not use levels yet). Message params: `teacher`, `level`.
-- **`planSlotTeacherChange`** (§5.6).
+- **`planGroupTeacherChange`** (§5.6).
 
 What the engine still owns: the overlap graph (an interval test, verified
 against `checkSlot` in step 6 and by property 2), the weekly-minutes sum
@@ -479,13 +489,13 @@ view, and no `loadContext` for the checker, ever reads them.
 
 The term's state decides the modes the Assign dialog offers (UX spec §6.3):
 
-| Term state                      | Mode (dialog option)                                | Behaviour                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Not published, no slots         | **REPLACE**                                         | Assign every included group from scratch.                                                                                                                                                                                                                                                                                                                                |
-| Not published, has editor slots | **REPLACE**, _Keep current teachers_ (default)      | A group's **current teacher** (below) is imported as a locked `IMPORTED` assignment; the rest are assigned. Applying replaces the editor's slots with slots from the groups' lesson times.                                                                                                                                                                               |
-| Not published, has editor slots | **REPLACE**, _Reassign everything_                  | Nothing imported; every included group is assigned from scratch. Applying replaces the editor's slots.                                                                                                                                                                                                                                                                   |
-| Published (has lessons)         | **FILL**, _Only groups without a teacher_ (default) | From an **effective date** _D_. Groups with live slots in effect on or after _D_ are not in the draft; their slots stay as they are, are part of the fixed context and count toward their teachers' minutes. Only groups without live slots from _D_ (e.g. new groups) are assigned; their slots start on _D_.                                                           |
-| Published (has lessons)         | **REPLAN_FROM**, _Reconsider every group_           | From _D_, every included group is in the draft. Groups with live slots start with their current teacher as an unlocked `IMPORTED` assignment; key 3 of the objective (§3.3) keeps it unless changing it staffs more groups. A group whose current teacher is no longer eligible keeps them if nobody else fits, with the conflict shown, rather than losing its lessons. |
+| Term state                      | Mode (dialog option)                                | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Not published, no slots         | **REPLACE**                                         | Assign every included group from scratch.                                                                                                                                                                                                                                                                                                                                                                |
+| Not published, has editor slots | **REPLACE**, _Keep current teachers_ (default)      | A group's **current teacher** (below) is imported as a locked `IMPORTED` assignment; the rest are assigned. Applying replaces the editor's slots with slots from the groups' lesson times.                                                                                                                                                                                                               |
+| Not published, has editor slots | **REPLACE**, _Reassign everything_                  | Nothing imported; every included group is assigned from scratch. Applying replaces the editor's slots.                                                                                                                                                                                                                                                                                                   |
+| Published (has lessons)         | **FILL**, _Only groups without a teacher_ (default) | From an **effective date** _D_. Groups with live slots in effect on or after _D_ are not in the draft; their slots stay as they are, are part of the fixed context and count toward their teachers' minutes. Only groups without live slots from _D_ (e.g. new groups) are assigned; their slots start on _D_.                                                                                           |
+| Published (has lessons)         | **REPLAN_FROM**, _Reconsider every group_           | From _D_, every included group is in the draft. Groups with live slots start with their current teacher as an unlocked `IMPORTED` assignment; keys 3–4 of the objective (§3.3) keep it unless changing it staffs more groups. A group whose current teacher is no longer eligible keeps them if nobody else fits (the fallback of §4.2 step 4), with the conflict shown, rather than losing its lessons. |
 
 **Current teacher** of a group: the teacher of its live slots in effect on
 the run's start date when they all have the same one. If they differ, the
@@ -560,8 +570,13 @@ one transaction holding the school's timetable advisory lock
      teacher changed, their live slots end on _D_ − 1 and copies with the
      new teacher start on _D_; for a group the admin set to "No teacher",
      its live slots end on _D_ − 1.
-3. `checkTimetable` on it. Any **blocking** conflict refuses with the fresh
-   list (`BLOCKING_CONFLICTS`). Every **overridable** conflict of a slot
+3. `checkTimetable` on it. Any **blocking** conflict that involves a slot
+   the draft creates or changes refuses with the fresh list
+   (`BLOCKING_CONFLICTS`). A blocking conflict only between live slots the
+   draft leaves as they are (e.g. a fallback group's current teacher, §4.2
+   step 4, double-booked by data the editor let through earlier) is
+   pre-existing: it is listed as `PRE_EXISTING_CONFLICT` in the response and
+   the draft, does not refuse the apply, and is fixed in the editor. Every **overridable** conflict of a slot
    from the draft, and every `OVER_MAX_HOURS` warning, must be in
    `acknowledgedConflictKeys` (keys prefixed with the group id and lesson
    time; `maxHours:<teacherId>` for the maximum), else
@@ -572,7 +587,7 @@ one transaction holding the school's timetable advisory lock
      ones.
    - FILL: create the new slots from _D_; nothing else changes.
    - REPLAN_FROM: groups with an unchanged teacher: nothing. Groups with a
-     changed teacher: `planSlotTeacherChange` per live slot (below).
+     changed teacher: `planGroupTeacherChange` per live slot (below).
      Groups set to "No teacher": the editor's **End** after _D_ − 1, with
      its lesson reconciliation (untouched lessons deleted, touched ones
      cancelled `TIMETABLE_CHANGED`). New groups: create from _D_.
@@ -590,21 +605,43 @@ one transaction holding the school's timetable advisory lock
 **Teacher-only change in a published term** (UX spec Q5, decided here).
 When only the teacher of a live slot changes from _D_, nothing about the
 lessons' time, room or students changes, so cancelling lessons with
-history would be wrong. `planSlotTeacherChange(slot, newTeacherId, D)` (pure,
-in `lesson-sync.ts`):
+history would be wrong. `planGroupTeacherChange({ slots, lessons,
+oldTeacherId, newTeacherId, from: D, now })` (pure, in `lesson-sync.ts`),
+for one group:
 
-- splits the slot: the old one ends on _D_ − 1, a copy with the new teacher
-  starts on _D_ (so past lessons keep pointing at the template they were
-  made from, as `scheduling.md` requires);
-- **re-points** every `SCHEDULED` lesson of the old slot on or after _D_ to
-  the new slot and sets its `teacherId`, instead of deleting or cancelling
-  it. Absences, replacement bookings, makeup credits and teacher notes stay
-  on the same lesson row. A substitute stays (it was arranged for that
-  date), unless the substitute is the new teacher, then it is cleared;
-- lessons moved or re-roomed by hand keep their time and room and are
-  checked with `checkLesson` for the new teacher in step 3 (blocking
-  refuses, overridable must be acknowledged);
-- creates any missing occurrences of the new slot (`planLessonSync`).
+- splits each of the group's live slots in effect on or after _D_: the old
+  one ends on _D_ − 1, a copy with the new teacher starts on _D_ (so past
+  lessons keep pointing at the template they were made from, as
+  `scheduling.md` requires);
+- **re-points every lesson** of the old slot dated on or after _D_ that
+  hasn't started, **whatever its status**, to the new slot (same
+  `occurrenceDate`). `teacherId` is set only on the `SCHEDULED` ones;
+  `CANCELLED` lessons (`STUDENT_CANCELLED`, `RESCHEDULED`, `HOLIDAY`, …)
+  stay cancelled with their reason. Because every such date is then taken
+  on the new slot, `planLessonSync` creates no second occurrence for it:
+  a cancelled or rescheduled 1-on-1 never comes back;
+- absences, replacement bookings, makeup credits, teacher notes and an
+  ad-hoc lesson's `rescheduledFromId` stay on the same lesson row. A
+  substitute stays (it was arranged for that date), unless the substitute
+  is the new teacher, then it is cleared;
+- **ad-hoc lessons** of the group (`timetableSlotId` null, e.g. a
+  rescheduled 1-on-1) starting on or after _D_, `SCHEDULED`, not started,
+  with `teacherId` = the old teacher also get the new teacher. A group has
+  one teacher, so these are the group's lessons that teacher was going to
+  give; ad-hoc lessons someone else teaches are left alone;
+- lessons moved or re-roomed by hand, and ad-hoc lessons, keep their time
+  and room and are checked with `checkLesson` for the new teacher in step 3
+  (blocking refuses, overridable must be acknowledged);
+- creates any missing occurrences of the new slots (`planLessonSync`).
+
+**Relation to `planSlotCarryOver`.** A split from the editor (`planSlotEdit`)
+creates the new slot's lessons as new rows and cancels or deletes the old
+ones, so `planSlotCarryOver` has to move absences, cancellations and
+bookings to a successor in the same week. A teacher-only change keeps the
+weekday and time, so each lesson's successor is the lesson itself:
+re-pointing the row is the carry-over, with nothing to move and no
+successor to create. `planGroupTeacherChange` therefore does not call
+`planSlotCarryOver`, and it never cancels or deletes a lesson.
 
 The editor keeps its current rule for slot edits; whether its teacher-only
 edits should use the same plan is open question 3.
@@ -695,7 +732,7 @@ limits and print the measured values.
    single relocate or insert-with-depth-1-repair without breaking a hard
    rule, and its per-teacher reasons agree with a brute-force recount.
 8. **Score:** incremental objective = from-scratch recomputation after every
-   accepted move (checked every N moves in tests); with keys 1–3 tied, a
+   accepted move (checked every N moves in tests); with keys 1–4 tied, a
    relocate that lowers Σ _m_ₜ² is never available at the end.
 9. **Small instances vs oracle:** on 200 random instances (≤ 8 groups, ≤ 4
    teachers, random levels, times, availability and maxima), an exhaustive
@@ -706,16 +743,22 @@ limits and print the measured values.
     changes; in FILL no live slot changes; in REPLAN_FROM with unchanged
     data the draft equals the live assignments (`changedTeachers` = 0),
     and a group whose current teacher becomes ineligible gets another one
-    if any is eligible and keeps the current one otherwise.
-11. **Teacher change:** `planSlotTeacherChange` re-points every scheduled
-    lesson from _D_ (keeping absences, bookings, substitutes), deletes and
-    cancels nothing, leaves lessons before _D_ alone, and is idempotent
-    with `planLessonSync` afterwards.
+    if any is eligible and keeps the current one otherwise (counted in
+    `keptIneligible`, assigned for keys 1–2); a pre-existing blocking
+    conflict between untouched live slots does not refuse apply.
+11. **Teacher change:** `planGroupTeacherChange` re-points every
+    not-started lesson from _D_ of the group's slots whatever its status,
+    and changes the teacher of the scheduled ones and of the group's
+    ad-hoc lessons with the old teacher (keeping absences, bookings,
+    substitutes); it deletes and cancels nothing, leaves lessons before _D_
+    alone, and is idempotent with `planLessonSync` afterwards. A
+    `CANCELLED` 1-on-1 (`STUDENT_CANCELLED` or `RESCHEDULED`) after _D_
+    stays cancelled, and no new occurrence is created on its date.
 
 DB tests (`generator-service.db.test.ts`, opt-in like the others): apply in
 all three modes (and `previewApply` = what apply then does), refusal on a
 clash created between generate and apply, a teacher change keeping a
-lesson's absence and replacement booking, run lifecycle (one running run
+lesson's absence and replacement booking and a cancelled 1-on-1 cancelled, run lifecycle (one running run
 per term, `RUN_IN_PROGRESS` on draft edits, cancel, a stale heartbeat
 marked `FAILED`), `DRAFT_CHANGED` on concurrent edits,
 `EFFECTIVE_DATE_PASSED`, `TEACHER_ARCHIVED`, skip flags, school scoping of
@@ -829,7 +872,7 @@ model TeacherLevel {
   teacher TeacherProfile @relation(fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Cascade)
   level   Level          @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
 
-  @@unique([teacherId, levelId])
+  @@unique([schoolId, teacherId, levelId])
   @@unique([schoolId, id])
   @@index([schoolId, levelId])
   @@map("teacher_levels")
