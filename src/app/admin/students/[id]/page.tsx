@@ -36,6 +36,8 @@ import {
   StudentProfileForm,
 } from "./student-detail-client";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
+import { ReadOnlyNotesCard } from "@/components/lessons/internal-notes-card";
+import { loadStudentNotes } from "@/server/notes/teacher-notes";
 
 const DATE = {
   day: "numeric",
@@ -60,13 +62,16 @@ async function StudentPage({
   const tg = await getTranslations("groups");
   const tp = await getTranslations("people");
   const format = await getFormatter();
+  const tabParam = param(await searchParams, "tab");
   const tab =
-    param(await searchParams, "tab") === "groups" ? "groups" : "profile";
+    tabParam === "groups" || tabParam === "notes" ? tabParam : "profile";
   const today = toIsoDate(todayDate);
-  const [options, groups, passwordSetAt] = await Promise.all([
+  const [options, groups, passwordSetAt, notes] = await Promise.all([
     studentFilterOptions(db),
     groupPickerOptions(db),
     lastPasswordChange(scope, student.userId),
+    // Internal notes about the student (lessons.md §7): admins only.
+    loadStudentNotes(db, { role: viewer.role }, student.id),
   ]);
   const levels = pickable(options.levels, student.levelId).map((level) => ({
     id: level.id,
@@ -109,6 +114,7 @@ async function StudentPage({
         <TabsList>
           <TabsTrigger value="profile">{t("tab.profile")}</TabsTrigger>
           <TabsTrigger value="groups">{t("tab.groups")}</TabsTrigger>
+          <TabsTrigger value="notes">{t("tab.notes")}</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="flex flex-col gap-6 pt-4">
           <Card className="max-w-2xl p-6">
@@ -252,6 +258,15 @@ async function StudentPage({
               </TableCard>
             )}
           </section>
+        </TabsContent>
+        <TabsContent value="notes" className="flex flex-col gap-6 pt-4">
+          <div className="max-w-2xl">
+            <ReadOnlyNotesCard
+              heading={t("tab.notes")}
+              notes={notes}
+              empty={t("notes.empty", { name: student.name })}
+            />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

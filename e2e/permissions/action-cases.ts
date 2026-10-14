@@ -15,6 +15,7 @@ const LEVELS = "src/app/admin/levels/actions.ts";
 const ROOMS = "src/app/admin/settings/rooms/actions.ts";
 const TERMS = "src/app/admin/settings/terms/actions.ts";
 const TIMETABLE = "src/app/admin/timetable/actions.ts";
+const LESSONS = "src/app/admin/lessons/actions.ts";
 
 export type ActionCase = {
   name: string;
@@ -406,6 +407,12 @@ export function crossSchoolCases(
       name: "regenerate lessons",
       action: [TIMETABLE, "regenerateLessonsAction"],
       args: [target.term],
+    },
+    // Lessons (read-only; CARM-36)
+    {
+      name: "load earlier internal notes",
+      action: [LESSONS, "loadEarlierNotesAction"],
+      args: [target.lesson, 0],
     },
   ];
 }

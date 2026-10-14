@@ -35,7 +35,8 @@
   },
   "tab": {
     "profile": "Profile",
-    "groups": "Groups"
+    "groups": "Groups",
+    "notes": "Internal notes"
   },
   "groups": {
     "current": "Current groups",
@@ -68,5 +69,8 @@
     "title": "No students yet",
     "description": "Add students, then enrol them in groups.",
     "action": "Add student"
+  },
+  "notes": {
+    "empty": "No internal notes about {name} yet."
   }
 }
