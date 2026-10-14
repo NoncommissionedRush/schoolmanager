@@ -5,6 +5,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Role } from "@/generated/prisma/enums";
 import { requireRole } from "@/server/auth/session";
@@ -82,6 +83,7 @@ async function AuthorizedShell({
             </SidebarInset>
           </div>
           {role === "STUDENT" && <StudentTabBar />}
+          <Toaster position="bottom-right" />
         </SidebarProvider>
       </TooltipProvider>
     </NextIntlClientProvider>

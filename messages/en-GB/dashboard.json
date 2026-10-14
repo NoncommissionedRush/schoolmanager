@@ -10,6 +10,18 @@
     "empty": {
       "title": "Your school is ready to set up",
       "description": "Once terms, rooms, teachers, students and groups are added, today's lessons and anything that needs your attention will show up here."
+    },
+    "setup": {
+      "title": "Set up your school",
+      "progress": "{done} of {total} done",
+      "done": "Done",
+      "term": "Add a term",
+      "rooms": "Add rooms",
+      "levels": "Add skill levels",
+      "teachers": "Add teachers",
+      "students": "Add students",
+      "groups": "Create groups and add students",
+      "timetable": "Build and publish the timetable"
     }
   },
   "teacher": {

@@ -84,6 +84,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/students",
       icon: "graduation-cap",
       phase: 1,
+      enabled: true,
       section: "people",
     },
     {
@@ -91,6 +92,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/teachers",
       icon: "presentation",
       phase: 1,
+      enabled: true,
       section: "people",
     },
     {
@@ -102,9 +104,10 @@ const NAVIGATION: Record<Role, NavItem[]> = {
     },
     {
       label: "courses",
-      href: "/admin/courses",
+      href: "/admin/groups",
       icon: "book-open",
       phase: 1,
+      enabled: true,
       section: "academics",
     },
     {
@@ -112,6 +115,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/levels",
       icon: "signal",
       phase: 1,
+      enabled: true,
       section: "academics",
     },
     {
@@ -140,6 +144,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/settings",
       icon: "settings",
       phase: 1,
+      enabled: true,
       pinned: true,
     },
   ],
