@@ -14,7 +14,7 @@ import {
   msg,
   ok,
 } from "@/server/admin/result";
-import { schoolToday } from "@/server/admin/shared";
+import { assertIds, schoolToday } from "@/server/admin/shared";
 import { createStudent, updateStudent } from "@/server/admin/students/service";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
 
@@ -55,6 +55,7 @@ export async function updateStudentAction(
   formData: FormData,
 ): Promise<ActionResult<{ id: string; name: string }>> {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const parsed = parseInput(updateStudentSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const student = await updateStudent(scope, id, parsed.data);

@@ -10,6 +10,7 @@ import {
   updateCourse,
 } from "@/server/admin/courses/service";
 import { type ActionResult, msg, ok } from "@/server/admin/result";
+import { assertIds, assertOptionalId } from "@/server/admin/shared";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
 
 const refresh = () => revalidatePath("/admin/groups", "layout");
@@ -20,6 +21,7 @@ export async function saveCourseAction(
   formData: FormData,
 ): Promise<ActionResult<{ id: string; name: string }>> {
   return runAdminAction(async (scope) => {
+    assertOptionalId(id);
     const parsed = parseInput(courseSchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const course = id
@@ -37,6 +39,7 @@ export async function saveCourseAction(
 
 export async function deleteCourseAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const course = await deleteCourse(scope, id);
     refresh();
     return ok(undefined, msg("common.toast.deleted", { name: course.name }));

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { Prisma } from "@/generated/prisma/client";
 import { toCalendarDate } from "@/lib/i18n/dates";
 import { fromIsoDate } from "@/server/scheduling";
@@ -48,6 +50,22 @@ export function uniqueError(field: string, label: string, value: string) {
 
 export function notFound(): AdminError {
   return new AdminError(msg("common.error.notFound"));
+}
+
+const idArgument = z.uuid();
+
+/**
+ * Checks the id arguments of an admin action before anything queries them.
+ * Server actions take whatever a client posts; a malformed id can't match a
+ * record, so it is refused as not found (Postgres would reject it outright).
+ */
+export function assertIds(...ids: unknown[]): void {
+  if (!ids.every((id) => idArgument.safeParse(id).success)) throw notFound();
+}
+
+/** Like `assertIds` for an id that may be `null` ("create a new one"). */
+export function assertOptionalId(id: unknown): void {
+  if (id !== null) assertIds(id);
 }
 
 /** Append-only audit row. Never put passwords into `data`. */

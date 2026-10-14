@@ -11,7 +11,11 @@ import {
   msg,
   ok,
 } from "@/server/admin/result";
-import { schoolToday } from "@/server/admin/shared";
+import {
+  assertIds,
+  assertOptionalId,
+  schoolToday,
+} from "@/server/admin/shared";
 import {
   type LessonChanges,
   lessonChangeParts,
@@ -46,6 +50,7 @@ export async function saveTermAction(
   formData: FormData,
 ): Promise<ActionResult<SavedTerm>> {
   return runAdminAction(async (scope) => {
+    assertOptionalId(id);
     const today = toIsoDate(schoolToday(scope.viewer.school.timezone));
     const context = await termContext(scope.db, id, today);
     const parsed = parseInput(termSchema(context), formDataToObject(formData));
@@ -68,6 +73,7 @@ export async function saveTermAction(
 
 export async function deleteTermAction(id: string) {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const term = await deleteTerm(scope, id);
     revalidatePath(PATH);
     return ok(undefined, msg("common.toast.deleted", { name: term.name }));
@@ -96,6 +102,7 @@ export async function saveHolidayAction(
   formData: FormData,
 ): Promise<ActionResult<SavedHoliday>> {
   return runAdminAction(async (scope) => {
+    assertOptionalId(id);
     const parsed = parseInput(holidaySchema, formDataToObject(formData));
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const holiday = await saveHoliday(scope, id, parsed.data);
@@ -120,6 +127,7 @@ export async function deleteHolidayAction(
   touchesPublished: boolean,
 ): Promise<ActionResult<{ name: string; lessons: LessonResult }>> {
   return runAdminAction(async (scope) => {
+    assertIds(id);
     const holiday = await deleteHoliday(scope, id);
     revalidatePath(PATH);
     const data = {

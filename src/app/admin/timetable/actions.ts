@@ -27,6 +27,12 @@ const invalid = {
   formError: msg("scheduling.errors.INVALID_INPUT"),
 };
 
+/** A malformed id can't match a record: refused like an unknown one. */
+const notFound = {
+  ok: false as const,
+  formError: msg("scheduling.errors.NOT_FOUND"),
+};
+
 function revalidate() {
   revalidatePath("/admin/timetable", "layout");
   revalidatePath("/teacher/timetable");
@@ -98,7 +104,7 @@ export async function deleteSlotAction(
 ): Promise<ActionResult<LessonChanges>> {
   return runAdminAction(async ({ db, actor }) => {
     const parsed = idSchema.safeParse(slotId);
-    if (!parsed.success) return invalid;
+    if (!parsed.success) return notFound;
     const lessons = await deleteSlot(db, actor, parsed.data);
     revalidate();
     return ok(lessons);
@@ -114,7 +120,7 @@ export async function publishTermAction(
 ): Promise<ActionResult<PublishOutcome>> {
   return runAdminAction(async ({ db, actor }) => {
     const parsed = idSchema.safeParse(termId);
-    if (!parsed.success) return invalid;
+    if (!parsed.success) return notFound;
     const result = await publishTerm(db, actor, parsed.data);
     if (!result.ok) {
       return ok<PublishOutcome>({
@@ -136,7 +142,7 @@ export async function regenerateLessonsAction(
 ): Promise<ActionResult<LessonChanges>> {
   return runAdminAction(async ({ db, actor }) => {
     const parsed = idSchema.safeParse(termId);
-    if (!parsed.success) return invalid;
+    if (!parsed.success) return notFound;
     const lessons = await regenerateLessons(db, actor, parsed.data);
     revalidate();
     return ok(lessons);
