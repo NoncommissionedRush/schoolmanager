@@ -70,6 +70,7 @@
     "filtered": "No lessons match your filters."
   },
   "result": {
+    "moved": "{count, plural, one {# future lesson moved to the new teacher} other {# future lessons moved to the new teacher}}",
     "created": "{count, plural, one {# lesson created} other {# lessons created}}",
     "removed": "{count, plural, one {# future lesson removed} other {# future lessons removed}}",
     "cancelled": "{count, plural, one {# cancelled because it has history} other {# cancelled because they have history}}",
@@ -141,6 +142,7 @@
     "runs": "Every {weekday}, {start} – {end} ({count, plural, one {# lesson} other {# lessons}})",
     "runsSkipped": "{count, plural, =0 {} one {# date skipped for holidays} other {# dates skipped for holidays}}",
     "runsNone": "No lessons in this term.",
+    "teacherChangeNote": "From {date} the lessons move to the new teacher and keep their absences, replacement bookings and substitutes. Cancelled lessons stay cancelled. Lessons before {date} keep their teacher.",
     "splitNote": "From {date} this continues as a changed slot. Lessons before {date} stay as they were.",
     "saveAnyway": "Save anyway",
     "history": "History",

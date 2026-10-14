@@ -210,6 +210,15 @@ function SlotForm({
     ...(published && { effectiveFrom }),
   };
   const requestKey = JSON.stringify(request);
+  // Only the teacher changes: the lessons move to the new teacher (CARM-61).
+  const teacherOnly =
+    editing !== null &&
+    draft.teacherId !== editing.teacherId &&
+    draft.groupId === editing.groupId &&
+    (draft.roomId || null) === editing.roomId &&
+    draft.weekday === editing.weekday &&
+    draft.startMinute === editing.startMinute &&
+    draft.endMinute === editing.endMinute;
 
   // Live check, debounced 400 ms after the last change (§5.4).
   useEffect(() => {
@@ -588,10 +597,10 @@ function SlotForm({
                 .join(" · ")
             : t("slot.runsNone")}
         </p>
-        {published && editing?.tookPlace && (
+        {published && editing && (teacherOnly || editing.tookPlace) && (
           <Alert>
             <AlertDescription>
-              {t("slot.splitNote", {
+              {t(teacherOnly ? "slot.teacherChangeNote" : "slot.splitNote", {
                 date: formatDate(effectiveFrom, "short"),
               })}
             </AlertDescription>

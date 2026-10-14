@@ -652,8 +652,11 @@ re-pointing the row is the carry-over, with nothing to move and no
 successor to create. `planGroupTeacherChange` therefore does not call
 `planSlotCarryOver`, and it never cancels or deletes a lesson.
 
-The editor keeps its current rule for slot edits for now; its teacher-only
-edits move to the same plan in CARM-61 (§10 Q3).
+The editor keeps its current rule for other slot edits; an edit that
+changes only a slot's teacher uses the same plan (CARM-61, §10 Q3,
+`scheduling.md` _Change teacher_). There it covers one slot; the group's
+ad-hoc lessons move once every other slot of the group in effect from _D_
+already has the new teacher.
 
 **Preview.** `previewApply(draftId)` runs steps 1–5 in a transaction that
 is always rolled back and returns the counts plus the affected teachers,
