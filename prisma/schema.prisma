@@ -161,7 +161,7 @@ model Membership {
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
-  @@index([userId])
+  @@unique([userId])
   @@map("memberships")
 }
 
