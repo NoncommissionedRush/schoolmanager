@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, MoreHorizontal, Plus, TriangleAlert } from "lucide-react";
+import { Info, MoreHorizontal, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
@@ -27,7 +27,7 @@ import {
   touchedPublishedTerms,
 } from "@/server/admin/holidays/schema";
 import type { Message } from "@/server/admin/result";
-import { overlappingTerms, termSchema } from "@/server/admin/terms/schema";
+import { termSchema } from "@/server/admin/terms/schema";
 
 import {
   deleteHolidayAction,
@@ -107,38 +107,16 @@ function TermDialog({
 }) {
   const t = useTranslations("terms");
   const lessonToast = useLessonToast();
-  const initial = () => ({
-    startDate: term?.startDate ?? "",
-    endDate: term?.endDate ?? "",
+  // Overlapping another term is an error (`terms.error.overlap`).
+  const schema = termSchema({
+    published: term?.published ?? false,
+    original: term
+      ? { startDate: term.startDate, endDate: term.endDate }
+      : null,
+    today,
+    terms,
+    id: term?.id ?? null,
   });
-  const [dates, setDates] = useState(initial);
-  // Every opening starts from the stored values (the trigger owns `open`).
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setDates(initial());
-  }
-  const schema = termSchema(
-    term
-      ? {
-          published: term.published,
-          original: { startDate: term.startDate, endDate: term.endDate },
-          today,
-        }
-      : undefined,
-  );
-  // Overlap is a warning, not an error (§6.8).
-  const overlaps =
-    dates.startDate && dates.endDate && dates.startDate <= dates.endDate
-      ? overlappingTerms(dates, terms, term?.id)
-      : [];
-
-  function track(event: FormEvent<HTMLDivElement>) {
-    const target = event.target as HTMLInputElement;
-    if (target.name === "startDate" || target.name === "endDate") {
-      setDates((current) => ({ ...current, [target.name]: target.value }));
-    }
-  }
 
   return (
     <FormDialog
@@ -155,36 +133,26 @@ function TermDialog({
         if (data.lessons) lessonToast(t("toast.saved"), data.lessons);
       }}
     >
-      <div className="contents" onChange={track}>
+      <TextField
+        name="name"
+        label={t("field.name")}
+        placeholder={t("field.namePlaceholder")}
+        defaultValue={term?.name}
+        autoFocus
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
         <TextField
-          name="name"
-          label={t("field.name")}
-          placeholder={t("field.namePlaceholder")}
-          defaultValue={term?.name}
-          autoFocus
+          name="startDate"
+          type="date"
+          label={t("field.start")}
+          defaultValue={term?.startDate}
         />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <TextField
-            name="startDate"
-            type="date"
-            label={t("field.start")}
-            defaultValue={term?.startDate}
-          />
-          <TextField
-            name="endDate"
-            type="date"
-            label={t("field.end")}
-            defaultValue={term?.endDate}
-          />
-        </div>
-        {overlaps.map((other) => (
-          <Alert key={other.id}>
-            <TriangleAlert aria-hidden="true" />
-            <AlertDescription>
-              {t("warning.overlap", { term: other.name })}
-            </AlertDescription>
-          </Alert>
-        ))}
+        <TextField
+          name="endDate"
+          type="date"
+          label={t("field.end")}
+          defaultValue={term?.endDate}
+        />
       </div>
     </FormDialog>
   );

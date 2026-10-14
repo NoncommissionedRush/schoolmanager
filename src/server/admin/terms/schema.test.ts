@@ -140,6 +140,71 @@ describe("term overlap", () => {
     ).toEqual([]);
   });
 
+  describe("in the term schema", () => {
+    const schema = (id: string | null = null) =>
+      termSchema({
+        published: false,
+        original: null,
+        today: "2026-10-14",
+        terms,
+        id,
+      });
+    const spring = {
+      name: "Spring",
+      startDate: "2027-02-01",
+      endDate: "2027-06-30",
+    };
+    const overlap = (field: string) => ({
+      ok: false,
+      fieldErrors: {
+        [field]: { key: "terms.error.overlap", values: { term: "Autumn" } },
+      },
+    });
+
+    it("accepts a term that follows on directly", () => {
+      expect(parseInput(schema(), spring).ok).toBe(true);
+      expect(
+        parseInput(schema(), { ...spring, startDate: "2027-01-30" }).ok,
+      ).toBe(true);
+    });
+
+    it("refuses sharing the other term's last day, naming it", () => {
+      expect(
+        parseInput(schema(), { ...spring, startDate: "2027-01-29" }),
+      ).toEqual(overlap("startDate"));
+    });
+
+    it("puts the error on the end date when only the end overlaps", () => {
+      expect(
+        parseInput(schema(), {
+          name: "Pre-autumn",
+          startDate: "2026-08-01",
+          endDate: "2026-09-14",
+        }),
+      ).toEqual(overlap("endDate"));
+    });
+
+    it("refuses a term that encloses another one", () => {
+      expect(
+        parseInput(schema(), {
+          name: "Year",
+          startDate: "2026-09-01",
+          endDate: "2027-06-30",
+        }),
+      ).toEqual(overlap("startDate"));
+    });
+
+    it("lets the edited term keep or move its own dates", () => {
+      expect(
+        parseInput(schema("a"), {
+          name: "Autumn",
+          startDate: "2026-09-01",
+          endDate: "2027-01-31",
+        }).ok,
+      ).toBe(true);
+    });
+  });
+
   it("marks the current term", () => {
     expect(isCurrentTerm(terms[0], "2026-10-14")).toBe(true);
     expect(isCurrentTerm(terms[0], "2027-01-29")).toBe(true);

@@ -29,10 +29,9 @@
   "openTimetable": "Open timetable",
   "error": {
     "endBeforeStart": "The last day must be on or after the first day.",
-    "cannotRemovePast": "A published term can't start or end before today."
-  },
-  "warning": {
-    "overlap": "Overlaps with {term}. Lessons of both terms will run in parallel."
+    "cannotRemovePast": "A published term can't start or end before today.",
+    "overlap": "These dates overlap {term}. Terms can't share a day.",
+    "overlapAny": "These dates overlap another term. Terms can't share a day."
   },
   "impact": {
     "datesChanged": "Lessons outside the new dates are removed (or cancelled if they have history); new dates get lessons."

@@ -133,6 +133,22 @@ Prisma does not model CHECK constraints, so these live in
 - teacher note is about a student, group or lesson
 - replacement target ≠ original lesson
 
+### Terms never overlap
+
+A school's terms can't share a day (owner decision, 2026-10-14). Both the
+first and the last day count: a term ending on 30 Jan and one starting on
+30 Jan overlap; one starting on 31 Jan follows on. The term dialog refuses an
+overlap (`terms.error.overlap`, naming the other term), and the exclusion
+constraint `terms_no_overlap` (`btree_gist`, on `school_id` and
+`daterange(start_date, end_date, '[]')`, migration `*_terms_no_overlap`)
+backs that up against races and scripts. The migration stops with the
+clashing terms listed if existing data already overlaps.
+
+So any date lies in at most one term of a school. Code that looks up "the
+term containing a date" can take the first match, and per-term totals never
+mix two terms' lessons: a teacher's weekly maximum in the generator only ever
+counts lessons of one term (generator.md §10 Q1).
+
 ## Soft delete and archiving
 
 `User.deletedAt` and `Group.deletedAt` — history (lessons, logs)

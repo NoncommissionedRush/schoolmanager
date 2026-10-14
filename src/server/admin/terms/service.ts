@@ -4,8 +4,10 @@ import {
   regenerateLessons,
 } from "@/server/timetable/service";
 
+import { AdminError, msg } from "../result";
 import {
   audit,
+  isExclusionViolation,
   isUniqueViolation,
   notFound,
   type SchoolDb,
@@ -19,6 +21,8 @@ import {
   type TermContext,
   type TermInput,
 } from "./schema";
+
+const TERMS_NO_OVERLAP = "terms_no_overlap";
 
 /** Terms table (§6.8), oldest first. Dates as `YYYY-MM-DD`. */
 export async function listTerms(db: SchoolDb, today: string) {
@@ -59,7 +63,16 @@ export async function termContext(
   id: string | null,
   today: string,
 ): Promise<TermContext> {
-  if (!id) return { published: false, original: null, today };
+  const terms = (
+    await db.term.findMany({
+      select: { id: true, name: true, startDate: true, endDate: true },
+    })
+  ).map((term) => ({
+    ...term,
+    startDate: toIsoDate(term.startDate),
+    endDate: toIsoDate(term.endDate),
+  }));
+  if (!id) return { published: false, original: null, today, terms, id };
   const term = await findTerm(db, id);
   return {
     published: !!term.timetablePublishedAt,
@@ -68,6 +81,8 @@ export async function termContext(
       endDate: toIsoDate(term.endDate),
     },
     today,
+    terms,
+    id,
   };
 }
 
@@ -97,6 +112,27 @@ async function assertNameFree(db: SchoolDb, name: string, exceptId?: string) {
   if (clash) throw uniqueError("name", "terms.field.name", name);
 }
 
+/**
+ * `terms_no_overlap` refused the dates: another save got in between the
+ * schema check and this one. Reported like the schema's overlap error.
+ */
+async function overlapError(db: SchoolDb, input: TermInput, exceptId?: string) {
+  const clash = await db.term.findFirst({
+    where: {
+      startDate: { lte: fromIsoDate(input.endDate) },
+      endDate: { gte: fromIsoDate(input.startDate) },
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+    select: { name: true },
+  });
+  return new AdminError(
+    clash
+      ? msg("terms.error.overlap", { term: clash.name })
+      : msg("terms.error.overlapAny"),
+    "startDate",
+  );
+}
+
 const toData = (input: TermInput) => ({
   name: input.name,
   startDate: fromIsoDate(input.startDate),
@@ -119,6 +155,8 @@ export async function createTerm(scope: Scope, input: TermInput) {
   } catch (error) {
     if (isUniqueViolation(error))
       throw uniqueError("name", "terms.field.name", input.name);
+    if (isExclusionViolation(error, TERMS_NO_OVERLAP))
+      throw await overlapError(db, input);
     throw error;
   }
 }
@@ -146,6 +184,8 @@ export async function updateTerm(
   } catch (error) {
     if (isUniqueViolation(error))
       throw uniqueError("name", "terms.field.name", input.name);
+    if (isExclusionViolation(error, TERMS_NO_OVERLAP))
+      throw await overlapError(db, input, id);
     throw error;
   }
   const original = {

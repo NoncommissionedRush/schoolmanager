@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { type Browser, expect, type Page, test } from "@playwright/test";
 
-import { signIn, sql } from "../helpers";
+import { insertOwnTerm, signIn, sql } from "../helpers";
+import { addDays } from "../../src/server/scheduling/time";
 import { callAction, pagesIn, serverActionsIn } from "../server-actions";
 import { teacherLessonCases } from "./action-cases";
 import {
@@ -208,12 +209,22 @@ test.beforeAll(async () => {
   colleague = row.colleague;
 
   // January terms, away from the weeks and terms other specs look at.
-  await sql(
-    `INSERT INTO terms (id, school_id, name, start_date, end_date, timetable_published_at, updated_at)
-     VALUES ($1, $3, $4, '2026-01-19', '2026-01-25', now(), now()),
-            ($2, $3, $5, '2026-01-26', '2026-01-31', NULL, now())`,
-    [ids.term, ids.draftTerm, a.school, marker("term"), marker("draft term")],
-  );
+  const published = await insertOwnTerm({
+    id: ids.term,
+    schoolId: a.school,
+    name: marker("term"),
+    startDate: "2026-01-19",
+    days: 7,
+    published: true,
+  });
+  await insertOwnTerm({
+    id: ids.draftTerm,
+    schoolId: a.school,
+    name: marker("draft term"),
+    startDate: addDays(published.endDate, 1),
+    days: 6,
+    published: false,
+  });
   for (const key of ["joined", "left", "other"] as const) {
     await sql(
       `INSERT INTO groups (id, school_id, level_id, type, name, capacity, updated_at)

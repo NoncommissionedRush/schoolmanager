@@ -5,7 +5,6 @@
 
 import { type Calendar, checkLesson } from "./conflicts";
 import type { Conflict } from "./conflict-types";
-import { compareStrings } from "./generate-lessons";
 import {
   type AttendedLesson,
   type CreditStatus,
@@ -103,18 +102,20 @@ export type RescheduleCheck = {
   termId: string | null;
 };
 
-/** The published term containing the local `date`, if any. */
+/**
+ * The published term containing the local `date`, if any. A school's terms
+ * never overlap (data-model.md), so at most one does.
+ */
 function termOn(
   calendar: Calendar,
   publishedTermIds: readonly string[],
   date: IsoDate,
 ): string | null {
-  const ids = [...publishedTermIds].sort(compareStrings);
-  for (const id of ids) {
+  const id = publishedTermIds.find((id) => {
     const term = calendar.terms.get(id);
-    if (term && term.startDate <= date && date <= term.endDate) return id;
-  }
-  return null;
+    return term && term.startDate <= date && date <= term.endDate;
+  });
+  return id ?? null;
 }
 
 /**
