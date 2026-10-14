@@ -45,7 +45,7 @@ export function SetPasswordDialog({
         action={(previous, formData) =>
           setPasswordAction(person.userId, previous, formData)
         }
-        onSuccess={setCredentials}
+        onSuccess={(data) => setCredentials(data)}
       >
         <PasswordField autoFocus />
       </FormDialog>
