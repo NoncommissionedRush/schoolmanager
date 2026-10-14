@@ -391,6 +391,7 @@ export async function loadStudentAbsences(
       },
       select: {
         id: true,
+        groupId: true,
         startsAt: true,
         endsAt: true,
         rescheduledFromId: true,
@@ -474,7 +475,14 @@ export async function loadStudentAbsences(
       sortAt: r.targetLesson.startsAt.getTime(),
     });
   }
+  // Only while they are the group's student, like their timetable: a
+  // 1-on-1 group can pass to another student (CARM-43 review).
+  const memberships = await db.groupMembership.findMany({
+    where: { studentId: student.id },
+    select: { groupId: true, joinedAt: true, leftAt: true },
+  });
   for (const lesson of rescheduled) {
+    if (!isMemberAt(memberships, lesson.groupId, lesson.startsAt)) continue;
     const credit =
       lesson.spentCredit?.studentId === student.id ? lesson.spentCredit : null;
     const root = await rescheduleRoot(db, lesson);
