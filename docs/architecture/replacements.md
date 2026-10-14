@@ -5,7 +5,9 @@ absences (§3) and credit creation and expiry (§4) in CARM-42; replacement
 booking and review (§5–§6), 1-on-1 and admin reschedule (§7), credit
 release (§4) and the rest of the schema (§9) in CARM-43; the slot-split
 carry-over (§5 _Slot splits_) and counting absences and replacements in
-`checkLesson` (§9 _Changes outside the new module_) in CARM-46.** This page
+`checkLesson` (§9 _Changes outside the new module_) in CARM-46; an admin
+spending a student's credit for them (§6 _Admin booking_, §7 _Admin
+reschedule_) in CARM-47.** This page
 defines the rules the Phase 3 booking flow enforces and the schema changes
 it needs. The screens are specified in `docs/design/absences.md` (CARM-39);
 where the two disagree, raise it on the issue rather than picking one.
@@ -212,7 +214,9 @@ its own link back (`Lesson.rescheduledFromId`), so "Rescheduled to …"
 history never depends on the credit. A credit is only deleted with its absence, and never while `USED` (§3).
 
 **Admin override and approve** do not change the credit (it stays `USED`).
-An admin cannot mint credits in v1.
+An admin cannot mint credits in v1, but can spend a student's `AVAILABLE`
+credit for them (§6 _Admin booking_, §7 _Admin reschedule_); from then on
+the credit is released exactly as if the student had spent it.
 
 ## 5. Room-size limit
 
@@ -343,6 +347,36 @@ Notes:
 - There is no separate "booking closes N hours before" rule for the target
   in v1: it can be booked until it starts, as the issue asks. The teacher
   sees replacement students on the lesson page as soon as they book.
+
+### Admin booking
+
+An admin can spend a student's `AVAILABLE` **group** credit for them
+(CARM-47), e.g. when the student phones the office: the same booking the
+student would make, from the admin's _Absences_ tab (row menu _Book
+replacement…_ on an absence with an available credit).
+
+- **Same rules.** `checkReplacement` with the student's data, under the
+  lock (§8), the same conditional credit update, the same partial unique
+  indexes. A 1-on-1 credit is "not found" here (it is rescheduled, §7).
+- **Blocking reasons refuse**, for admins too. **Overridable reasons**
+  (`CREDIT_EXPIRES_FIRST`, `NO_LEVEL`, `LEVEL_MISMATCH`, `ROOM_FULL`,
+  `STUDENT_CLASH`) can be booked once the admin acknowledges each one, as in
+  Override (`decideOverride`).
+- **Already reviewed.** The admin who books is the reviewer: the booking is
+  `APPROVED` with no reasons, `OVERRIDDEN` with acknowledged ones, with
+  `reviewedById`, `reviewedAt` and the admin's optional note (the student
+  sees it, ≤ 300 characters). It never waits in the Review queue; the
+  _Replacements_ tab shows it, and Reject / Override work on it as on any
+  active booking.
+- **Afterwards** it is an ordinary booking: the student cancels it under §6
+  (before the cutoff the credit comes back), an admin rejects it with grace
+  (§4).
+- **Picker.** Upcoming group lessons up to 30 days ahead without a blocking
+  reason: at the student's level and reason-free by default, every level
+  with their overridable reasons on _Show all lessons_ — the Override
+  picker's rule.
+- **Audit:** `replacement.booked` with the admin as actor, `byAdmin: true`,
+  the note and every acknowledged reason (code + params).
 
 **Students** see only lessons with an empty reason list (the "Book a
 replacement" list is `checkReplacement` over the candidate lessons: same
@@ -490,16 +524,31 @@ source is cancelled and a new ad-hoc lesson is created with
   student attends the new lesson as normal.
 - **No credit is created or spent.** If the source is itself a reschedule,
   the credit spent on it stays `USED` and its `rescheduledLessonId` moves
-  to the new lesson. Separately, an admin can spend a student's
-  `AVAILABLE` 1-on-1 credit on their behalf. That is the student flow run
-  by the admin, with the admin rules below.
+  to the new lesson.
+- **From a credit** (CARM-47). Separately, an admin can spend a student's
+  `AVAILABLE` 1-on-1 credit on their behalf (_Absences_ tab, row menu _Book
+  1-on-1 with credit…_). That is the student's "reschedule from a credit"
+  run by the admin: no lesson is cancelled, the new ad-hoc lesson continues
+  the credit's chain (`rescheduledFromId` = the last lesson of the chain
+  that starts at the credit's missed lesson), in that lesson's group with
+  its regular teacher, and the credit becomes `USED` with
+  `rescheduledLessonId` set, by the same conditional update as the
+  student's. From then on it is a credit-backed rescheduled lesson (§3): if
+  the student cancels it before the cutoff, the same credit comes back with
+  its own expiry. The credit must be the student's, effectively
+  `AVAILABLE` and from a 1-on-1 lesson; anything else refuses
+  (`CREDIT_UNAVAILABLE`, or "not found" for a group credit).
 - **Checks:** the same checks as `checkReschedule`, without the
-  student-only time limits (`TOO_SOON`, `CREDIT_EXPIRES_FIRST`).
-  - Blocking `checkLesson` conflicts and `OUTSIDE_TERM` refuse the move.
+  student-only notice limit (`TOO_SOON` only refuses a time in the past).
+  - Blocking `checkLesson` conflicts, `OUTSIDE_TERM` and an unusable credit
+    refuse the move.
   - Overridable conflicts (unavailability, holiday, school hours, shared
-    online room, and `STUDENT_CLASH`) can be saved once the admin
-    acknowledges each one. This is the `decideSave` pattern from the
-    timetable editor.
+    online room), `STUDENT_CLASH` and — only when spending a credit —
+    `CREDIT_EXPIRES_FIRST` (the new lesson starts on or after the credit's
+    `expiresAt`) can be saved once the admin acknowledges each one. This is
+    the `decideSave` pattern from the timetable editor, and the same
+    `CREDIT_EXPIRES_FIRST` override an admin has on a group booking (§6). A
+    credit that merely moves with its lesson is not checked for expiry.
   - `DURATION_CHANGED` doesn't apply: the admin may change the length.
 - **What the admin picks:** the date, time and room. The teacher stays the
   group's regular teacher; substitutes are a P5 workflow.
@@ -508,8 +557,9 @@ source is cancelled and a new ad-hoc lesson is created with
   releases its credit with grace (§4). Cancelling by the student follows §3, including
   the case of an admin-moved lesson with no credit.
 - **Audit:** `lesson.rescheduled` records the actor, student, credit if
-  any, source and new lesson, from and to, room, every acknowledged
-  conflict and the admin's optional note (e.g. "agreed by phone").
+  any (`creditSpent: true` when the admin spent an `AVAILABLE` one), source
+  and new lesson, from and to, room, every acknowledged conflict or reason
+  and the admin's optional note (e.g. "agreed by phone").
 - It takes the same lock as every other write here (§8).
 
 ## 8. Concurrency
@@ -688,6 +738,13 @@ replacement students`, replacement students marked. _Not coming_ = the
   late absence; no credit created or spent; credit link moved when the
   source is itself a reschedule; blocking conflicts refused; overridable
   conflicts and `STUDENT_CLASH` only with acknowledgement.
+- Unit and DB, admin spending a credit (CARM-47): a group booking is
+  `APPROVED` without reasons and `OVERRIDDEN` only with every overridable
+  reason acknowledged, never past a blocking one, and skips the Review
+  queue; a 1-on-1 booking from a credit continues the chain, spends the
+  credit, needs `CREDIT_EXPIRES_FIRST` acknowledged after the expiry, and a
+  later student cancel in time gives the same credit back; spent, wrong-kind
+  and other schools' credits are refused.
 - DB (opt-in, like `service.db.test.ts`): two concurrent bookings for the
   last seat → exactly one succeeds; one credit spent from two transactions
   → exactly one succeeds.

@@ -6,7 +6,8 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import { AdminError, msg } from "@/server/admin/result";
-import { toZonedDateTime } from "@/server/scheduling";
+import { loadLessonRoster } from "@/server/replacements/views";
+import { addDays, toZonedDateTime, zonedTimeToUtc } from "@/server/scheduling";
 import type { SchoolDb } from "@/server/timetable/service";
 
 import { isUuid, teacherLessonWhere } from "./access";
@@ -17,6 +18,7 @@ import {
   logLock,
   logWrite,
   matchesFilter,
+  rosterCounts,
   type TeacherRelation,
   teacherRelation,
   TODO_DAYS,
@@ -569,6 +571,76 @@ export async function loadTeacherTodo(
     take: TODO_LIMIT,
   });
   return rows.map((r) => toListItem(r, now, timeZone));
+}
+
+/** One lesson of the teacher dashboard's Today list (app-layout.md §7.3). */
+export type TodayLesson = {
+  id: string;
+  startMinute: number;
+  endMinute: number;
+  groupName: string;
+  roomName: string | null;
+  cancelled: boolean;
+  /** "−{n} · +{r}" (absences.md §6.3); zero on cancelled lessons. */
+  notComing: number;
+  replacements: number;
+};
+
+/**
+ * The teacher's lessons today (taught or substituted, published terms), in
+ * the school's time zone, by start, each with the Students card's counts.
+ */
+export async function loadTeacherToday(
+  db: SchoolDb,
+  teacherId: string | null,
+  now: Date,
+  timeZone: string,
+): Promise<TodayLesson[]> {
+  if (!teacherId) return [];
+  const today = toZonedDateTime(now, timeZone).date;
+  const rows = await db.lesson.findMany({
+    where: {
+      AND: [
+        teacherLessonWhere(teacherId),
+        {
+          startsAt: {
+            gte: zonedTimeToUtc(today, 0, timeZone),
+            lt: zonedTimeToUtc(addDays(today, 1), 0, timeZone),
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      startsAt: true,
+      endsAt: true,
+      status: true,
+      group: { select: { name: true } },
+      room: { select: { name: true } },
+    },
+    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+  });
+  // A teacher has a handful of lessons a day: one roster query each keeps
+  // the counts identical to the lesson page's Students card.
+  const rosters = await Promise.all(
+    rows.map((row) =>
+      row.status === "CANCELLED" ? null : loadLessonRoster(db, row.id, now),
+    ),
+  );
+  return rows.map((row, i) => {
+    const start = toZonedDateTime(row.startsAt, timeZone);
+    const end = toZonedDateTime(row.endsAt, timeZone);
+    const roster = rosters[i];
+    return {
+      id: row.id,
+      startMinute: start.minute,
+      endMinute: end.date === start.date ? end.minute : 24 * 60,
+      groupName: row.group.name,
+      roomName: row.room?.name ?? null,
+      cancelled: row.status === "CANCELLED",
+      ...(roster ? rosterCounts(roster) : { notComing: 0, replacements: 0 }),
+    };
+  });
 }
 
 /** Whether the teacher has any lesson they can open (dashboard empty state). */

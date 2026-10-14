@@ -51,8 +51,10 @@ export type RescheduleReason = {
 export type RescheduleRequest = {
   /**
    * `student`: every rule applies and nothing can be overridden. `admin`
-   * (§7 _Admin reschedule_): no notice or credit-expiry limits, any
-   * duration, and overridable conflicts can be acknowledged.
+   * (§7 _Admin reschedule_): no notice limit, any duration, and
+   * overridable conflicts can be acknowledged. A credit the admin spends
+   * (not one already spent on the moving lesson) still checks its expiry,
+   * as an acknowledgeable reason.
    */
   mode: "student" | "admin";
   /** The 1-on-1 group; the new lesson is an ad-hoc lesson of it. */
@@ -150,8 +152,8 @@ export function checkReschedule(
     add("TOO_SOON");
   }
   if (
-    student &&
     credit &&
+    (student || !credit.spentOnMoving) &&
     candidate.startsAt.getTime() >= credit.expiresAt.getTime()
   ) {
     add("CREDIT_EXPIRES_FIRST");
@@ -222,15 +224,20 @@ export type AdminRescheduleDecision =
       unacknowledged: string[];
     };
 
-/** Reasons an admin can acknowledge; the rest (credit, term, past) block. */
-const ADMIN_OVERRIDABLE: ReadonlySet<RescheduleReasonCode> = new Set([
+/**
+ * Reasons an admin can acknowledge; the rest (unusable credit, term, past)
+ * block. CREDIT_EXPIRES_FIRST only fires for admins spending a credit.
+ */
+export const ADMIN_OVERRIDABLE: ReadonlySet<RescheduleReasonCode> = new Set([
+  "CREDIT_EXPIRES_FIRST",
   "STUDENT_CLASH",
 ]);
 
 /**
  * Whether an admin reschedule may be saved (§7): blocking conflicts,
  * OUTSIDE_TERM, a past time or an unusable credit refuse; overridable
- * conflicts and STUDENT_CLASH need each key acknowledged.
+ * conflicts, CREDIT_EXPIRES_FIRST and STUDENT_CLASH need each key
+ * acknowledged.
  */
 export function decideAdminReschedule(
   check: RescheduleCheck,

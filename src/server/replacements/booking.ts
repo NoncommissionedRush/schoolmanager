@@ -15,6 +15,7 @@ import {
   checkReplacement,
   creditState,
   decideOverride,
+  OVERRIDABLE_REPLACEMENT_REASONS,
   planBookingCancel,
   type ReplacementCheckInput,
   type ReplacementReason,
@@ -1050,6 +1051,130 @@ export async function overrideReplacement(
 }
 
 // ---------------------------------------------------------------------------
+// Admin: book a replacement for a student with their credit (CARM-47)
+// ---------------------------------------------------------------------------
+
+/** A student's AVAILABLE group credit, with the student, for an admin. */
+async function loadCreditForAdmin(tx: Tx | SchoolDb, creditId: string) {
+  const credit = await tx.makeupCredit.findFirst({
+    where: { id: creditId },
+    select: { ...creditSelect, student: { select: studentSelect } },
+  });
+  // 1-on-1 credits are rescheduled, never booked into a group (§7).
+  if (!credit || credit.sourceLesson.group.type !== "GROUP") return null;
+  return credit;
+}
+
+/**
+ * An admin books `targetLessonId` for the student who owns `creditId`
+ * (replacements.md §6 _Admin booking_): `checkReplacement` as for the
+ * student, under the lock. Blocking reasons refuse; overridable ones need
+ * each key acknowledged, as in Override. The booking is already reviewed
+ * by the admin who made it: APPROVED, or OVERRIDDEN when reasons were
+ * acknowledged. The credit is spent with the same conditional update.
+ */
+export async function bookReplacementForStudent(
+  db: SchoolDb,
+  actor: ReviewActor,
+  input: {
+    creditId: string;
+    targetLessonId: string;
+    acknowledgedKeys: readonly string[];
+    note: string | null;
+  },
+  now: Date,
+): Promise<BookResult> {
+  if (!isUuid(input.creditId) || !isUuid(input.targetLessonId)) {
+    throw notFound();
+  }
+  return inLockedTransaction(db, async (tx, school) => {
+    const credit = await loadCreditForAdmin(tx, input.creditId);
+    if (!credit) throw notFound();
+    const target = await tx.lesson.findFirst({
+      where: { id: input.targetLessonId },
+      select: targetSelect,
+    });
+    if (!target) throw notFound();
+    const student = toStudentInfo(credit.student);
+    const seats = await seatsOfLessons(tx, [target]);
+    const context = await studentContext(tx, student, {
+      from: target.startsAt,
+      to: target.endsAt,
+    });
+    const reasons = checkReplacement(
+      context.input(target, seats.get(target.id) ?? 0, creditInput(credit)),
+      now,
+    );
+    const decision = decideOverride(reasons, input.acknowledgedKeys);
+    if (!decision.ok) {
+      return {
+        status: "refused",
+        reasons: await reasonViews(tx, reasons, school.timezone),
+      };
+    }
+
+    const { count } = await tx.makeupCredit.updateMany({
+      where: { id: credit.id, status: "AVAILABLE", expiresAt: { gt: now } },
+      data: { status: "USED", usedAt: now },
+    });
+    if (count !== 1) throw refusal("CREDIT_UNAVAILABLE");
+    let bookingId: string;
+    try {
+      const row = await tx.replacementRequest.create({
+        data: {
+          schoolId: school.id,
+          studentId: student.id,
+          originalLessonId: credit.sourceLessonId,
+          targetLessonId: target.id,
+          makeupCreditId: credit.id,
+          status: reasons.length > 0 ? "OVERRIDDEN" : "APPROVED",
+          reviewedById: actor.userId,
+          reviewedAt: now,
+          reviewNote: input.note,
+          createdAt: now,
+        },
+        select: { id: true },
+      });
+      bookingId = row.id;
+    } catch (error) {
+      if (isUniqueViolation(error)) throw refusal("ALREADY_ATTENDING");
+      throw error;
+    }
+    await tx.auditLog.create({
+      data: {
+        schoolId: school.id,
+        actorId: actor.userId,
+        action: "replacement.booked",
+        entityType: "ReplacementRequest",
+        entityId: bookingId,
+        data: JSON.parse(
+          JSON.stringify({
+            byAdmin: true,
+            studentId: student.id,
+            creditId: credit.id,
+            originalLessonId: credit.sourceLessonId,
+            targetLessonId: target.id,
+            seatsTaken: (seats.get(target.id) ?? 0) + 1,
+            capacity: target.room?.capacity ?? null,
+            note: input.note,
+            acknowledged: decision.overridden.map((r) => ({
+              code: r.code,
+              key: r.key,
+              params: r.params,
+            })),
+          }),
+        ),
+      },
+    });
+    return {
+      status: "booked",
+      bookingId,
+      startsAt: target.startsAt.toISOString(),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Admin lists: Review and Replacements tabs (absences.md §7.2)
 // ---------------------------------------------------------------------------
 
@@ -1334,4 +1459,77 @@ export async function listOverrideOptions(
     options.push(option);
   }
   return { current, options };
+}
+
+export type AdminBookingOptions = {
+  student: { id: string; name: string };
+  credit: { sourceDate: string; validUntil: string };
+  options: OverrideOption[];
+};
+
+/**
+ * Lessons the admin's "Book replacement" dialog offers for a student's
+ * AVAILABLE group credit (CARM-47): like the Override picker, upcoming
+ * group lessons up to 30 days ahead without a blocking reason, only
+ * reason-free ones unless `showAll`, each with its `checkReplacement`
+ * reasons. Null when the credit isn't a group credit of this school.
+ */
+export async function listAdminBookingOptions(
+  db: SchoolDb,
+  creditId: string,
+  showAll: boolean,
+  now: Date,
+): Promise<AdminBookingOptions | null> {
+  if (!isUuid(creditId)) return null;
+  const school = await schoolOf(db);
+  const tz = school.timezone;
+  const credit = await loadCreditForAdmin(db, creditId);
+  if (!credit) return null;
+  const student = toStudentInfo(credit.student);
+  const until = new Date(now.getTime() + 30 * 86_400_000);
+  const candidates = await db.lesson.findMany({
+    where: {
+      status: "SCHEDULED",
+      startsAt: { gt: now, lt: until },
+      term: { timetablePublishedAt: { not: null } },
+      group: {
+        type: "GROUP",
+        deletedAt: null,
+        ...(!showAll && student.levelId && { levelId: student.levelId }),
+      },
+    },
+    select: targetSelect,
+    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+  });
+  const seats = await seatsOfLessons(db, candidates);
+  const context = await studentContext(db, student, { from: now, to: until });
+  const spend = creditInput(credit);
+  const options: OverrideOption[] = [];
+  for (const target of candidates) {
+    const reasons = checkReplacement(
+      context.input(target, seats.get(target.id) ?? 0, spend),
+      now,
+    );
+    if (
+      reasons.some((r) => !OVERRIDABLE_REPLACEMENT_REASONS.has(r.code)) ||
+      (!showAll && reasons.length > 0)
+    ) {
+      continue;
+    }
+    options.push({
+      ...lessonRef(target, tz),
+      startsAt: target.startsAt.toISOString(),
+      roomName: target.room?.name ?? null,
+      teacherName: (target.substituteTeacher ?? target.teacher).user.name,
+      reasons: await reasonViews(db, reasons, tz),
+    });
+  }
+  return {
+    student: { id: student.id, name: student.name },
+    credit: {
+      sourceDate: toZonedDateTime(credit.sourceLesson.startsAt, tz).date,
+      validUntil: validUntilOf(credit.expiresAt, tz),
+    },
+    options,
+  };
 }
