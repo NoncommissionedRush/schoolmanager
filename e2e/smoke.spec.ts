@@ -5,6 +5,8 @@ test("home page renders", async ({ page }) => {
   await expect(
     page.getByRole("heading", { level: 1, name: "School Manager" }),
   ).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en-GB");
+  await expect(page).toHaveTitle("School Manager");
 });
 
 test("health endpoint reports a reachable database", async ({ request }) => {

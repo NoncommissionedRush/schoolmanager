@@ -6,7 +6,7 @@ timetables (recurring slots → dated lessons), group and 1-on-1 lessons,
 attendance, lesson logs, absences and replacement lessons.
 
 **Stack:** Next.js (App Router) + TypeScript (strict), PostgreSQL + Prisma,
-Tailwind CSS + shadcn/ui, Vitest, Playwright. Package manager: pnpm.
+Tailwind CSS + shadcn/ui, next-intl, Vitest, Playwright. Package manager: pnpm.
 
 ## Run locally
 
@@ -50,6 +50,8 @@ src/app         Next.js routes (UI, route handlers, server actions)
 src/server      Domain logic — pure, testable functions
 src/components  React components (shadcn/ui in src/components/ui)
 src/lib         Shared utilities (e.g. Prisma client in src/lib/db.ts)
+src/i18n        next-intl request config, locales, named formats
+messages/       UI message catalogs, one JSON file per feature namespace
 src/generated   Generated Prisma client (git-ignored)
 prisma/         Schema, migrations, seed
 e2e/            Playwright tests
@@ -60,5 +62,7 @@ docs/           Project docs and design specs
 
 - Every tenant-owned table has `school_id` and every query is scoped by it.
 - Authorization is enforced server-side, never only in the UI.
+- All UI strings go through next-intl — see
+  [docs/architecture/i18n.md](docs/architecture/i18n.md).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branch, commit and PR conventions.

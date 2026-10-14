@@ -16,11 +16,11 @@ weekly timetable grid. Tokens: `docs/design/tokens.md`. Clickable wireframe:
 
 ## 2. Roles
 
-| Role | Primary device | Main jobs (roadmap) |
-|---|---|---|
-| Admin | Desktop (≥ 1280) | Set up school data, build timetable, review absences/replacements, people, payments, reports |
-| Teacher | Desktop or tablet; phone between lessons | See own lessons, log lessons, attendance, homework, report absence |
-| Student | Phone (≈ 390 × 844) | See next lesson & timetable, homework, report absence, book replacement |
+| Role    | Primary device                           | Main jobs (roadmap)                                                                          |
+| ------- | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Admin   | Desktop (≥ 1280)                         | Set up school data, build timetable, review absences/replacements, people, payments, reports |
+| Teacher | Desktop or tablet; phone between lessons | See own lessons, log lessons, attendance, homework, report absence                           |
+| Student | Phone (≈ 390 × 844)                      | See next lesson & timetable, homework, report absence, book replacement                      |
 
 **One role per user** (decided 2026-10-14): a person is admin, teacher or student — never several. No role switcher.
 
@@ -74,14 +74,14 @@ and returns there after sign-in (if the role allows it).
   uploaded logos, see §9) + **school name** (truncate with tooltip) ·
   right side: notifications bell (**P5**, not rendered before) · **user menu**.
 - **User menu** (`DropdownMenu` on an `Avatar` + first name + chevron; on mobile avatar only):
-  header shows full name, email and role badge · *My profile* (P1) ·
-  *Calendar subscription* (iCal, **P5**) · *Language* (only when > 1 locale) ·
-  separator · *Sign out*.
+  header shows full name, email and role badge · _My profile_ (P1) ·
+  _Calendar subscription_ (iCal, **P5**) · _Language_ (only when > 1 locale) ·
+  separator · _Sign out_.
 - **Sidebar** (shadcn `Sidebar`, `collapsible="icon"`): grouped nav (section
   labels as `SidebarGroupLabel`), Settings pinned to the bottom. Expanded 256 px
   on ≥ 1024, icon rail on 768–1023 by default; user choice persisted in the
   `sidebar_state` cookie. Active item: `bg-accent text-accent-foreground
-  font-medium` + `aria-current="page"`. Collapsed rail shows tooltips.
+font-medium` + `aria-current="page"`. Collapsed rail shows tooltips.
 - **Main** (`<main id="content">`): `bg-muted`, page padding `p-6`. Page header =
   h1 + optional description + right-aligned primary action. Content in cards.
 - First focusable element: "Skip to content" link (`common.skipToContent`).
@@ -90,7 +90,7 @@ and returns there after sign-in (if the role allows it).
 
 - Header: menu button (opens nav in a left `Sheet`) · school name · avatar (user menu).
 - **Student only: bottom tab bar** (`<nav aria-label>`, fixed, 64 px + safe area)
-  with up to 4 primary destinations + *More* (opens the full nav sheet).
+  with up to 4 primary destinations + _More_ (opens the full nav sheet).
   Tabs: icon + label (always both), active = primary color + `aria-current`.
 - Admin/teacher: no bottom bar; sheet navigation only. Admin pages that are
   desktop-only by nature (timetable editor) show a read-only view plus a
@@ -101,92 +101,92 @@ and returns there after sign-in (if the role allows it).
 
 **Rule for later-phase items:** an item is rendered only once its feature ships
 (nav config entry has a `phase` and `enabled` flag). No "coming soon" dead
-links in the product. The wireframe shows them greyed with a phase badge *only
-to validate the IA*.
+links in the product. The wireframe shows them greyed with a phase badge _only
+to validate the IA_.
 
 Admin
 
-| Section (`nav.section.*`) | Item | i18n key | Icon (lucide) | Phase |
-|---|---|---|---|---|
-| — | Dashboard | `nav.dashboard` | `layout-dashboard` | P0 |
-| Schedule | Timetable | `nav.timetable` | `calendar-days` | P1 |
-| Schedule | Absences & replacements | `nav.absences` | `calendar-x` | P3 |
-| Schedule | Substitutions | `nav.substitutions` | `user-round-cog` | P5 |
-| Schedule | Auto-generate | `nav.autoGenerate` | `wand-sparkles` | P4 |
-| People | Students | `nav.students` | `graduation-cap` | P1 |
-| People | Teachers | `nav.teachers` | `presentation` | P1 |
-| People | Parents | `nav.parents` | `users-round` | P6 |
-| Academics | Courses & groups | `nav.courses` | `book-open` | P1 |
-| Academics | Skill levels | `nav.levels` | `signal` | P1 |
-| Academics | Ratings | `nav.ratings` | `star` | P5 |
-| Finance | Payments | `nav.payments` | `wallet` | P6 |
-| Finance | Reports | `nav.reports` | `chart-column` | P6 |
-| (bottom) | Settings — school, terms & holidays, rooms, users | `nav.settings` | `settings` | P1 |
+| Section (`nav.section.*`) | Item                                              | i18n key            | Icon (lucide)      | Phase |
+| ------------------------- | ------------------------------------------------- | ------------------- | ------------------ | ----- |
+| —                         | Dashboard                                         | `nav.dashboard`     | `layout-dashboard` | P0    |
+| Schedule                  | Timetable                                         | `nav.timetable`     | `calendar-days`    | P1    |
+| Schedule                  | Absences & replacements                           | `nav.absences`      | `calendar-x`       | P3    |
+| Schedule                  | Substitutions                                     | `nav.substitutions` | `user-round-cog`   | P5    |
+| Schedule                  | Auto-generate                                     | `nav.autoGenerate`  | `wand-sparkles`    | P4    |
+| People                    | Students                                          | `nav.students`      | `graduation-cap`   | P1    |
+| People                    | Teachers                                          | `nav.teachers`      | `presentation`     | P1    |
+| People                    | Parents                                           | `nav.parents`       | `users-round`      | P6    |
+| Academics                 | Courses & groups                                  | `nav.courses`       | `book-open`        | P1    |
+| Academics                 | Skill levels                                      | `nav.levels`        | `signal`           | P1    |
+| Academics                 | Ratings                                           | `nav.ratings`       | `star`             | P5    |
+| Finance                   | Payments                                          | `nav.payments`      | `wallet`           | P6    |
+| Finance                   | Reports                                           | `nav.reports`       | `chart-column`     | P6    |
+| (bottom)                  | Settings — school, terms & holidays, rooms, users | `nav.settings`      | `settings`         | P1    |
 
 Teacher
 
-| Section | Item | i18n key | Icon | Phase |
-|---|---|---|---|---|
-| — | Dashboard | `nav.dashboard` | `layout-dashboard` | P0 |
-| Teaching | My timetable | `nav.myTimetable` | `calendar-days` | P1 |
-| Teaching | My groups & students | `nav.myGroups` | `users` | P1 |
-| Teaching | Lesson log | `nav.lessonLog` | `notebook-pen` | P2 |
-| Teaching | Homework | `nav.homework` | `clipboard-list` | P2 |
-| Teaching | Ratings | `nav.ratings` | `star` | P5 |
-| Me | My absences | `nav.myAbsences` | `calendar-x` | P3 |
-| Me | Substitutions | `nav.substitutions` | `user-round-cog` | P5 |
+| Section  | Item                 | i18n key            | Icon               | Phase |
+| -------- | -------------------- | ------------------- | ------------------ | ----- |
+| —        | Dashboard            | `nav.dashboard`     | `layout-dashboard` | P0    |
+| Teaching | My timetable         | `nav.myTimetable`   | `calendar-days`    | P1    |
+| Teaching | My groups & students | `nav.myGroups`      | `users`            | P1    |
+| Teaching | Lesson log           | `nav.lessonLog`     | `notebook-pen`     | P2    |
+| Teaching | Homework             | `nav.homework`      | `clipboard-list`   | P2    |
+| Teaching | Ratings              | `nav.ratings`       | `star`             | P5    |
+| Me       | My absences          | `nav.myAbsences`    | `calendar-x`       | P3    |
+| Me       | Substitutions        | `nav.substitutions` | `user-round-cog`   | P5    |
 
 Student (bottom tabs marked ★)
 
-| Item | i18n key | Icon | Phase |
-|---|---|---|---|
-| ★ Home | `nav.home` | `house` | P0 |
-| ★ Timetable | `nav.timetable` | `calendar-days` | P1 |
-| ★ Homework | `nav.homework` | `clipboard-list` | P2 |
-| ★ Absences & replacements | `nav.absencesShort` → "Absences" | `calendar-x` | P3 |
-| Attendance | `nav.attendance` | `list-checks` | P2 |
-| Payments | `nav.payments` | `wallet` | P6 |
-| ★/More | `nav.more` | `menu` | P0 (shown once > 4 items exist) |
+| Item                      | i18n key                         | Icon             | Phase                           |
+| ------------------------- | -------------------------------- | ---------------- | ------------------------------- |
+| ★ Home                    | `nav.home`                       | `house`          | P0                              |
+| ★ Timetable               | `nav.timetable`                  | `calendar-days`  | P1                              |
+| ★ Homework                | `nav.homework`                   | `clipboard-list` | P2                              |
+| ★ Absences & replacements | `nav.absencesShort` → "Absences" | `calendar-x`     | P3                              |
+| Attendance                | `nav.attendance`                 | `list-checks`    | P2                              |
+| Payments                  | `nav.payments`                   | `wallet`         | P6                              |
+| ★/More                    | `nav.more`                       | `menu`           | P0 (shown once > 4 items exist) |
 
 Until P1 ships, the student bottom bar is hidden (only one destination).
 
 ### 4.4 Page-level patterns
 
-| Pattern | Use |
-|---|---|
-| List page | Page header + filter bar (search `Input`, `Select` filters) + data table in a card + pagination |
-| Detail page | Page header with back link, `Tabs` for sub-areas, cards per section |
+| Pattern       | Use                                                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| List page     | Page header + filter bar (search `Input`, `Select` filters) + data table in a card + pagination                             |
+| Detail page   | Page header with back link, `Tabs` for sub-areas, cards per section                                                         |
 | Create / edit | Small forms (≤ 6 fields) in a `Dialog`; larger forms on their own page (`max-w-2xl`); destructive actions via `AlertDialog` |
-| Quick view | Right `Sheet` (desktop) / bottom `Sheet` (mobile) — e.g. lesson details from the timetable |
+| Quick view    | Right `Sheet` (desktop) / bottom `Sheet` (mobile) — e.g. lesson details from the timetable                                  |
 
 ## 5. Component guidelines (shadcn/ui)
 
-| Need | Component(s) | Rules |
-|---|---|---|
-| Actions | `Button` | One primary per view. Variants: `default` (primary), `outline` (secondary), `ghost` (toolbar/icon), `destructive` (only inside confirm dialogs), `link`. Loading = disabled + `Loader2` spinner + verb-ing label. |
-| Forms | `Form` (react-hook-form + zod), `Input`, `Label`, `Textarea`, `Select`, `Checkbox`, `RadioGroup`, `Switch` | Label above control; required fields marked "(required)" in label text, not just `*`. Validate on blur + submit. Error text under field, `text-destructive`, linked via `aria-describedby`, focus first invalid field on submit. Never disable submit to signal invalid. |
-| Search-select (teacher, student, room) | `Combobox` = `Popover` + `Command` | Use when > 10 options. |
-| Dates / times | `Calendar` in `Popover` (date picker); time = `Select` in 15-min steps or `Input type="time"` | Week starts Monday. Display format from next-intl (`dateTime` formats), never hand-built strings. |
-| Tables | `Table` + TanStack Table ("data table" recipe) | Sticky header, sortable columns via header buttons (`aria-sort`), row actions in a `DropdownMenu` (`more-horizontal`), clickable rows also have a real link in the first cell. Mobile: collapse to stacked cards for student-facing lists. |
-| Dialogs | `Dialog`, `AlertDialog`, `Sheet` | `AlertDialog` for destructive/irreversible confirmation with the object name in the title. Focus trapped, `Esc` closes, focus returns to trigger. |
-| Feedback | `Sonner` toasts, `Alert` | Toasts for success of user-initiated actions (bottom-right desktop, top-center mobile, 5 s, pause on hover, `role="status"`). Errors that need action → inline `Alert`, not a toast. |
-| Status | `Badge` | Status tokens from `tokens.md`; always text, optional icon. |
-| Navigation | `Sidebar`, `Sheet`, `Breadcrumb`, `Tabs`, `DropdownMenu`, `Avatar`, `Tooltip` | See §4. |
-| Loading | `Skeleton` | Mirrors the final layout; no full-page spinners. |
-| Timetable grid | Custom `TimetableGrid` (CSS grid) + `Button` lesson blocks + `Popover`/`Sheet` details + `ToggleGroup` view switch | No shadcn equivalent; see §8. |
-| Layout | `Card`, `Separator`, `ScrollArea` | |
+| Need                                   | Component(s)                                                                                                       | Rules                                                                                                                                                                                                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Actions                                | `Button`                                                                                                           | One primary per view. Variants: `default` (primary), `outline` (secondary), `ghost` (toolbar/icon), `destructive` (only inside confirm dialogs), `link`. Loading = disabled + `Loader2` spinner + verb-ing label.                                                        |
+| Forms                                  | `Form` (react-hook-form + zod), `Input`, `Label`, `Textarea`, `Select`, `Checkbox`, `RadioGroup`, `Switch`         | Label above control; required fields marked "(required)" in label text, not just `*`. Validate on blur + submit. Error text under field, `text-destructive`, linked via `aria-describedby`, focus first invalid field on submit. Never disable submit to signal invalid. |
+| Search-select (teacher, student, room) | `Combobox` = `Popover` + `Command`                                                                                 | Use when > 10 options.                                                                                                                                                                                                                                                   |
+| Dates / times                          | `Calendar` in `Popover` (date picker); time = `Select` in 15-min steps or `Input type="time"`                      | Week starts Monday. Display format from next-intl (`dateTime` formats), never hand-built strings.                                                                                                                                                                        |
+| Tables                                 | `Table` + TanStack Table ("data table" recipe)                                                                     | Sticky header, sortable columns via header buttons (`aria-sort`), row actions in a `DropdownMenu` (`more-horizontal`), clickable rows also have a real link in the first cell. Mobile: collapse to stacked cards for student-facing lists.                               |
+| Dialogs                                | `Dialog`, `AlertDialog`, `Sheet`                                                                                   | `AlertDialog` for destructive/irreversible confirmation with the object name in the title. Focus trapped, `Esc` closes, focus returns to trigger.                                                                                                                        |
+| Feedback                               | `Sonner` toasts, `Alert`                                                                                           | Toasts for success of user-initiated actions (bottom-right desktop, top-center mobile, 5 s, pause on hover, `role="status"`). Errors that need action → inline `Alert`, not a toast.                                                                                     |
+| Status                                 | `Badge`                                                                                                            | Status tokens from `tokens.md`; always text, optional icon.                                                                                                                                                                                                              |
+| Navigation                             | `Sidebar`, `Sheet`, `Breadcrumb`, `Tabs`, `DropdownMenu`, `Avatar`, `Tooltip`                                      | See §4.                                                                                                                                                                                                                                                                  |
+| Loading                                | `Skeleton`                                                                                                         | Mirrors the final layout; no full-page spinners.                                                                                                                                                                                                                         |
+| Timetable grid                         | Custom `TimetableGrid` (CSS grid) + `Button` lesson blocks + `Popover`/`Sheet` details + `ToggleGroup` view switch | No shadcn equivalent; see §8.                                                                                                                                                                                                                                            |
+| Layout                                 | `Card`, `Separator`, `ScrollArea`                                                                                  |                                                                                                                                                                                                                                                                          |
 
 ## 6. States (apply to every screen)
 
-| State | Pattern | Copy keys |
-|---|---|---|
-| Loading | `Skeleton` blocks in the shape of the content (via `loading.tsx` / Suspense). Buttons: spinner + "Saving…". | `common.loading`, `common.saving` |
-| Empty — first use | Centered in the card: 40 px muted icon, h2 title, one sentence what will appear here, primary action if the user can create it (else none). | `<feature>.empty.title`, `.description`, `.action` |
-| Empty — no results | "No results for '{query}'" + *Clear filters* link. | `common.noResults`, `common.clearFilters` |
-| Error — load failed | `Alert variant="destructive"` in place of content: title, one line, *Try again* button (re-fetch). Route `error.tsx` uses the same. | `common.error.title`, `common.error.description`, `common.retry` |
-| Error — forbidden | Full page 403: "You don't have access to this page" + *Go to my dashboard*. | `errors.forbidden.*` |
-| Error — not found | Full page 404 with link to dashboard. | `errors.notFound.*` |
-| Offline / server down on submit | Inline `Alert` above form, form data kept. | `common.error.network` |
+| State                           | Pattern                                                                                                                                     | Copy keys                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Loading                         | `Skeleton` blocks in the shape of the content (via `loading.tsx` / Suspense). Buttons: spinner + "Saving…".                                 | `common.loading`, `common.saving`                                |
+| Empty — first use               | Centered in the card: 40 px muted icon, h2 title, one sentence what will appear here, primary action if the user can create it (else none). | `<feature>.empty.title`, `.description`, `.action`               |
+| Empty — no results              | "No results for '{query}'" + _Clear filters_ link.                                                                                          | `common.noResults`, `common.clearFilters`                        |
+| Error — load failed             | `Alert variant="destructive"` in place of content: title, one line, _Try again_ button (re-fetch). Route `error.tsx` uses the same.         | `common.error.title`, `common.error.description`, `common.retry` |
+| Error — forbidden               | Full page 403: "You don't have access to this page" + _Go to my dashboard_.                                                                 | `errors.forbidden.*`                                             |
+| Error — not found               | Full page 404 with link to dashboard.                                                                                                       | `errors.notFound.*`                                              |
+| Offline / server down on submit | Inline `Alert` above form, form data kept.                                                                                                  | `common.error.network`                                           |
 
 ## 7. Screens
 
@@ -198,23 +198,23 @@ Layout: `bg-muted` full screen, centered card `max-w-sm`, `rounded-xl`, `p-6`.
 School initials tile + school name (display) above the card; v1 has one school, so the
 name comes from the single seeded school (multi-school login is P6).
 
-| Element | Key | Copy |
-|---|---|---|
-| Title (h1) | `auth.login.title` | Sign in |
-| Subtitle | `auth.login.subtitle` | Sign in to {schoolName} |
-| Email label | `auth.login.email` | Email |
-| Password label | `auth.login.password` | Password |
-| Show/hide password (icon button) | `auth.login.showPassword` / `auth.login.hidePassword` | Show password / Hide password |
-| Submit | `auth.login.submit` / `auth.login.submitting` | Sign in / Signing in… |
-| Forgot password link | `auth.login.forgot` | Forgot password? — **not rendered in v1**; admins set passwords. Returns with email in P5. |
-| Invalid credentials | `auth.login.error.invalid` | Email or password is incorrect. |
-| Account disabled | `auth.login.error.disabled` | Your account is disabled. Contact the school office. |
-| Rate limited | `auth.login.error.rateLimited` | Too many attempts. Try again in a few minutes. |
-| Server error | `auth.login.error.server` | Something went wrong. Please try again. |
-| Required field | `validation.required` | Enter your {field}. |
-| Invalid email | `validation.email` | Enter a valid email address. |
-| Session expired banner | `auth.login.sessionExpired` | Your session expired. Sign in again to continue. |
-| Dev-only demo hint | `auth.login.demoHint` | Demo accounts: admin@…, teacher@…, student@… (rendered only when `NODE_ENV=development`) |
+| Element                          | Key                                                   | Copy                                                                                       |
+| -------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Title (h1)                       | `auth.login.title`                                    | Sign in                                                                                    |
+| Subtitle                         | `auth.login.subtitle`                                 | Sign in to {schoolName}                                                                    |
+| Email label                      | `auth.login.email`                                    | Email                                                                                      |
+| Password label                   | `auth.login.password`                                 | Password                                                                                   |
+| Show/hide password (icon button) | `auth.login.showPassword` / `auth.login.hidePassword` | Show password / Hide password                                                              |
+| Submit                           | `auth.login.submit` / `auth.login.submitting`         | Sign in / Signing in…                                                                      |
+| Forgot password link             | `auth.login.forgot`                                   | Forgot password? — **not rendered in v1**; admins set passwords. Returns with email in P5. |
+| Invalid credentials              | `auth.login.error.invalid`                            | Email or password is incorrect.                                                            |
+| Account disabled                 | `auth.login.error.disabled`                           | Your account is disabled. Contact the school office.                                       |
+| Rate limited                     | `auth.login.error.rateLimited`                        | Too many attempts. Try again in a few minutes.                                             |
+| Server error                     | `auth.login.error.server`                             | Something went wrong. Please try again.                                                    |
+| Required field                   | `validation.required`                                 | Enter your {field}.                                                                        |
+| Invalid email                    | `validation.email`                                    | Enter a valid email address.                                                               |
+| Session expired banner           | `auth.login.sessionExpired`                           | Your session expired. Sign in again to continue.                                           |
+| Dev-only demo hint               | `auth.login.demoHint`                                 | Demo accounts: admin@…, teacher@…, student@… (rendered only when `NODE_ENV=development`)   |
 
 States: default · field validation errors · submitting (inputs + button
 disabled) · auth error (`Alert` above fields, `role="alert"`, password cleared,
@@ -237,11 +237,11 @@ Zones (desktop, 12-col grid):
 
 **P0 empty state** (what ships now): stat row and lists are not rendered; one card:
 
-| Key | Copy |
-|---|---|
-| `dashboard.admin.empty.title` | Your school is ready to set up |
+| Key                                 | Copy                                                                                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `dashboard.admin.empty.title`       | Your school is ready to set up                                                                                                        |
 | `dashboard.admin.empty.description` | Once terms, rooms, teachers, students and groups are added, today's lessons and anything that needs your attention will show up here. |
-| `dashboard.admin.empty.action` | Go to settings (only when Settings exists — P1; in P0 no action) |
+| `dashboard.admin.empty.action`      | Go to settings (only when Settings exists — P1; in P0 no action)                                                                      |
 
 From P1 the empty card turns into a **setup checklist** (term → rooms → teachers →
 students → courses & groups → timetable), each step linking to its page with a
@@ -250,15 +250,15 @@ done check. Spec in the P1 dashboard issue.
 ### 7.3 Teacher dashboard (`/teacher`)
 
 1. Greeting + date.
-2. **Next lesson** card (P1): time until start, group/student, room, level, *Open lesson* (P2 log).
+2. **Next lesson** card (P1): time until start, group/student, room, level, _Open lesson_ (P2 log).
 3. **Today** list (P1) — same compact list as admin, own lessons only.
 4. **To do** (P2): lessons without log, homework to check.
 
 P0 empty state:
 
-| Key | Copy |
-|---|---|
-| `dashboard.teacher.empty.title` | No lessons yet |
+| Key                                   | Copy                                                                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `dashboard.teacher.empty.title`       | No lessons yet                                                                                 |
 | `dashboard.teacher.empty.description` | When the school publishes the timetable, your lessons for today and the week will appear here. |
 
 Also the "no lessons today" state (P1): `dashboard.teacher.noLessonsToday` "No lessons today. Your next lesson is {date} at {time}."
@@ -268,15 +268,15 @@ Also the "no lessons today" state (P1): `dashboard.teacher.noLessonsToday` "No l
 Single column at all widths (`max-w-md` centered on desktop).
 
 1. Greeting "Hi, {firstName}".
-2. **Next lesson** card (P1): weekday + time (large), course/group, teacher, room; *Can't attend?* (P3).
-3. **Homework due** (P2): up to 3 items, *See all*.
+2. **Next lesson** card (P1): weekday + time (large), course/group, teacher, room; _Can't attend?_ (P3).
+3. **Homework due** (P2): up to 3 items, _See all_.
 4. **This week** (P1): mini agenda of remaining lessons.
 
 P0 empty state:
 
-| Key | Copy |
-|---|---|
-| `dashboard.student.empty.title` | You're all set |
+| Key                                   | Copy                                                                         |
+| ------------------------------------- | ---------------------------------------------------------------------------- |
+| `dashboard.student.empty.title`       | You're all set                                                               |
 | `dashboard.student.empty.description` | Your lessons and homework will appear here once you're enrolled in a course. |
 
 ### 7.5 Weekly timetable — first look (`/admin/timetable`, `/teacher/timetable`, `/student/timetable`)
@@ -287,8 +287,8 @@ recurring `TimetableSlot`s and drag & drop get their own spec later.
 Toolbar (one row desktop, wraps on mobile):
 `‹` `Today` `›` · week label "13 – 19 Oct 2026" (`timetable.weekRange`) ·
 view `ToggleGroup` Week / Day (`timetable.view.week|day`) ·
-admin only: filter `Combobox`es *Teacher*, *Room*, *Group* (`timetable.filter.*`)
-and *Edit timetable* button (P1 editor).
+admin only: filter `Combobox`es _Teacher_, _Room_, _Group_ (`timetable.filter.*`)
+and _Edit timetable_ button (P1 editor).
 
 Desktop week grid:
 
@@ -333,7 +333,7 @@ States: loading (grid skeleton with 3–4 grey blocks) · empty week
 
 1. **Roles**: one role per user. No multi-role users, no role switcher.
 2. **Later-phase nav items**: hidden until the feature ships (no "coming soon" items).
-3. **Passwords**: admins set passwords in v1; *Forgot password?* is not rendered until email exists (P5).
+3. **Passwords**: admins set passwords in v1; _Forgot password?_ is not rendered until email exists (P5).
 4. **School week**: Mon–Sat, 07:00–21:00 by default (stored as a school setting, so other schools can change it).
 5. **Branding**: no school logos. The product is multi-school, so the UI stays neutral: the shared blue theme plus the school name and an initials tile. No per-school theming in v1.
 6. **Dark mode**: not in v1. Light theme only; the dark values in `tokens.md` stay as reference for later.
