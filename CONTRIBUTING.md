@@ -34,5 +34,6 @@
 - Every tenant-owned table carries `school_id`; every query is scoped by it.
 - Authorization is enforced server-side. Teacher internal notes are never
   readable by students.
-- All user-facing strings go through the i18n layer (next-intl).
+- All user-facing strings go through the i18n layer (next-intl); `pnpm lint`
+  rejects hard-coded UI text. See `docs/architecture/i18n.md`.
 - Add a Playwright test for the main happy path of each feature.
