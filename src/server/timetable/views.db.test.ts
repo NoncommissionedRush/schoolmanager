@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PrismaClient } from "@/generated/prisma/client";
 import { scopeToSchool } from "@/server/db/school-scope";
-import { fromIsoDate, zonedTimeToUtc } from "@/server/scheduling";
+import { addDays, fromIsoDate, zonedTimeToUtc } from "@/server/scheduling";
 
 import type { SchoolDb } from "./service";
 import { loadWeek } from "./views";
@@ -31,6 +31,7 @@ describe.skipIf(!url)("weekly timetable views (database)", () => {
     student: "",
     newcomer: "",
     loner: "",
+    leaver: "",
   };
   const ids = {
     publishedTerm: randomUUID(),
@@ -40,6 +41,7 @@ describe.skipIf(!url)("weekly timetable views (database)", () => {
     student: randomUUID(),
     newcomer: randomUUID(),
     loner: randomUUID(),
+    leaver: randomUUID(),
     groupA: randomUUID(),
     groupB: randomUUID(),
     room: randomUUID(),
@@ -93,6 +95,7 @@ describe.skipIf(!url)("weekly timetable views (database)", () => {
         { schoolId, userId: users.student, role: "STUDENT" },
         { schoolId, userId: users.newcomer, role: "STUDENT" },
         { schoolId, userId: users.loner, role: "STUDENT" },
+        { schoolId, userId: users.leaver, role: "STUDENT" },
       ],
     });
     await client.teacherProfile.createMany({
@@ -106,6 +109,7 @@ describe.skipIf(!url)("weekly timetable views (database)", () => {
         { id: ids.student, schoolId, userId: users.student },
         { id: ids.newcomer, schoolId, userId: users.newcomer },
         { id: ids.loner, schoolId, userId: users.loner },
+        { id: ids.leaver, schoolId, userId: users.leaver },
       ],
     });
     const level = await client.level.create({
@@ -145,6 +149,20 @@ describe.skipIf(!url)("weekly timetable views (database)", () => {
           groupId: ids.groupA,
           studentId: ids.newcomer,
           joinedAt: new Date("2026-10-20T00:00:00Z"),
+        },
+        // Left the busy GB before the term; joins GA in December.
+        {
+          schoolId,
+          groupId: ids.groupB,
+          studentId: ids.leaver,
+          joinedAt: new Date("2026-09-01T00:00:00Z"),
+          leftAt: new Date("2026-10-01T00:00:00Z"),
+        },
+        {
+          schoolId,
+          groupId: ids.groupA,
+          studentId: ids.leaver,
+          joinedAt: new Date("2026-12-27T00:00:00Z"),
         },
       ],
     });
@@ -317,6 +335,55 @@ describe.skipIf(!url)("weekly timetable views (database)", () => {
     expect(await lessonsFor("STUDENT", users.newcomer)).toEqual([
       lessonIds.aWednesday,
     ]);
+  });
+
+  it("finds a student's next lesson past many lessons of a group they left", async () => {
+    // 60 daily GB lessons, then GA's first lesson after the leaver joins.
+    const at = (date: string) => zonedTimeToUtc(date, 17 * 60, TZ);
+    const gb = Array.from({ length: 60 }, (_, i) => {
+      const date = addDays("2026-10-27", i);
+      return {
+        schoolId: schools[0],
+        termId: ids.publishedTerm,
+        groupId: ids.groupB,
+        teacherId: ids.teacherB,
+        startsAt: at(date),
+        endsAt: zonedTimeToUtc(date, 18 * 60, TZ),
+      };
+    });
+    const gaId = randomUUID();
+    await client.lesson.createMany({
+      data: [
+        ...gb,
+        {
+          id: gaId,
+          schoolId: schools[0],
+          termId: ids.publishedTerm,
+          groupId: ids.groupA,
+          teacherId: ids.teacherA,
+          startsAt: at("2026-12-28"),
+          endsAt: zonedTimeToUtc("2026-12-28", 18 * 60, TZ),
+        },
+      ],
+    });
+    try {
+      const week = await loadWeek(
+        db,
+        { kind: "STUDENT", userId: users.leaver },
+        "2026-10-26",
+      );
+      expect(week.lessons).toEqual([]);
+      expect(week.nextLesson?.date).toBe("2026-12-28");
+    } finally {
+      await client.lesson.deleteMany({
+        where: {
+          OR: [
+            { id: gaId },
+            { groupId: ids.groupB, startsAt: { gte: at("2026-10-27") } },
+          ],
+        },
+      });
+    }
   });
 
   it("tells a student in no group so", async () => {
