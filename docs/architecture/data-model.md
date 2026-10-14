@@ -92,6 +92,10 @@ student.
    admin can later set `APPROVED`, `REJECTED` or `OVERRIDDEN`, recording
    `reviewedBy`, `reviewedAt` and `reviewNote`.
 
+The Phase 3 rules (cutoff, credit expiry, room-size limit, 1-on-1
+reschedule) and the schema changes they need are in
+[replacements.md](replacements.md).
+
 ## Teacher availability
 
 `TeacherAvailability.kind`:
