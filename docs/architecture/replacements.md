@@ -5,10 +5,13 @@ defines the rules the Phase 3 booking flow enforces and the schema changes
 it needs. The screens are specified in `docs/design/absences.md` (CARM-39);
 where the two disagree, raise it on the issue rather than picking one.
 
-Owner decisions this builds on (2026-10-14, CARM-38):
+Owner decisions this builds on (2026-10-14, CARM-38, amended by the
+owner's answers on CARM-39):
 
-- Only the student reports their own absence. The admin sets per school how
-  long before a lesson a student can still cancel and earn a credit.
+- The student reports their own absence, or an admin of the school reports
+  it for them (e.g. the student phones the office). Teachers can't. The
+  admin sets per school how long before a lesson a cancellation still earns
+  a credit.
 - Makeup credits expire; the admin sets the expiry per school.
 - Group lessons: a replacement must be at the same level, is auto-approved,
   and an admin can review and override it.
@@ -60,7 +63,8 @@ worth it for two integers):
 
 ## 3. Reporting an absence
 
-A student may report an absence for lesson `L` when all hold:
+The student, or an admin of the student's school on their behalf, may
+report an absence for lesson `L` when all hold:
 
 - `L` is in the student's school, its term is published, `L.status` is
   `SCHEDULED` and `L` has not started;
@@ -70,6 +74,18 @@ A student may report an absence for lesson `L` when all hold:
 - the student has no absence report for `L` yet (`@@unique([lessonId, studentId])`).
 
 `earnsCredit(L, reportedAt, cutoff)` = `reportedAt ≤ L.startsAt − cutoff`.
+
+**Admin reports.** The rules are exactly the same as the student's: same
+conditions, same cutoff, evaluated at the admin's `now`, same credit. The
+service checks server-side that the actor is the student themselves or an
+admin of the student's school; a teacher (or anyone else) gets
+`FORBIDDEN`. `AbsenceReport.reportedById` stores the actor's user id
+(§9), so the student's view can say "The school office cancelled this
+lesson for you" and the teacher's roster "via office". On a lesson the
+student attends as a replacement the admin uses Reject (§6) instead, as
+the student would cancel the replacement. Admins don't use the reschedule
+flow (§7); an admin report on a 1-on-1 before the cutoff gives the student
+a credit to reschedule later. Audit: `absence.reported` with the actor.
 
 | Lesson type | Before the cutoff                                                                                                                                     | After the cutoff (until the lesson starts)                                                  |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -84,10 +100,15 @@ A student may report an absence for lesson `L` when all hold:
   - _Cancel_, which records the absence and releases the original credit
     with its original `expiresAt`, or `EXPIRED` if that date has passed.
 
-  After the cutoff they get the same as any late 1-on-1 cancellation. That
-  way repeated cancelling can never move the expiry back (§4).
+  After the cutoff (until the lesson starts) they can still cancel, and
+  get the same as any late 1-on-1 cancellation: an `AbsenceReport` on the
+  rescheduled lesson, no credit, the lesson stays `SCHEDULED` and the
+  original credit stays `USED`. The teacher's roster lists them as not
+  coming (§9). That way repeated cancelling can never move the expiry back
+  (§4).
 
-- A report is **final** in v1: students cannot withdraw it. Withdrawing
+- A report is **final** in v1: students cannot withdraw it, whoever
+  reported it. Withdrawing
   would take back a seat a replacement student may already hold (§5), and
   for a 1-on-1 the cancelled lesson's time may already be taken.
 - **Admins can delete a report** if it was a mistake. The deletion is
@@ -123,6 +144,7 @@ stateDiagram-v2
   USED --> AVAILABLE: replacement cancelled by student before cutoff,\nrejected by admin, or target lesson cancelled
   AVAILABLE --> EXPIRED: now ≥ expiresAt
   USED --> EXPIRED: released after expiresAt (student's own cancel)
+  USED --> USED: student cancels after the cutoff (credit spent)
   EXPIRED --> [*]
 ```
 
@@ -156,8 +178,12 @@ goes back:
 | The target / rescheduled lesson is cancelled by the school | `AVAILABLE`, `expiresAt = max(expiresAt, now + 7 days)`                                 |
 | Student cancels their rescheduled 1-on-1 before the cutoff | `AVAILABLE` with the same `expiresAt` (or `EXPIRED`), no new credit (§3)                |
 
-The 7-day grace is a constant (`RELEASE_GRACE_DAYS`) in the rules module,
-not a setting; listed as an open question below. `usedAt` and
+Not a release: a student cancelling a replacement or a rescheduled 1-on-1
+**after** its cutoff (§3, §6). The credit stays `USED`; it was spent on a
+seat or a teacher's time the student gave up too late.
+
+The 7-day grace is a fixed constant (`RELEASE_GRACE_DAYS`) in the rules
+module, not a setting (owner decision on CARM-39). `usedAt` and
 `rescheduledLessonId` are cleared on release. The rescheduled lesson keeps
 its own link back (`Lesson.rescheduledFromId`), so "Rescheduled to …"
 history never depends on the credit. A credit is only deleted with its absence, and never while `USED` (§3).
@@ -206,7 +232,7 @@ automatically because the room changed:
   as today.
 - A timetable slot edit regenerates lessons. See _Slot splits_ below.
 - A lesson over capacity takes no further bookings until seats free up, and
-  the admin review queue flags it (`OVER_CAPACITY`).
+  the admin review queue flags it (`ROOM_FULL`, §6 _Admin review_).
 
 Admins adding a member to a group do not re-check replacement seats in v1;
 an upcoming lesson that ends up over capacity is flagged in the review
@@ -296,11 +322,19 @@ replacement" list is `checkReplacement` over the candidate lessons: same
 level, not started, before the credit's expiry, ordered by start). They
 never override anything.
 
-**Cancelling a replacement (student).** Allowed while
-`now ≤ target.startsAt − cutoff`; the replacement becomes `CANCELLED`
-(reason `STUDENT`) and the credit is released (§4). After that the booking
-stands and the credit stays used — the same rule as for their own lessons.
-A student cannot report an absence on a lesson they attend as a
+**Cancelling a replacement (student).** Allowed until the target starts
+(owner decision on CARM-39); the cutoff only decides what happens to the
+credit, the same rule as for their own lessons:
+
+| When                                        | Replacement becomes                | Credit                         |
+| ------------------------------------------- | ---------------------------------- | ------------------------------ |
+| `now ≤ target.startsAt − cutoff`            | `CANCELLED`, reason `STUDENT`      | Released (§4)                  |
+| After that, while the target hasn't started | `CANCELLED`, reason `STUDENT_LATE` | Stays `USED`, nothing released |
+
+Either way the seat is free again (a `CANCELLED` replacement doesn't count
+in `seatsTaken`) and the target is no longer one of the student's lessons.
+The teacher's roster lists `STUDENT_LATE` replacements under _Not coming_
+(§9). A student cannot report an absence on a lesson they attend as a
 replacement; they cancel the replacement instead.
 
 ### Admin review
@@ -462,10 +496,12 @@ absence and credit parts; CARM-43 the replacement and reschedule parts).
 
 **`AbsenceReport`**
 
-- **Drop `reportedById`** and `User.reportedAbsences`. Only the student
-  reports, and the student is `studentId` (→ `StudentProfile.userId`). A
-  nullable "reported by" invites the teacher/admin path the owner ruled
-  out; if it ever comes back, add it then with its own rules.
+- **Keep `reportedById`** (→ `User`, `onDelete: SetNull`) and
+  `User.reportedAbsences`. The service always writes the actor: the
+  student's user id, or the admin's when an admin reported it (§3). "Via
+  office" is `reportedById ≠ student's userId`; null only after the
+  reporting user was deleted. It is never a teacher (enforced by the
+  service, covered by a permission test).
 - Drop `reportedAt` (it duplicates `createdAt`) — or keep it and stop
   writing `createdAt` separately; one timestamp is enough. Proposal: drop.
 - Whether it earned a credit is the credit's existence; no extra column.
@@ -486,7 +522,9 @@ absence and credit parts; CARM-43 the replacement and reschedule parts).
 
 - Add `CANCELLED` to `ReplacementStatus`, plus
   `cancelledAt DateTime?` and `cancelReason String?`
-  (`STUDENT` | `LESSON_CANCELLED`; translated). Rows are kept for history.
+  (`STUDENT` | `STUDENT_LATE` | `LESSON_CANCELLED`; translated). `STUDENT_LATE`
+  marks a cancel after the cutoff, so the credit stays `USED` (§6). Rows
+  are kept for history.
   CHECK: `cancelled_at IS NOT NULL` iff `status = 'CANCELLED'`.
 - `makeupCreditId` **required**. Partial unique indexes:
   - `(makeup_credit_id) WHERE status IN ('AUTO_APPROVED','APPROVED','OVERRIDDEN')`
@@ -532,8 +570,11 @@ overridden`, `lesson.rescheduled`.
   into a lesson gives the same access as membership (log and homework once
   it has started, never `TeacherNote`). Rejected or cancelled replacements
   give none. To be covered by the CARM-44 permission suite.
-- Teacher roster for a lesson = `members − absent + replacement students`,
-  replacement students marked.
+- Teacher roster for a lesson: _Coming_ = `members − absent + active
+replacement students`, replacement students marked. _Not coming_ = the
+  absent members (late when they have no credit, "via office" per
+  `reportedById`) plus replacements cancelled as `STUDENT_LATE`. For a
+  rescheduled 1-on-1, an `AbsenceReport` on it means not coming.
 
 ## 10. Tests
 
@@ -553,6 +594,14 @@ overridden`, `lesson.rescheduled`.
     (idempotent); a replacement moved versus released.
   - Admin absence delete: refused while the credit is `USED`; a 1-on-1
     lesson is restored only without blocking conflicts.
+- Unit, the CARM-39 answers:
+  - An admin report follows the same cutoff and credit rules as the
+    student's, and records the admin as `reportedById`; a teacher is
+    refused.
+  - A replacement cancelled after the cutoff is `STUDENT_LATE`, frees the
+    seat and leaves the credit `USED`; cancelling once the target has
+    started is refused. A late cancel of a rescheduled 1-on-1 keeps the
+    lesson and the credit `USED`.
 - Property (seeded realistic schools from `testing/`, 20 teachers, 60
   groups, 15 rooms, ~330 students): apply a random sequence of absences,
   bookings, cancellations, rejections and room moves through the rules, and
@@ -566,14 +615,17 @@ overridden`, `lesson.rescheduled`.
 
 ## Open questions for the owner
 
-1. **Grace on release** (§4): when an admin rejects a replacement or the
-   school cancels the lesson, the credit gets at least 7 more days.
-   Proposed fixed; make it a setting?
-2. **Late 1-on-1 cancellation** (§3): after the cutoff the 1-on-1 lesson
+Answered on CARM-39 (2026-10-14): admins may report absences for
+students; credit validity counts from the missed lesson; a booking
+cancelled after its cutoff spends the credit; the release grace is a fixed
+7 days; 1-on-1 "cancel now, reschedule later" is allowed; no cap on
+credits or bookings.
+
+1. **Late 1-on-1 cancellation** (§3): after the cutoff the 1-on-1 lesson
    stays scheduled and the student loses it. Confirm.
-3. **Physical rooms without a capacity** (§5): treated as unlimited.
+2. **Physical rooms without a capacity** (§5): treated as unlimited.
    Alternatively make `capacity` required for physical rooms in the admin
    form.
-4. **Booking until the start** (§6): replacements can be booked until the
+3. **Booking until the start** (§6): replacements can be booked until the
    target starts. Should there be a minimum notice for the teacher, like the
    cutoff?
