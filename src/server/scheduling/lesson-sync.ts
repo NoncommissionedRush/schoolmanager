@@ -11,7 +11,7 @@ import type { HolidayInfo, LessonInfo, SlotInfo, TermInfo } from "./types";
 /** A stored lesson plus whether anything else points at it. */
 export type ExistingLesson = LessonInfo & {
   /**
-   * Attendance, a lesson log, homework, teacher notes, absence reports,
+   * A lesson log (with homework), teacher notes, absence reports,
    * replacements or makeup credits reference this lesson.
    */
   hasDependents: boolean;
@@ -88,7 +88,7 @@ export function isUntouched(
  *   a cancellation is never undone automatically.
  * - A SCHEDULED lesson whose occurrence is no longer wanted (slot ended or
  *   moved, holiday added, term shortened) is deleted when untouched and
- *   cancelled otherwise, so attendance, absences, homework, notes and manual
+ *   cancelled otherwise, so logs, homework, absences, notes and manual
  *   moves or substitutions are never lost silently.
  * - Lessons before `from` or `now`, and COMPLETED or CANCELLED lessons, are
  *   left alone.

@@ -140,7 +140,7 @@ in the past).
 **Reconciling lessons away.** A SCHEDULED lesson that is no longer wanted is
 **deleted** if it is untouched — exactly what its slot generates and nothing
 refers to it — and **cancelled** (`cancelReason` `TIMETABLE_CHANGED` or
-`HOLIDAY`) if it has attendance, a log, homework, teacher notes, absence
+`HOLIDAY`) if it has a lesson log, teacher notes, absence
 reports, replacements or makeup credits, a substitute, or was moved or
 re-roomed by hand. Nothing is lost silently; cancelled lessons stay visible
 to whoever relied on them. COMPLETED and CANCELLED lessons, lessons before

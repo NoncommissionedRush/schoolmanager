@@ -47,7 +47,7 @@ x(school_id, id)`. A `Lesson` of school A cannot point at a `Group` of
   `src/server/scheduling/generate-lessons.ts` converts slots to lessons and
   keeps local wall-clock time across DST changes.
 - Calendar days (`Term`, `Holiday`, `TeacherAvailability.date`,
-  `TimetableSlot.validFrom/validUntil`, `Assignment.dueDate`) are `date`
+  `TimetableSlot.validFrom/validUntil`) are `date`
   columns; ranges are inclusive.
 - `School.teachingWeekdays` (default Mon–Sat) and
   `School.dayStartMinute`/`dayEndMinute` (default 07:00–21:00) are the
@@ -70,9 +70,15 @@ null means the timetable is a draft (not shown to students).
 A lesson keeps its regular `teacher`; `substituteTeacher` is set when someone
 else teaches that instance (Phase 5 builds the workflow on top of this).
 
-Attendance, lesson logs (one per lesson), homework (`Assignment`, set in one
-lesson and due by a lesson and/or date), teacher notes, absence reports and
-replacements all attach to `Lesson` instances.
+The lesson log (one per lesson: _what we covered_ plus the homework for the
+next lesson, either of them optional but not both), teacher notes, absence
+reports and replacements all attach to `Lesson` instances. There is no
+attendance tracking and no separate homework model (owner decision
+2026-10-14, `docs/design/lessons.md`). `LessonLog.updatedById` and
+`updatedAt` record the last save; `updatedAt` is the edit-conflict check.
+A `TeacherNote` written on a lesson page always has `lessonId` (where it was
+written) plus `groupId` or `studentId` when it is about the group or a
+student.
 
 ## Absences & replacements
 
@@ -114,13 +120,14 @@ Prisma does not model CHECK constraints, so these live in
 - availability shape matches its `kind` (see table above)
 - lesson `starts_at < ends_at`; substitute ≠ regular teacher; lessons with a
   slot have an `occurrence_date`
-- assignment has a due lesson or a due date
+- lesson log has content or homework; covered ≤ 5,000, homework and note
+  body ≤ 2,000 characters
 - teacher note is about a student, group or lesson
 - replacement target ≠ original lesson
 
 ## Soft delete and archiving
 
-`User.deletedAt` and `Group.deletedAt` — history (lessons, attendance)
+`User.deletedAt` and `Group.deletedAt` — history (lessons, logs)
 must survive when a person leaves or a group is closed. `Room.archivedAt` and
 `Level.archivedAt` hide a room or level that is no longer used from pickers
 while everything that refers to it stays as it is (a room that was used last
@@ -167,11 +174,8 @@ erDiagram
   TeacherProfile |o--o{ Lesson : substitute
   Room |o--o{ Lesson : ""
 
-  Lesson ||--o{ Attendance : ""
-  StudentProfile ||--o{ Attendance : ""
   Lesson ||--o| LessonLog : ""
-  Group ||--o{ Assignment : ""
-  Lesson |o--o{ Assignment : "set in / due in"
+  TeacherProfile ||--o{ LessonLog : "author / last editor"
   TeacherProfile ||--o{ TeacherNote : writes
   StudentProfile |o--o{ TeacherNote : about
 
@@ -201,7 +205,8 @@ C2), 6 courses, 10 groups and 3 1-on-1s, 4 physical rooms + 1 online room
 holidays (one school-wide), a published timetable (A2 Morning's Thursday slot
 ends on 2026-10-25 and continues on Fridays) and lessons generated
 2026-09-14 → 2026-11-08.
-Lessons before 2026-10-14 are `COMPLETED`; the last two weeks have attendance
-and lesson logs. Also: homework, teacher notes, one substitution, one cancelled
+Lessons stay `SCHEDULED` (P2 doesn't use `COMPLETED`); most past lessons
+have a lesson log with homework, every sixth has none yet
+("No log yet"). Also: teacher notes, one substitution, one cancelled
 lesson, absences with makeup credits and two replacements (auto-approved and
 overridden). Fixtures live in `prisma/seed/data.ts`.

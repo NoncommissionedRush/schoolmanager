@@ -625,7 +625,7 @@ export async function addMembers(
   return result;
 }
 
-/** Sets `leftAt` (never deletes): history and attendance stay. */
+/** Sets `leftAt` (never deletes): the student's lesson history stays. */
 export async function removeMember(
   scope: Scope,
   membershipId: string,

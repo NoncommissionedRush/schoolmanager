@@ -16,6 +16,7 @@ import {
   GROUPS,
   HOLIDAYS,
   LESSON_GENERATION_END,
+  LESSON_HOMEWORK,
   LESSON_LOG_TOPICS,
   ARCHIVED_AT,
   ARCHIVED_LEVELS,
@@ -329,8 +330,8 @@ async function main() {
       roomId: o.roomId,
       startsAt: o.startsAt,
       endsAt: o.endsAt,
-      status:
-        o.date < DEMO_TODAY ? ("COMPLETED" as const) : ("SCHEDULED" as const),
+      // P2 doesn't use COMPLETED: lessons stay SCHEDULED or CANCELLED.
+      status: "SCHEDULED" as const,
       substituteTeacherId: null,
       cancelReason: null,
     };
@@ -368,90 +369,31 @@ async function main() {
     data: { status: "CANCELLED", cancelReason: "Teacher on sick leave" },
   });
 
-  // --- Recent history: attendance, lesson logs, homework, notes -----------
-  const recent = lessons.filter(
-    (l) => l.date >= "2026-09-30" && l.date < DEMO_TODAY,
-  );
-  for (const [i, lesson] of recent.entries()) {
-    const members = membersByGroup.get(lesson.groupId) ?? [];
-    for (const [j, studentId] of members.entries()) {
-      const roll = (i + j * 7) % 13;
-      const status = roll === 0 ? "ABSENT" : roll === 1 ? "LATE" : "PRESENT";
-      await db.attendance.upsert({
-        where: { lessonId_studentId: { lessonId: lesson.id, studentId } },
-        update: { status },
-        create: {
-          id: id("attendance", lesson.id, studentId),
-          schoolId,
-          lessonId: lesson.id,
-          studentId,
-          status,
-        },
-      });
+  // --- History: lesson logs with homework, notes ---------------------------
+  // Every sixth past lesson has no log yet, so teachers have something on
+  // their "No log yet" list and dashboard.
+  const past = lessons.filter((l) => l.date < DEMO_TODAY);
+  for (const [i, lesson] of past.entries()) {
+    const where = { schoolId_lessonId: { schoolId, lessonId: lesson.id } };
+    if (i % 6 === 5) {
+      await db.lessonLog.deleteMany({ where: { lessonId: lesson.id } });
+      continue;
     }
-    const content = LESSON_LOG_TOPICS[i % LESSON_LOG_TOPICS.length];
+    const data = {
+      authorId: lesson.teacherId,
+      updatedById: lesson.teacherId,
+      content: LESSON_LOG_TOPICS[i % LESSON_LOG_TOPICS.length],
+      homework: LESSON_HOMEWORK[i % LESSON_HOMEWORK.length],
+    };
     await db.lessonLog.upsert({
-      where: { schoolId_lessonId: { schoolId, lessonId: lesson.id } },
-      update: { content, authorId: lesson.teacherId },
+      where,
+      update: data,
       create: {
         id: id("lesson-log", lesson.id),
         schoolId,
         lessonId: lesson.id,
-        authorId: lesson.teacherId,
-        content,
+        ...data,
       },
-    });
-  }
-
-  const homework = [
-    {
-      group: "a1-morning",
-      set: "2026-10-12",
-      due: "2026-10-14",
-      title: "Workbook p. 18, ex. 1–4",
-    },
-    {
-      group: "a2-evening",
-      set: "2026-10-12",
-      due: "2026-10-14",
-      title: "Write 10 sentences about your weekend",
-    },
-    {
-      group: "b1-online",
-      set: "2026-10-13",
-      due: "2026-10-15",
-      title: "Listening: podcast episode 3 + questions",
-    },
-    {
-      group: "b2-business",
-      set: "2026-10-12",
-      due: "2026-10-19",
-      title: "Draft a formal complaint email",
-    },
-    {
-      group: "c1-evening",
-      set: "2026-10-12",
-      due: "2026-10-19",
-      title: "Essay: Remote work — pros and cons (250 words)",
-    },
-  ];
-  for (const hw of homework) {
-    const setIn = lessonOf(hw.group, hw.set);
-    const dueIn = lessonOf(hw.group, hw.due);
-    const rowId = id("assignment", hw.group, hw.set);
-    const data = {
-      schoolId,
-      groupId: setIn.groupId,
-      lessonId: setIn.id,
-      dueLessonId: dueIn.id,
-      dueDate: fromIsoDate(hw.due),
-      authorId: setIn.teacherId,
-      title: hw.title,
-    };
-    await db.assignment.upsert({
-      where: { id: rowId },
-      update: data,
-      create: { id: rowId, ...data },
     });
   }
 
@@ -479,9 +421,17 @@ async function main() {
     {
       key: "b1-lesson",
       teacher: "t-kovac",
-      group: "b1-evening",
+      lessonOf: "b1-evening",
       lesson: "2026-10-12",
       body: "Ran out of time on the reading task; repeat next lesson.",
+    },
+    {
+      key: "b1-student",
+      teacher: "t-kovac",
+      memberOf: "b1-evening",
+      lessonOf: "b1-evening",
+      lesson: "2026-10-07",
+      body: "Needs extra time in written tasks; let them finish at home.",
     },
   ];
   for (const note of notes) {
@@ -489,10 +439,14 @@ async function main() {
     const data = {
       schoolId,
       authorId: teacherIds.get(note.teacher)!,
-      studentId: note.student ? studentId(note.student) : null,
+      studentId: note.student
+        ? studentId(note.student)
+        : note.memberOf
+          ? membersByGroup.get(groupIds.get(note.memberOf)!)![0]
+          : null,
       groupId: note.group ? groupIds.get(note.group)! : null,
-      lessonId:
-        note.group && note.lesson ? lessonOf(note.group, note.lesson).id : null,
+      // Notes written on a lesson page keep that lesson as their context.
+      lessonId: note.lessonOf ? lessonOf(note.lessonOf, note.lesson).id : null,
       body: note.body,
     };
     await db.teacherNote.upsert({
@@ -556,19 +510,6 @@ async function main() {
         reportedAt: new Date(`${a.date}T06:00:00Z`),
       },
     });
-    if (a.date < DEMO_TODAY) {
-      await db.attendance.upsert({
-        where: { lessonId_studentId: { lessonId: lesson.id, studentId: sId } },
-        update: { status: "EXCUSED" },
-        create: {
-          id: id("attendance", lesson.id, sId),
-          schoolId,
-          lessonId: lesson.id,
-          studentId: sId,
-          status: "EXCUSED",
-        },
-      });
-    }
     const credit = await db.makeupCredit.upsert({
       where: {
         studentId_sourceLessonId: { studentId: sId, sourceLessonId: lesson.id },
