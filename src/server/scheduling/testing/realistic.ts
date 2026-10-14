@@ -2,6 +2,8 @@
 // 20 teachers, 60 groups (incl. 1-on-1s), 15 rooms (incl. online), ~330
 // students, availability rules, holidays and one term. Same seed, same data.
 
+import type { Conflict } from "../conflict-types";
+import { buildCalendar, checkSlot } from "../conflicts";
 import type {
   AvailabilityRule,
   GroupInfo,
@@ -215,4 +217,42 @@ export function randomTimetable(
     randomSlot(r, school, group, `${group.id}-a`),
     randomSlot(r, school, group, `${group.id}-b`),
   ]);
+}
+
+/**
+ * Greedy placement: each group's two slots go to the first random time the
+ * checker finds no conflict for (one-off unavailability aside), so the
+ * result has no clashes and no room over capacity.
+ */
+export function placeGreedily(school: RealisticSchool, seed: number) {
+  const r = prng(seed);
+  const placed: SlotInfo[] = [];
+  const unplaced: { slot: SlotInfo; conflicts: Conflict[] }[] = [];
+  const contextOf = (): SchedulingContext => ({
+    ...school,
+    slots: placed,
+    lessons: [],
+  });
+  for (const group of school.groups) {
+    for (const suffix of ["a", "b"]) {
+      let last: { slot: SlotInfo; conflicts: Conflict[] } | null = null;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const slot = randomSlot(r, school, group, `${group.id}-${suffix}`);
+        if (school.groupTeacher.get(group.id) !== slot.teacherId) {
+          slot.teacherId = school.groupTeacher.get(group.id)!;
+        }
+        const conflicts = checkSlot(buildCalendar(contextOf()), slot).filter(
+          (c) => c.type !== "TEACHER_UNAVAILABLE_ON_DATE",
+        );
+        if (conflicts.length === 0) {
+          placed.push(slot);
+          last = null;
+          break;
+        }
+        last = { slot, conflicts };
+      }
+      if (last) unplaced.push(last);
+    }
+  }
+  return { placed, unplaced };
 }

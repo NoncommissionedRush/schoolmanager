@@ -485,6 +485,8 @@ export async function deleteAbsence(
           endsAt: lesson.endsAt,
         },
         now,
+        // The student comes back: their seat counts again.
+        { returningStudentId: report.studentId },
       );
       const decision = decideSave(conflicts, acknowledgedConflictKeys);
       if (!decision.ok) {
