@@ -160,10 +160,24 @@ The payload follows the reader's existing read rules:
 
 ### 2.5 Deduplication, coalescing and retention
 
-- **Idempotent per action.** Each notification carries `sourceKey` =
-  `<action>:<entity id>:<audit log id>`; a unique index on
-  `(school_id, recipient_id, source_key)` with `ON CONFLICT DO NOTHING`
-  means a retried or double-submitted action can't notify twice.
+- **No double notifications: the conditional write is the guarantee.**
+  Every action that notifies changes state under the timetable lock with a
+  conditional write (§3.5 for substitutes; absences, bookings and the editor
+  as in replacements.md §8 and scheduling.md). A retried or double-submitted
+  action therefore changes nothing the second time (`IS_CURRENT`,
+  `LESSON_CHANGED`, an empty sync plan, …) and emits no events. Stage 2's
+  db tests prove it this way: run the action twice, expect one
+  notification per recipient.
+- **`sourceKey` only de-duplicates within one transaction.** It is
+  `<audit log id>:<type>:<subject>` (e.g. `…:SUBSTITUTE_ASSIGNED:lesson:<id>`)
+  and protects against one action emitting the same event twice for a
+  recipient (e.g. a person who is both regular teacher and attendee of the
+  plan, or two plans of one action touching the same lesson). `notify`
+  first drops duplicate `(recipient, sourceKey)` events in memory, **then**
+  coalesces, so counts are never added twice inside an action. The unique
+  index on `(school_id, recipient_id, source_key)` with `ON CONFLICT DO
+NOTHING` is the backstop for the same thing. It is not a cross-request
+  idempotency key; the audit id differs per run.
 - **Coalescing while unread.** Each notification also has a `coalesceKey`:
 
   | Type(s)                                      | `coalesceKey`            | On a new event with the same key, while the old one is unread                                                                                                  |
@@ -176,7 +190,10 @@ The payload follows the reader's existing read rules:
 
   A partial unique index on `(school_id, recipient_id, coalesce_key) WHERE
 read_at IS NULL AND coalesce_key IS NOT NULL` makes this an upsert; the
-  coalesced row moves to the top (`createdAt` = now). A read notification is
+  coalesced row moves to the top (`createdAt` = now) and takes the newest
+  event's `sourceKey`. A replay of the older event can't reach this row:
+  across requests the conditional write emits nothing (above), and within
+  a request the in-memory de-duplication runs before coalescing. A read notification is
   never changed; a new one is created. `LESSON_CANCELLED` deletes an unread
   `lesson:<id>:moved` / `:substitute` row of the same recipient (the
   cancellation supersedes them).
@@ -319,11 +336,11 @@ the update is `WHERE id = $id AND substitute_teacher_id IS NOT DISTINCT
 FROM $expected AND starts_at = $expectedStart` and must affect one row;
 otherwise `LESSON_CHANGED` with the fresh lesson and reasons.
 
-| Action                       | Checks                                                                                                                                                                                                                                                                 | Writes                       | Notifies (§2.2)                                                               |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------- |
-| **Assign** _t_ (none before) | §3.2, then §3.3 for _t_ with acknowledgements                                                                                                                                                                                                                          | `substituteTeacherId = t`    | `SUBSTITUTE_ASSIGNED` (not ended only)                                        |
-| **Change** _s_ → _t_         | As assign                                                                                                                                                                                                                                                              | `substituteTeacherId = t`    | `SUBSTITUTE_REMOVED` to _s_; `SUBSTITUTE_ASSIGNED` to _t_, regular, attendees |
-| **Remove** _s_               | §3.2 except the record window applies the same; `checkLesson({...L, substituteTeacherId: null})` for the **regular** teacher: `TEACHER_DOUBLE_BOOKED` refuses (`REGULAR_TEACHER_BUSY`; pick another substitute instead), other teacher-typed conflicts are overridable | `substituteTeacherId = null` | `SUBSTITUTE_REMOVED`                                                          |
+| Action                       | Checks                                                                                                                                                                                                                                                                                                                   | Writes                       | Notifies (§2.2)                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- | ----------------------------------------------------------------------------- |
+| **Assign** _t_ (none before) | §3.2, then §3.3 for _t_ with acknowledgements                                                                                                                                                                                                                                                                            | `substituteTeacherId = t`    | `SUBSTITUTE_ASSIGNED` (not ended only)                                        |
+| **Change** _s_ → _t_         | As assign                                                                                                                                                                                                                                                                                                                | `substituteTeacherId = t`    | `SUBSTITUTE_REMOVED` to _s_; `SUBSTITUTE_ASSIGNED` to _t_, regular, attendees |
+| **Remove** _s_               | All of §3.2 (`LESSON_CANCELLED`, `TERM_NOT_PUBLISHED`, `TOO_LATE_TO_RECORD`), as for assign; then `checkLesson({...L, substituteTeacherId: null})` for the **regular** teacher: `TEACHER_DOUBLE_BOOKED` refuses (`REGULAR_TEACHER_BUSY`; pick another substitute instead), other teacher-typed conflicts are overridable | `substituteTeacherId = null` | `SUBSTITUTE_REMOVED`                                                          |
 
 - A lesson that has **started** keeps the same actions (for the record);
   only students are no longer notified once it started, and nobody once it
@@ -348,7 +365,7 @@ otherwise `LESSON_CHANGED` with the fresh lesson and reasons.
 | Attendance                  | Not tracked (owner decision). The roster (`buildRoster`) is shown to the effective teacher and the regular teacher, unchanged.                                                                                                                                                                                                                                                                                                                                                         |
 | Student absences            | Independent of the teacher. `ABSENCE_REPORTED` goes to the effective teacher at the time of the report; a later substitute sees the absence on the roster.                                                                                                                                                                                                                                                                                                                             |
 | Replacements                | Eligibility is by group level and seats, not by teacher: unaffected. Booking screens already show `substituteTeacher ?? teacher`. `REPLACEMENT_*` notifications go to the effective teacher.                                                                                                                                                                                                                                                                                           |
-| 1-on-1 reschedule           | The new ad-hoc lesson starts **without** a substitute (`reschedule.ts` already sets `substituteTeacherId: null`): cover was arranged for the old date. The old lesson is cancelled `RESCHEDULED` and keeps its substitute for history. The regular teacher and the student get `LESSON_MOVED` (old → new time); a substitute of the old lesson gets `SUBSTITUTE_REMOVED` instead.                                                                                                      |
+| 1-on-1 reschedule           | The new ad-hoc lesson starts **without** a substitute (`createRescheduled` in `src/server/replacements/reschedule.ts` creates it without a substitute, so the column defaults to null): cover was arranged for the old date. The old lesson is cancelled `RESCHEDULED` and keeps its substitute for history. The regular teacher and the student get `LESSON_MOVED` (old → new time); a substitute of the old lesson gets `SUBSTITUTE_REMOVED` instead.                                |
 | Lesson moved (admin)        | The substitute stays. The move is checked with `checkLesson`, which checks the effective teacher, i.e. the substitute: busy blocks the move, unavailability / max hours need acknowledgement. The move dialog offers "remove substitute" as the alternative (then the regular teacher is checked). A move never silently drops a substitute. No separate "check substitute" flag: if the substitute is away at the new time, the lesson is in _Needs cover_ (§3.7, `who: SUBSTITUTE`). |
 | Lesson cancelled            | `substituteTeacherId` stays for history; cancelled lessons occupy nothing and count no minutes. Restoring a cancelled 1-on-1 (absence delete, replacements.md §3) runs `checkLesson` with the substitute.                                                                                                                                                                                                                                                                              |
 | Editor slot edit / split    | Unchanged: a lesson with a substitute counts as touched and is cancelled `TIMETABLE_CHANGED`, not deleted; the successor lesson has no substitute. The substitute is in the `TIMETABLE_CHANGED` counts (`cancelled`). The admin re-arranges cover on the new lesson.                                                                                                                                                                                                                   |
@@ -479,9 +496,11 @@ The student's list (_Rate your teachers_) shows every teacher for whom only
 
 - `src/server/ratings/admin.ts` holds every function that reads other
   people's ratings. Each starts with `requireRole("ADMIN")` and uses
-  `getSchoolScopedDb()`. Nothing under `src/app/teacher/` or
-  `src/app/student/` imports it; a unit test (like the teacher-notes import
-  guard) fails if one does.
+  `getSchoolScopedDb()`. **Allow-list:** only files under
+  `src/app/admin/**` and `src/server/ratings/**` may import `admin.ts`; a
+  unit test (like the teacher-notes import guard) scans every other file
+  in `src/` (pages, API routes, shared components, other services) and
+  fails if one does.
 - `src/server/ratings/student.ts` reads and writes only
   `studentId = viewer's StudentProfile`, returns a student DTO (score,
   comment, editable until), and never returns aggregates.
@@ -563,8 +582,8 @@ Per lesson, one `VEVENT`:
 | `LAST-MODIFIED`     | `Lesson.updatedAt`                                                                                                                               |
 | `SEQUENCE`          | Seconds from 2026-01-01T00:00Z to `Lesson.updatedAt` (increases on every change, fits a 32-bit int for decades)                                  |
 | `SUMMARY`           | From i18n per case below (`calendarFeed.event.*`); for a 1-on-1 the student's feed uses the lesson type instead of their own name                |
-| `LOCATION`          | Room name; for an online room the room name (the link goes in `URL`)                                                                             |
-| `URL`               | The role's lesson page; for online rooms the `meetingUrl` instead when set                                                                       |
+| `LOCATION`          | Room name (online rooms too, without their link)                                                                                                 |
+| `URL`               | The role's lesson page (it shows the meeting link after sign-in). Never the room's `meetingUrl`                                                  |
 | `DESCRIPTION`       | Level, effective teacher's name, "Substitute for {regular}" when covered, link to the lesson page                                                |
 | `STATUS`            | `CONFIRMED`, or `CANCELLED` (below)                                                                                                              |
 | `TRANSP`            | `OPAQUE`, or `TRANSPARENT` (below)                                                                                                               |
@@ -586,7 +605,9 @@ clients mark the existing event cancelled instead of keeping a stale one.
 
 **Never in a feed**, because a calendar URL is easy to leak (shared
 calendars, forwarded links): other students' names, rosters, `TeacherNote`s,
-absence reasons, ratings, lesson logs or homework. Calendar header:
+absence reasons, ratings, lesson logs, homework, or an online room's
+`meetingUrl` (a leaked feed would otherwise let anyone join every online
+lesson in the window). Calendar header:
 `X-WR-CALNAME` = "{school} — {user}" (i18n), `X-WR-TIMEZONE` = the school's
 time zone (display hint only).
 
@@ -646,7 +667,8 @@ model Notification {
   params      Json             @default("{}")
   /// { kind: "lesson", lessonId } | { kind: "timetable", date }.
   link        Json?
-  /// Idempotency: `<action>:<entity id>:<audit log id>`.
+  /// `<audit log id>:<type>:<subject>`; de-duplicates within one action
+  /// only (§2.5). Cross-request safety is the action's conditional write.
   sourceKey   String           @map("source_key")
   /// Merges unread notifications about the same subject (§2.5).
   coalesceKey String?          @map("coalesce_key")
@@ -796,7 +818,10 @@ Unit (pure, no database):
   fixture full of notes, reasons and other students.
 
 Database (`*.db.test.ts`): notifications written in the action's
-transaction and absent after a rollback; idempotent `sourceKey`; the
+transaction and absent after a rollback; every notifying action run twice
+gives one notification per recipient (second run is a no-op); one action
+emitting a duplicate event per recipient stores one row and, for
+`TIMETABLE_CHANGED`, counts it once; the
 unread-coalesce index, including mark-as-unread next to a newer unread row; substitute assign racing a lesson move (lock +
 conditional update → `LESSON_CHANGED`); feed reset invalidates the old
 token; feed of school A's token never returns school B's lessons.
