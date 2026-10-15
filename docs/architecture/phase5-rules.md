@@ -79,24 +79,40 @@ returned (not just the first) so the UI can explain.
 
 `audience` selects the message variant: `teacher` (effective teacher),
 `regular` (the regular teacher of a covered lesson), `substitute`,
-`student`. "Teachers" = the effective teacher plus, when different, the
-regular teacher (audience `regular`).
+`student`, `admin`. "Teachers" = the effective teacher plus, when
+different, the regular teacher (audience `regular`).
 
-| Type                  | Fired by                                                                                                                                                                                                                      | Recipients (minus the actor)                                                                                    | Params                                                                                      | Link                     |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------ |
-| `LESSON_CANCELLED`    | A single not-ended lesson becomes `CANCELLED` by an admin action, with `cancelReason` other than `STUDENT_CANCELLED` / `RESCHEDULED`                                                                                          | Teachers; attendees (audience `student`)                                                                        | `group`, `startsAt`, `endsAt`, `reason` (`cancelReason`)                                    | lesson                   |
-| `LESSON_MOVED`        | A single not-ended `SCHEDULED` lesson changes `startsAt`, `endsAt` or `roomId`, or a 1-on-1 is rescheduled (old lesson → new one; by the student → teachers only)                                                             | Teachers; attendees                                                                                             | `group`, `oldStartsAt`, `oldEndsAt`, `startsAt`, `endsAt`, `oldRoom`, `room`                | lesson (new one)         |
-| `SUBSTITUTE_ASSIGNED` | §3.5 assign, or change (to the new substitute)                                                                                                                                                                                | New substitute (`substitute`); regular teacher (`regular`); attendees (`student`)                               | `group`, `startsAt`, `endsAt`, `room`, `substitute`, `teacher` (regular)                    | lesson                   |
-| `SUBSTITUTE_REMOVED`  | §3.5 remove, or change (to the previous substitute)                                                                                                                                                                           | Previous substitute (`substitute`); on remove also regular teacher (`regular`) and attendees (`student`)        | `group`, `startsAt`, `endsAt`, `substitute`, `teacher`                                      | lesson / timetable       |
-| `ABSENCE_REPORTED`    | `AbsenceReport` created (replacements.md §3)                                                                                                                                                                                  | Effective teacher; the student when an admin reported it                                                        | `group`, `startsAt`, `student` (teacher only), `withCredit` (yes/no)                        | lesson                   |
-| `REPLACEMENT_BOOKED`  | `ReplacementRequest` created                                                                                                                                                                                                  | Effective teacher of the target lesson; the student when an admin booked it                                     | `group`, `startsAt`, `student` (teacher only), `fromGroup`                                  | target lesson            |
-| `REPLACEMENT_ENDED`   | An active booking becomes `CANCELLED` or `REJECTED` (an `OVERRIDDEN` booking stays active and notifies nobody)                                                                                                                | Effective teacher of the target; the student unless they did it                                                 | `group`, `startsAt`, `student` (teacher only), `outcome` (cancelled/rejected), `creditBack` | target lesson            |
-| `TIMETABLE_PUBLISHED` | `publishTerm` the first time for a term (`timetablePublishedAt` was null)                                                                                                                                                     | Every non-archived teacher with a slot in the term; every student enrolled in a group with a slot in the term   | `term`, `termStart`, `termEnd`                                                              | timetable                |
-| `TIMETABLE_CHANGED`   | A **bulk** action changes recipients' not-ended lessons (§2.3): `saveSlot`, `endSlot`, `deleteSlot`, `saveHoliday`, `deleteHoliday`, `regenerateLessons`, re-publish, `applyDraft` (FILL / REPLAN_FROM / teacher-only change) | Per recipient: whoever is effective teacher, regular teacher or attendee of an affected lesson, before or after | `term`, `added`, `cancelled`, `moved`, `teacherChanged`, `firstDate`, `lastDate`            | timetable at `firstDate` |
+Every lesson event's params also carry `lessonType` (`GROUP` /
+`ONE_ON_ONE`), so the 1-on-1 student copy can say "your lesson" instead of
+the group name (an ICU `select`, no extra type).
 
-Not notified in v1 (deliberately): admins (they act, and have the review
-queue and the "needs cover" list, §3.7); ratings (§4); makeup credit expiry
-(no scheduler exists; the student's credits card already shows days left).
+| Type                         | Fired by                                                                                                                                                                                                                                          | Recipients (minus the actor)                                                                                    | Params                                                                                                                                | Link                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `LESSON_CANCELLED`           | A single not-ended lesson becomes `CANCELLED` by an admin action, with `cancelReason` other than `STUDENT_CANCELLED` / `RESCHEDULED`                                                                                                              | Teachers; attendees (audience `student`)                                                                        | `group`, `startsAt`, `endsAt`, `reason` (`cancelReason`)                                                                              | lesson                       |
+| `LESSON_MOVED`               | A single not-ended `SCHEDULED` lesson changes `startsAt`, `endsAt` or `roomId`, or a 1-on-1 is rescheduled (old lesson → new one; by the student → teachers only). One type: the copy uses the "now in {room}" variant when only the room changed | Teachers; attendees                                                                                             | `group`, `oldStartsAt`, `oldEndsAt`, `startsAt`, `endsAt`, `oldRoom`, `room`                                                          | lesson (new one)             |
+| `SUBSTITUTE_ASSIGNED`        | §3.5 assign, or change (to the new substitute)                                                                                                                                                                                                    | New substitute (`substitute`); regular teacher (`regular`); attendees (`student`)                               | `group`, `startsAt`, `endsAt`, `room`, `substitute`, `teacher` (regular)                                                              | lesson                       |
+| `SUBSTITUTE_REMOVED`         | §3.5 remove, or change (to the previous substitute)                                                                                                                                                                                               | Previous substitute (`substitute`); on remove also regular teacher (`regular`) and attendees (`student`)        | `group`, `startsAt`, `endsAt`, `substitute`, `teacher`                                                                                | lesson / timetable           |
+| `ABSENCE_REPORTED`           | `AbsenceReport` created (replacements.md §3)                                                                                                                                                                                                      | Effective teacher; the student when an admin reported it                                                        | `group`, `startsAt`, `student` (teacher only), `withCredit` (yes/no)                                                                  | lesson                       |
+| `REPLACEMENT_BOOKED`         | `ReplacementRequest` created                                                                                                                                                                                                                      | Effective teacher of the target lesson; the student when an admin booked it                                     | `group`, `startsAt`, `student` (teacher only), `fromGroup`                                                                            | target lesson                |
+| `REPLACEMENT_ENDED`          | An active booking becomes `CANCELLED` or `REJECTED`, or an Override moves it to another target (outcome `moved`, to the old target's teacher only)                                                                                                | Effective teacher of the target; the student unless they did it (not for `moved`)                               | `group`, `startsAt`, `student` (teacher only), `outcome` (cancelled/rejected/moved), `creditBack`, `note` (review note, student only) | target lesson                |
+| `REPLACEMENT_MOVED`          | An admin Override moves an active booking to another target lesson (replacements.md _Admin review_). Approve, and Override that keeps the target, change nothing for anyone and notify nobody                                                     | The student; the new target's effective teacher gets `REPLACEMENT_BOOKED`                                       | `fromGroup`, `oldStartsAt`, `group`, `startsAt`, `note`                                                                               | new target lesson            |
+| `REPLACEMENT_REVIEW_PENDING` | A student books a replacement (it is `AUTO_APPROVED` and enters the admin review queue)                                                                                                                                                           | Every admin of the school (audience `admin`)                                                                    | `count` (bookings since the item was last read, §2.5)                                                                                 | admin review queue           |
+| `TIMETABLE_PUBLISHED`        | `publishTerm` the first time for a term (`timetablePublishedAt` was null)                                                                                                                                                                         | Every non-archived teacher with a slot in the term; every student enrolled in a group with a slot in the term   | `term`, `termStart`, `termEnd`, `firstStartsAt` (the recipient's first lesson, null if none)                                          | timetable at `firstStartsAt` |
+| `TIMETABLE_CHANGED`          | A **bulk** action changes recipients' not-ended lessons (§2.3): `saveSlot`, `endSlot`, `deleteSlot`, `saveHoliday`, `deleteHoliday`, `regenerateLessons`, re-publish, `applyDraft` (FILL / REPLAN_FROM / teacher-only change)                     | Per recipient: whoever is effective teacher, regular teacher or attendee of an affected lesson, before or after | `term`, `added`, `cancelled`, `moved`, `teacherChanged`, `firstDate`, `lastDate`                                                      | timetable at `firstDate`     |
+| `CALENDAR_FEED_REVOKED`      | An admin revokes a user's calendar link (§5.1; only if the owner says yes to admin reset)                                                                                                                                                         | The user                                                                                                        | —                                                                                                                                     | calendar subscription page   |
+
+Not notified in v1 (deliberately):
+
+- **"Needs cover"** (§3.7). Only admins record unavailability and archive
+  teachers, so the actor is always an admin and the dashboard's _Needs
+  attention_ card and the _Needs cover_ tab count already show it.
+- **Rating open** (§4). It would be a time-based event and there is no
+  scheduler; the student's home card and _Rate your teachers_ page are the
+  prompt.
+- Makeup credit expiry (no scheduler; the credits card shows days left).
+
+Admins get one type only, `REPLACEMENT_REVIEW_PENDING`, because those
+bookings are created by students, not by an admin.
 
 Students only get notifications for lessons they are an attendee of at the
 time of the event; a student who left the group or reported an absence is
@@ -133,8 +149,9 @@ The payload follows the reader's existing read rules:
 - **Teachers** get a student's name only where their roster already shows
   it (absences and replacements in their own lesson). Absence reasons are
   not copied into the notification; the lesson page shows them.
-- **Links** are stored as `{ kind: "lesson", lessonId }` or
-  `{ kind: "timetable", date }` and resolved per role at read time
+- **Links** are stored as `{ kind: "lesson", lessonId }`,
+  `{ kind: "timetable", date }`, `{ kind: "replacementReview" }` or
+  `{ kind: "calendarFeed" }` and resolved per role at read time
   (`/teacher/lessons/[id]`, `/student/lessons/[id]`, `/admin/lessons/[id]`,
   the role's timetable week). Opening one re-runs the page's normal access
   check, so a substitute removed since sees the usual 404 ("no longer
@@ -154,6 +171,7 @@ The payload follows the reader's existing read rules:
   | `LESSON_MOVED`                               | `lesson:<id>:moved`      | Replace params with the newest, keep the **oldest** `old*` values                                                                                              |
   | `SUBSTITUTE_ASSIGNED` / `SUBSTITUTE_REMOVED` | `lesson:<id>:substitute` | Replace type and params with the newest; if the result says nothing changed for this recipient (e.g. assigned then removed for the same substitute), delete it |
   | `TIMETABLE_CHANGED`                          | `term:<id>:changed`      | Add the counts, widen `firstDate`–`lastDate`                                                                                                                   |
+  | `REPLACEMENT_REVIEW_PENDING`                 | `replacements:review`    | Add 1 to `count`. So an admin has at most one unread item about the review queue                                                                               |
   | everything else                              | null                     | No coalescing                                                                                                                                                  |
 
   A partial unique index on `(school_id, recipient_id, coalesce_key) WHERE
@@ -163,9 +181,12 @@ read_at IS NULL AND coalesce_key IS NOT NULL` makes this an upsert; the
   `lesson:<id>:moved` / `:substitute` row of the same recipient (the
   cancellation supersedes them).
 
-- **Retention.** Read notifications are deleted 90 days after `readAt`,
-  unread ones 180 days after `createdAt` (`NOTIFICATION_READ_RETENTION_DAYS`,
-  `NOTIFICATION_UNREAD_RETENTION_DAYS` in `rules.ts`). Without a scheduler
+- **Mark as unread** sets `readAt = null` and clears the row's
+  `coalesceKey` (a newer unread row may already hold that key; the re-opened
+  one is then a plain item and is never merged into).
+- **Retention.** Every notification, read or unread, is deleted
+  `NOTIFICATION_RETENTION_DAYS` (90) days after `createdAt` (`rules.ts`;
+  the inbox caption reads the same constant). Without a scheduler
   the purge runs when a user opens their inbox (their own rows only, one
   indexed `DELETE`) and in a new `pnpm notifications:purge` script. Deliveries cascade.
   Deleting a user deletes their notifications.
@@ -195,12 +216,12 @@ interface NotificationChannel {
 
 ### 2.7 Inbox API and access
 
-| Function                        | Rule                                                                                                                                     |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `listNotifications({ cursor })` | Own rows only (`school_id` + `recipient_id` = viewer), newest first, 20 per page, keyset on `(created_at, id)`. Runs the purge first.    |
-| `unreadCount()`                 | Own unread rows; the badge shows `99+` above 99. Read on every layout render, one indexed count.                                         |
-| `markRead(id)`                  | Own row only; another user's or school's id is `NOT_FOUND` (not 403). Idempotent.                                                        |
-| `markAllRead({ upTo })`         | Own unread rows with `(created_at, id) ≤ upTo` (the newest row the client has shown), so a notification arriving meanwhile stays unread. |
+| Function                                    | Rule                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listNotifications({ cursor, unreadOnly })` | Own rows only (`school_id` + `recipient_id` = viewer), newest first, 20 per page (the popover asks for 8), keyset on `(created_at, id)`. Runs the purge first. Each item comes with `href` resolved for the viewer's role, or `null` when the target is gone or no longer readable by the viewer ("No longer available"): one batched access query per page, same rules as the lesson pages. |
+| `unreadCount()`                             | Own unread rows, counted up to 100 (`LIMIT`); the badge format (`9+`) is the UI's. Read on every layout render, one indexed count.                                                                                                                                                                                                                                                           |
+| `markRead(id)` / `markUnread(id)`           | Own row only; another user's or school's id is `NOT_FOUND` (not 403). Idempotent. `markRead` returns the item's `href`.                                                                                                                                                                                                                                                                      |
+| `markAllRead({ upTo })`                     | Own unread rows with `(created_at, id) ≤ upTo` (the newest row the client has shown), so a notification arriving meanwhile stays unread.                                                                                                                                                                                                                                                     |
 
 All roles, any signed-in member. Every action re-reads the `Membership`
 (as every request does), validates input with zod and goes through
@@ -306,7 +327,12 @@ otherwise `LESSON_CHANGED` with the fresh lesson and reasons.
 
 - A lesson that has **started** keeps the same actions (for the record);
   only students are no longer notified once it started, and nobody once it
-  ended.
+  ended. Recording after the end starts from the admin lesson page (the
+  _Needs cover_ list only holds lessons that haven't started).
+- The sheet's "who will be notified" line comes from the server
+  (`notifyPreview: { teachers: [{ id, name, audience }], studentCount }`,
+  computed by the same `recipientsFor` the action uses), so the preview and
+  the actual notifications can't disagree.
 - An optional admin `reason` (≤ 300 characters) goes to the audit log only.
 - Admin-only: `requireRole("ADMIN")` on every action and on
   `suggestSubstitutes`; the lesson id is looked up through
@@ -314,22 +340,22 @@ otherwise `LESSON_CHANGED` with the fresh lesson and reasons.
 
 ### 3.6 How it interacts with the rest
 
-| Area                        | Rule                                                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Conflict checker            | Unchanged: it already checks the effective teacher everywhere. A substitute occupies their own time; the regular teacher of a covered lesson is free then.                                                                                                                                                                                                                        |
-| Timetables & dashboards     | Unchanged queries (`teacherId = me OR substituteTeacherId = me`, `week.ts` `TeacherRole`): the substitute sees the lesson as `substituting`, the regular teacher as `covered`. Dashboard counts ("lessons this week") count lessons where the viewer is the **effective** teacher.                                                                                                |
-| Lesson log, homework, notes | Unchanged (lessons.md §2): regular teacher and substitute both have full rights on that lesson; `LessonLog.authorId` / `updatedById` record who wrote. A removed substitute loses access with the row.                                                                                                                                                                            |
-| Attendance                  | Not tracked (owner decision). The roster (`buildRoster`) is shown to the effective teacher and the regular teacher, unchanged.                                                                                                                                                                                                                                                    |
-| Student absences            | Independent of the teacher. `ABSENCE_REPORTED` goes to the effective teacher at the time of the report; a later substitute sees the absence on the roster.                                                                                                                                                                                                                        |
-| Replacements                | Eligibility is by group level and seats, not by teacher: unaffected. Booking screens already show `substituteTeacher ?? teacher`. `REPLACEMENT_*` notifications go to the effective teacher.                                                                                                                                                                                      |
-| 1-on-1 reschedule           | The new ad-hoc lesson starts **without** a substitute (`reschedule.ts` already sets `substituteTeacherId: null`): cover was arranged for the old date. The old lesson is cancelled `RESCHEDULED` and keeps its substitute for history. The regular teacher and the student get `LESSON_MOVED` (old → new time); a substitute of the old lesson gets `SUBSTITUTE_REMOVED` instead. |
-| Lesson moved (admin)        | The substitute stays. The move is checked with `checkLesson`, which checks the effective teacher, i.e. the substitute: busy blocks the move, unavailability / max hours need acknowledgement. The move dialog offers "remove substitute" as the alternative (then the regular teacher is checked). A move never silently drops a substitute.                                      |
-| Lesson cancelled            | `substituteTeacherId` stays for history; cancelled lessons occupy nothing and count no minutes. Restoring a cancelled 1-on-1 (absence delete, replacements.md §3) runs `checkLesson` with the substitute.                                                                                                                                                                         |
-| Editor slot edit / split    | Unchanged: a lesson with a substitute counts as touched and is cancelled `TIMETABLE_CHANGED`, not deleted; the successor lesson has no substitute. The substitute is in the `TIMETABLE_CHANGED` counts (`cancelled`). The admin re-arranges cover on the new lesson.                                                                                                              |
-| Teacher-only change         | Unchanged (`planGroupTeacherChange`): the substitute stays, and is cleared if they are the new regular teacher.                                                                                                                                                                                                                                                                   |
-| Teacher archived            | A teacher with future lessons as effective teacher (regular or substitute) appears in the "needs cover" list (§3.7). Profiles are never hard-deleted (`onDelete: Restrict`).                                                                                                                                                                                                      |
-| Max hours                   | Substitute minutes count toward the substitute's week (§3.4) and not the regular teacher's.                                                                                                                                                                                                                                                                                       |
-| Payroll-relevant hours      | `teachingMinutes` over ended, non-cancelled lessons: the **effective** teacher's. Not in scope until Phase 6 reports, but no other definition may be introduced.                                                                                                                                                                                                                  |
+| Area                        | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Conflict checker            | Unchanged: it already checks the effective teacher everywhere. A substitute occupies their own time; the regular teacher of a covered lesson is free then.                                                                                                                                                                                                                                                                                                                             |
+| Timetables & dashboards     | Unchanged queries (`teacherId = me OR substituteTeacherId = me`, `week.ts` `TeacherRole`): the substitute sees the lesson as `substituting`, the regular teacher as `covered`. Dashboard counts ("lessons this week") count lessons where the viewer is the **effective** teacher.                                                                                                                                                                                                     |
+| Lesson log, homework, notes | Unchanged (lessons.md §2): regular teacher and substitute both have full rights on that lesson; `LessonLog.authorId` / `updatedById` record who wrote. A removed substitute loses access with the row.                                                                                                                                                                                                                                                                                 |
+| Attendance                  | Not tracked (owner decision). The roster (`buildRoster`) is shown to the effective teacher and the regular teacher, unchanged.                                                                                                                                                                                                                                                                                                                                                         |
+| Student absences            | Independent of the teacher. `ABSENCE_REPORTED` goes to the effective teacher at the time of the report; a later substitute sees the absence on the roster.                                                                                                                                                                                                                                                                                                                             |
+| Replacements                | Eligibility is by group level and seats, not by teacher: unaffected. Booking screens already show `substituteTeacher ?? teacher`. `REPLACEMENT_*` notifications go to the effective teacher.                                                                                                                                                                                                                                                                                           |
+| 1-on-1 reschedule           | The new ad-hoc lesson starts **without** a substitute (`reschedule.ts` already sets `substituteTeacherId: null`): cover was arranged for the old date. The old lesson is cancelled `RESCHEDULED` and keeps its substitute for history. The regular teacher and the student get `LESSON_MOVED` (old → new time); a substitute of the old lesson gets `SUBSTITUTE_REMOVED` instead.                                                                                                      |
+| Lesson moved (admin)        | The substitute stays. The move is checked with `checkLesson`, which checks the effective teacher, i.e. the substitute: busy blocks the move, unavailability / max hours need acknowledgement. The move dialog offers "remove substitute" as the alternative (then the regular teacher is checked). A move never silently drops a substitute. No separate "check substitute" flag: if the substitute is away at the new time, the lesson is in _Needs cover_ (§3.7, `who: SUBSTITUTE`). |
+| Lesson cancelled            | `substituteTeacherId` stays for history; cancelled lessons occupy nothing and count no minutes. Restoring a cancelled 1-on-1 (absence delete, replacements.md §3) runs `checkLesson` with the substitute.                                                                                                                                                                                                                                                                              |
+| Editor slot edit / split    | Unchanged: a lesson with a substitute counts as touched and is cancelled `TIMETABLE_CHANGED`, not deleted; the successor lesson has no substitute. The substitute is in the `TIMETABLE_CHANGED` counts (`cancelled`). The admin re-arranges cover on the new lesson.                                                                                                                                                                                                                   |
+| Teacher-only change         | Unchanged (`planGroupTeacherChange`): the substitute stays, and is cleared if they are the new regular teacher.                                                                                                                                                                                                                                                                                                                                                                        |
+| Teacher archived            | A teacher with future lessons as effective teacher (regular or substitute) appears in the "needs cover" list (§3.7). Profiles are never hard-deleted (`onDelete: Restrict`).                                                                                                                                                                                                                                                                                                           |
+| Max hours                   | Substitute minutes count toward the substitute's week (§3.4) and not the regular teacher's.                                                                                                                                                                                                                                                                                                                                                                                            |
+| Payroll-relevant hours      | `teachingMinutes` over ended, non-cancelled lessons: the **effective** teacher's. Not in scope until Phase 6 reports, but no other definition may be introduced.                                                                                                                                                                                                                                                                                                                       |
 
 ### 3.7 Suggestions and "needs cover"
 
@@ -350,19 +376,41 @@ reasons (§3.3) and rank facts, sorted:
    | `termSubstitutions` | fewer  | Lessons of this term _t_ already substitutes (not cancelled)                                                               | Share the cover                |
    | name, then id       | —      | Stable tie-break                                                                                                           | Determinism                    |
 
-3. Each entry: `{ teacherId, name, band, reasons[], facts: { knowsGroup,
-sameDay, weekMinutesAfter, maxMinutes, termSubstitutions } }`, so the
-   UI shows why someone is suggested ("Taught B1 Evening · already in on
-   Tuesday · 12 of 20 h this week") as well as why not.
+3. Each entry: `{ teacherId, name, band, rank, reasons[], hints[],
+facts: { knowsGroup, sameDay, weekMinutesBefore, weekMinutesAfter,
+maxMinutes, termSubstitutions } }`, so the UI shows why someone is
+   suggested ("Taught B1 Evening · already in on Tuesday · 12 of 20 h this
+   week") as well as why not. `band` is `SUGGESTED` (no reason),
+   `WITH_WARNING` (only overridable reasons) or `NOT_POSSIBLE` (a blocking
+   reason, i.e. `BUSY`). `rank` numbers the `SUGGESTED` band from 1.
+4. `hints` (only in `SUGGESTED`, at most two, in this order, codes for
+   `substitutes.hint.*`): `KNOWS_GROUP` (`knowsGroup`), `SAME_DAY`
+   (`sameDay`), `FEWEST_HOURS` (the lowest `weekMinutesAfter` in the band,
+   ties included). They explain the order; no score is returned.
+5. The **current substitute** is returned first with `current: true` and its
+   reasons (so the admin sees whether they are still fine); it can't be
+   assigned again (`IS_CURRENT`): the sheet offers _Remove_ for it. The
+   regular teacher and archived teachers are never returned.
 
-**Needs cover** (`lessonsNeedingCover(calendar, from, to)`, the admin's
-list for the next 14 days): not-cancelled, not-started lessons whose
-**effective** teacher has `TEACHER_UNAVAILABLE_ON_DATE`,
-`TEACHER_UNAVAILABLE_WEEKLY` or `TEACHER_DOUBLE_BOOKED` on them
-(`checkLesson`), or is archived. That is how a teacher's sick day reaches
-the substitute flow: the admin records it as a `DATE_UNAVAILABLE` rule
-(teacher availability) and the affected lessons appear here, each with
-_Find substitute_. Nothing is assigned automatically.
+**Needs cover** (`lessonsNeedingCover(calendar, from, to)`; the admin's
+tab uses now → now + `NEEDS_COVER_DAYS` (56, i.e. 8 weeks)): not-cancelled,
+not-started lessons whose **effective** teacher has
+`TEACHER_UNAVAILABLE_ON_DATE` or `TEACHER_DOUBLE_BOOKED` on them
+(`checkLesson`), or is archived. Each entry is `{ lessonId, who: REGULAR |
+SUBSTITUTE, reasons: (UNAVAILABLE_ON_DATE | DOUBLE_BOOKED | ARCHIVED)[] }`,
+so a covered lesson whose substitute is now away or archived comes back
+with `who: SUBSTITUTE` ("Substitute away" / "Substitute archived"). Weekly
+unavailability is left out on purpose: it is known when the slot is planned
+and was already acknowledged in the editor, so it would sit in the list
+forever.
+
+That is how a teacher's sick day reaches the substitute flow: the admin
+records it as a `DATE_UNAVAILABLE` rule (teacher availability) and the
+affected lessons appear here, each with _Find substitute_. The _Cover a
+teacher_ dialog's "Also mark {teacher} as away" (if the owner agrees) writes
+one `DATE_UNAVAILABLE` row per date through the existing availability
+service (same validation, same audit), in its own transaction before the
+list loads. Nothing is assigned automatically.
 
 ### 3.8 Audit
 
@@ -377,12 +425,13 @@ overridden: [{ code, key, params }], recordedAfterEnd: boolean }`.
 A student _s_ may rate teacher _t_ for term _T_ when all hold
 (`canRate`, pure; returns every failing reason):
 
-| Code              | Rule                                                                                                                            |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `NOT_A_STUDENT`   | _s_ has a `STUDENT` membership in the school and is not deleted                                                                 |
-| `TEACHER_UNKNOWN` | _t_ is a teacher of the same school (archived teachers can't be rated)                                                          |
-| `TOO_FEW_LESSONS` | _s_ **attended** ≥ `RATING_MIN_LESSONS` (3) lessons of _T_ whose effective teacher was _t_                                      |
-| `WINDOW_CLOSED`   | now is before the term's start or after `ratingClosesAt(T)` = start of the local day `RATING_GRACE_DAYS` (14) after `T.endDate` |
+| Code              | Rule                                                                                                                       |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `NOT_A_STUDENT`   | _s_ has a `STUDENT` membership in the school and is not deleted                                                            |
+| `TEACHER_UNKNOWN` | _t_ is a teacher of the same school (archived teachers can't be rated)                                                     |
+| `TOO_FEW_LESSONS` | _s_ **attended** ≥ `RATING_MIN_LESSONS` (3) lessons of _T_ whose effective teacher was _t_                                 |
+| `NOT_OPEN_YET`    | now is before `ratingOpensAt(T)` = start of the local day `T.startDate + ⌊(T.endDate − T.startDate) / 2⌋` days (half-term) |
+| `WINDOW_CLOSED`   | now is at or after `ratingClosesAt(T)` = start of the local day `RATING_GRACE_DAYS` (14) after `T.endDate`                 |
 
 **Attended** (there is no attendance record; owner decision): the lesson
 has ended, is not `CANCELLED`, and _s_ was an attendee — a member of the
@@ -390,7 +439,13 @@ group on the lesson date with no absence report on it, or held an active
 replacement into it. This is the `attendeesOf` rule applied to ended
 lessons; a pure `attendedLessons(student, lessons, …)` in `ratings/rules.ts`
 uses it. A substitute who covered three of a student's lessons in a term can
-be rated like anyone else; a one-off cover can't.
+be rated like anyone else; a one-off cover can't. "Attended" means
+**ended**, not just started.
+
+The student's list (_Rate your teachers_) shows every teacher for whom only
+`NOT_OPEN_YET` fails, with `opensAt` ("You can rate {teacher} from
+{date}"), and every teacher they can rate or have rated, with `editableUntil`
+= `ratingClosesAt(T)`. The UI never computes these dates itself.
 
 ### 4.2 The rating
 
@@ -398,9 +453,10 @@ be rated like anyone else; a one-off cover can't.
   later term is a new row, so admins can see change over time.
 - **Scale:** `score` integer 1–5 (stars), required. `comment` optional, ≤
   1,000 characters, trimmed, empty = null.
-- **Editing:** the student can change or delete their own rating while the
-  window is open (§4.1); after it closes it is read-only for them. Every
-  write re-checks `canRate`.
+- **Editing:** the student can change their own rating while the window
+  is open (§4.1); after it closes it is read-only for them. Every write
+  re-checks `canRate`. **No delete** in v1 (owner question, CARM-63 §11 Q4);
+  allowing it later is one action, no schema change.
 - **Admins can't edit** a rating. They can **hide** one (`hiddenAt`,
   `hiddenById`, e.g. abusive comment): hidden ratings are excluded from
   averages and shown collapsed; audited as `rating.hidden` / `.unhidden`.
@@ -437,8 +493,7 @@ be rated like anyone else; a one-off cover can't.
 
 ### 4.5 Audit
 
-`rating.created`, `rating.updated`, `rating.deleted` (by the student),
-`rating.hidden`, `rating.unhidden`. Audit `data` carries ids and the score
+`rating.created`, `rating.updated`, `rating.hidden`, `rating.unhidden`. Audit `data` carries ids and the score
 change only, **not the comment** (the audit log is admin-readable anyway,
 but keep comments in one place).
 
@@ -457,10 +512,16 @@ revokedAt, lastUsedAt }`.
   - a database dump alone can't produce working links (needs the secret);
   - changing `ICAL_TOKEN_SECRET` invalidates every link (documented in the
     README; `.env.example` gets the variable).
-- **Created lazily** the first time the user opens _Calendar subscription_.
+- **Created on request** (_Create my calendar link_), never by opening the
+  page, so unused links don't exist and a `GET` has no side effect.
   **Reset** = set `revokedAt` on the active row and create a new one, in one
   transaction; the old link stops working at once. Audit
   `calendar_feed.created`, `calendar_feed.reset` (no token in the audit).
+- **Admin revoke** (only if the owner agrees, CARM-63 §11 Q6): from the
+  user's admin page an admin sets `revokedAt` on the active row and creates
+  **no** new one (the admin must never see a user's link); the user gets
+  `CALENDAR_FEED_REVOKED` and creates a new link themselves. Audit
+  `calendar_feed.revoked`.
 - A partial unique index allows one row with `revoked_at IS NULL` per
   `(school_id, user_id)`.
 
@@ -483,7 +544,9 @@ max-age=900`, `ETag` = sha256 of the body; `If-None-Match` → 304.
 ### 5.3 Contents
 
 Window: lessons starting from **30 days ago to 180 days ahead**, in
-published terms. Per role:
+published terms (`FEED_PAST_DAYS`, `FEED_FUTURE_DAYS`). A fixed window, not
+"to the end of next term", so the feed size is bounded however long terms
+are; lessons only exist for published terms anyway. Per role:
 
 | Role    | Lessons                                                                                                                           |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -499,7 +562,7 @@ Per lesson, one `VEVENT`:
 | `DTSTAMP`           | Response time (UTC)                                                                                                                              |
 | `LAST-MODIFIED`     | `Lesson.updatedAt`                                                                                                                               |
 | `SEQUENCE`          | Seconds from 2026-01-01T00:00Z to `Lesson.updatedAt` (increases on every change, fits a 32-bit int for decades)                                  |
-| `SUMMARY`           | Group name; prefixes from i18n per case below                                                                                                    |
+| `SUMMARY`           | From i18n per case below (`calendarFeed.event.*`); for a 1-on-1 the student's feed uses the lesson type instead of their own name                |
 | `LOCATION`          | Room name; for an online room the room name (the link goes in `URL`)                                                                             |
 | `URL`               | The role's lesson page; for online rooms the `meetingUrl` instead when set                                                                       |
 | `DESCRIPTION`       | Level, effective teacher's name, "Substitute for {regular}" when covered, link to the lesson page                                                |
@@ -510,11 +573,12 @@ Cases:
 
 | Case                                                  | SUMMARY prefix (i18n `calendarFeed.*`)               | STATUS    | TRANSP      |
 | ----------------------------------------------------- | ---------------------------------------------------- | --------- | ----------- |
-| Normal                                                | —                                                    | CONFIRMED | OPAQUE      |
-| Substituted, student or substitute viewing            | — (DESCRIPTION names the substitute)                 | CONFIRMED | OPAQUE      |
-| Substituted, regular teacher viewing                  | "Covered: "                                          | CONFIRMED | TRANSPARENT |
-| Cancelled (any reason)                                | "Cancelled: "                                        | CANCELLED | TRANSPARENT |
-| Student reported an absence (group lesson still runs) | "Not attending: "                                    | CONFIRMED | TRANSPARENT |
+| Normal                                                | `{group}`                                            | CONFIRMED | OPAQUE      |
+| Substituted, student viewing                          | `{group} (substitute: {substitute})`                 | CONFIRMED | OPAQUE      |
+| Substituted, substitute viewing                       | `Substituting: {group}`                              | CONFIRMED | OPAQUE      |
+| Substituted, regular teacher viewing                  | `Covered by {substitute}: {group}`                   | CONFIRMED | TRANSPARENT |
+| Cancelled (any reason)                                | `Cancelled: {group}`                                 | CANCELLED | TRANSPARENT |
+| Student reported an absence (group lesson still runs) | `Not attending: {group}`                             | CONFIRMED | TRANSPARENT |
 | Substitute removed / student left / replacement ended | The event disappears from the feed (clients drop it) |
 
 Cancelled lessons stay in the feed (inside the window) so subscribed
@@ -547,8 +611,11 @@ enum NotificationType {
   ABSENCE_REPORTED
   REPLACEMENT_BOOKED
   REPLACEMENT_ENDED
+  REPLACEMENT_MOVED
+  REPLACEMENT_REVIEW_PENDING
   TIMETABLE_PUBLISHED
   TIMETABLE_CHANGED
+  CALENDAR_FEED_REVOKED
 }
 
 /// Out-of-app channels; IN_APP is the Notification row itself and never
@@ -573,7 +640,7 @@ model Notification {
   schoolId    String           @map("school_id") @db.Uuid
   recipientId String           @map("recipient_id") @db.Uuid
   type        NotificationType
-  /// teacher | regular | substitute | student — selects the message variant.
+  /// teacher | regular | substitute | student | admin — selects the message variant.
   audience    String
   /// ICU params, display names snapshotted at creation.
   params      Json             @default("{}")
@@ -602,7 +669,7 @@ model Notification {
 // Migration adds: CREATE UNIQUE INDEX notifications_unread_coalesce ON
 // notifications (school_id, recipient_id, coalesce_key)
 // WHERE read_at IS NULL AND coalesce_key IS NOT NULL;
-// CHECK (audience IN ('teacher','regular','substitute','student')).
+// CHECK (audience IN ('teacher','regular','substitute','student','admin')).
 
 /// A notification sent on an out-of-app channel (outbox). Unused in v1.
 model NotificationDelivery {
@@ -705,7 +772,9 @@ Unit (pure, no database):
   `IS_CURRENT`; teacher with no level rows; one-off unavailability; max
   hours at exactly the limit (allowed) and one minute over; covered lesson
   not counted for the regular teacher; DST week boundaries; ranking keys
-  one by one; output independent of input order.
+  one by one; hints; the current substitute's entry; output independent of
+  input order; `lessonsNeedingCover` for regular and substitute, with weekly
+  unavailability left out.
 - `substitutes.property.test.ts` on the realistic fixtures (20 teachers,
   60 groups, 15 rooms; seeded): for random lessons, every eligible
   suggestion, applied, leaves `checkTimetable` / `checkLesson` with no new
@@ -719,15 +788,16 @@ Unit (pure, no database):
   student audiences, coalescing table of §2.5, `summarizeLessonChanges` on
   `planLessonSync` / `planGroupTeacherChange` plans, retention cut-offs.
 - `ratings/rules.test.ts`: `canRate` reasons, attended counting (absence,
-  replacement, membership dates, cancelled, not ended), window boundaries in
-  the school time zone.
+  replacement, membership dates, cancelled, started but not ended), half-term
+  opening and closing boundaries in the school time zone (odd and even term
+  lengths).
 - `calendar-feed/build.test.ts`: each case of §5.3, escaping and folding,
   stable UIDs, increasing `SEQUENCE`, nothing forbidden in the output for a
   fixture full of notes, reasons and other students.
 
 Database (`*.db.test.ts`): notifications written in the action's
 transaction and absent after a rollback; idempotent `sourceKey`; the
-unread-coalesce index; substitute assign racing a lesson move (lock +
+unread-coalesce index, including mark-as-unread next to a newer unread row; substitute assign racing a lesson move (lock +
 conditional update → `LESSON_CHANGED`); feed reset invalidates the old
 token; feed of school A's token never returns school B's lessons.
 
@@ -738,8 +808,8 @@ The e2e permission cases are CARM-67's scope (its issue lists them).
 Defaults chosen here; each is one constant or one rule to change:
 
 1. **Rating threshold and window**: 3 attended lessons with the teacher in
-   the term; open from term start until 14 days after it ends; one rating
-   per teacher per term, editable while open.
+   the term; open from half-term until 14 days after the term ends; one
+   rating per teacher per term, editable (not deletable) while open.
 2. **Admins see who rated** (name next to the rating). The alternative —
    anonymous even to admins — makes abuse handling impossible; teachers see
    nothing either way.
@@ -751,16 +821,18 @@ Defaults chosen here; each is one constant or one rule to change:
    level, is unavailable or over their maximum, after acknowledging each
    warning; a teacher who is busy then can never be picked.
 
-## 9. To agree with the design spec (CARM-63)
+## 9. Agreed with the design spec (CARM-63)
 
-- Substitute picker: three bands (suggested / pick anyway / not possible)
-  with the reasons and rank facts of §3.7; acknowledgement checkboxes as in
-  the editor; "remove substitute" refuses with `REGULAR_TEACHER_BUSY`.
-- "Needs cover" list (§3.7) as the entry point from a teacher's sick day.
-- Inbox: 20 per page, `99+` badge, mark all read up to what's shown, a
-  dead link shows "no longer available"; message variants per `audience`.
-- Ratings: 1–5 stars + optional comment, the "who reads it" copy of §4.3,
-  edit/delete until the window closes; admin view with "too few to
-  average" under 3.
-- iCal: lazy creation, _Copy link_ any time, _Reset_ with a confirmation
-  that the old link stops working; no feed for admins.
+The spec's §11 assumptions, checked against this page. Where they differ,
+this page is the rule and the spec follows.
+
+| #   | Spec assumption                        | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | Events, recipients, batching           | Confirmed with changes (§2.2): one `LESSON_MOVED` type for time and room (room-only copy variant); `ABSENCE_REPORTED` / `REPLACEMENT_*` go to the **effective** teacher only, not also the regular one; the spec's `replacementReviewed` is `REPLACEMENT_ENDED` (rejected) or `REPLACEMENT_MOVED`; `replacementNeedsReview` is `REPLACEMENT_REVIEW_PENDING` (coalesced while unread, not per day); **no** `needsCover` and **no** `ratingOpen` notification in v1; `calendarLinkReset` is `CALENDAR_FEED_REVOKED`, only with admin revoke. Student copy is also needed for `ABSENCE_REPORTED` / `REPLACEMENT_BOOKED` made by an admin and for `REPLACEMENT_ENDED` (cancelled, rejected). |
+| A2  | Type + params + target, render on read | Confirmed (§2.1, §2.4). Lists return `href` or `null` per item.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| A3  | 90-day retention                       | Confirmed: every notification is deleted 90 days after it was created (§2.5). Also: mark as unread exists; the badge format is the UI's.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| A4  | "Needs cover"                          | Corrected (§3.7): based on the **effective** teacher, so a covered lesson whose substitute is away or archived comes back; one-off unavailability, archived, or double-booked; 8 weeks ahead. No "check substitute" badge after a move.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| A5  | Picker groups and hints                | Confirmed with changes (§3.3, §3.7): one-off unavailability is a **warning**, not "not possible"; archived teachers aren't listed at all; the current substitute is listed first and marked current; hints are `KNOWS_GROUP`, `SAME_DAY`, `FEWEST_HOURS`; the "will be notified" line comes from the server.                                                                                                                                                                                                                                                                                                                                                                             |
+| A6  | Started lessons, cancelled lessons     | Confirmed, plus: after the lesson **ended** nobody is notified, and the record window is 7 days after the end (also on _Past_ and the lesson page). Removing a substitute is refused when the regular teacher teaches another lesson then (`REGULAR_TEACHER_BUSY`); the dialog needs that state.                                                                                                                                                                                                                                                                                                                                                                                         |
+| A7  | Rating eligibility                     | Confirmed with changes (§4.1, §4.2): lessons must have **ended**; window opens at half-term and closes **14 days after** term end (`editableUntil` from the server); no delete. Admins can **hide** a rating (abusive comment), which the admin detail page needs as a row action.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| A8  | Feed                                   | Corrected (§5): window is 30 days back to 180 days ahead; times are UTC instants (no `TZID`); event titles are the spec's §7.6 texts, plus `Not attending: {group}`; links are created on request.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
