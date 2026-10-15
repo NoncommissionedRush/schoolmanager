@@ -197,7 +197,7 @@
           <div class="flex-1 min-w-0"><p class="${n.u ? "font-semibold" : ""}">${n.u ? `<span class="sr-only">Unread: </span>` : ""}${n.t}</p>
             ${n.d ? `<p class="text-muted-foreground tnum">${n.d}</p>` : ""}
             <div class="flex justify-between text-xs text-muted-foreground mt-1"><time title="Mon 20 Oct 2026, 14:05">${n.ago}</time>${n.gone ? `<span>No longer available.</span>` : `<span class="text-primary font-medium">${n.go}</span>`}</div></div>
-          ${compact ? "" : `<button class="h-8 w-8 rounded hover:bg-muted self-start" aria-label="More actions for this notification">⋯</button>`}</div></a>`;
+          ${compact || !n.u ? "" : `<button class="h-8 w-8 rounded hover:bg-muted self-start" aria-label="More actions for this notification: Mark as read">⋯</button>`}</div></a>`;
 
       function bellScreen(i) {
         const count = i === 1 ? 0 : 3;

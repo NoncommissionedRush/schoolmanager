@@ -131,7 +131,9 @@ Header right side, before the user menu (`app-layout.md` §4.1):
 ```
 
 - Header: h2 "Notifications" and a `link`-style button _Mark all as read_
-  (only when something is unread).
+  (only when something is unread). It marks read everything up to the
+  newest item shown (`markAllRead({ upTo })`, rules doc §2.7), so a
+  notification that arrives meanwhile stays unread.
 - Up to the 8 newest notifications (read and unread), newest first. Each
   item is one link (§4.3). Clicking it marks it read, closes the popover
   and navigates.
@@ -174,8 +176,10 @@ Same page for every role, inside the role's shell (`/admin/notifications`,
   (school timezone).
 - 20 per page, _Load more_ for the next 20. No infinite scroll.
 - Row menu (`⋯`, `DropdownMenu`, `aria-label` "More actions for this
-  notification"): _Mark as read_ / _Mark as unread_. No delete in v1:
-  retention (rules doc) removes old notifications.
+  notification") on **unread** items only: _Mark as read_. Read items have
+  no menu. There is no _Mark as unread_ and no delete in v1: unread items
+  about the same lesson are merged (rules doc §2.5), and retention removes
+  old notifications.
 - Every notification, read or unread, is deleted 90 days after it was
   created (rules doc §2.5). Footer caption: "Notifications older than
   {days} days are removed." with the rules doc's constant.
@@ -796,15 +800,15 @@ language. Times are UTC instants with no `TZID`, so DST is always right and
 calendar apps show each user's local time. One event per lesson, with a
 stable id, so a moved or cancelled lesson updates the same event.
 
-| Lesson                    | Event title                        | Status / transparency                 | Description                                                        |
-| ------------------------- | ---------------------------------- | ------------------------------------- | ------------------------------------------------------------------ |
-| Normal lesson             | {group}                            | `CONFIRMED`, busy                     | {type} · {level} · Teacher: {teacher} · Room · link to lesson page |
-| With substitute (student) | {group} (substitute: {substitute}) | `CONFIRMED`, busy                     | Teacher: {substitute}, instead of {teacher}                        |
-| Substitute's feed         | Substituting: {group}              | `CONFIRMED`, busy                     | For {teacher}                                                      |
-| Regular teacher, covered  | Covered by {substitute}: {group}   | `CONFIRMED`, **free** (`TRANSPARENT`) | So they see it's handled, but it doesn't block their day           |
-| Cancelled                 | Cancelled: {group}                 | `CANCELLED`, free                     | Reason: {reason}                                                   |
-| Student reported absent   | Not attending: {group}             | `CONFIRMED`, **free**                 | The group lesson still runs                                        |
-| Online room               | as above                           |                                       | + the join link as `URL`                                           |
+| Lesson                    | Event title                        | Status / transparency                 | Description                                                                                                                |
+| ------------------------- | ---------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Normal lesson             | {group}                            | `CONFIRMED`, busy                     | {type} · {level} · Teacher: {teacher} · Room · link to lesson page                                                         |
+| With substitute (student) | {group} (substitute: {substitute}) | `CONFIRMED`, busy                     | Teacher: {substitute}, instead of {teacher}                                                                                |
+| Substitute's feed         | Substituting: {group}              | `CONFIRMED`, busy                     | For {teacher}                                                                                                              |
+| Regular teacher, covered  | Covered by {substitute}: {group}   | `CONFIRMED`, **free** (`TRANSPARENT`) | So they see it's handled, but it doesn't block their day                                                                   |
+| Cancelled                 | Cancelled: {group}                 | `CANCELLED`, free                     | Reason: {reason}                                                                                                           |
+| Student reported absent   | Not attending: {group}             | `CONFIRMED`, **free**                 | The group lesson still runs                                                                                                |
+| Online room               | as above                           |                                       | No meeting link: the event links to the lesson page, which shows it after sign-in (a leaked feed must not let anyone join) |
 
 A removed substitute, a student who left the group or an ended replacement
 makes the event disappear from that person's feed. No other students'
@@ -824,7 +828,6 @@ Variant fallback: a teacher audience (`regular`, `substitute`) without its own k
 | `notifications.markAllRead`                              | Mark all as read                                                                                                            |
 | `notifications.markedAllRead`                            | All notifications marked as read.                                                                                           |
 | `notifications.markRead`                                 | Mark as read                                                                                                                |
-| `notifications.markUnread`                               | Mark as unread                                                                                                              |
 | `notifications.rowMenu`                                  | More actions for this notification                                                                                          |
 | `notifications.unread`                                   | Unread                                                                                                                      |
 | `notifications.seeAll`                                   | See all notifications                                                                                                       |
@@ -1180,12 +1183,12 @@ PR #41). Summary of what was agreed and what changed here:
 | --- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
 | A1  | Events and recipients   | Rules doc §2.2 types. Room-only moves are a `LESSON_MOVED` variant. Absence and replacement events go to the **effective** teacher only. No `needsCover` or `ratingOpen` notification. Student copy for admin-made absences and bookings, and for ended replacements. | §4.4       |
 | A2  | Stored type + params    | Rendered at read time; the list returns `href` or `null` per item.                                                                                                                                                                                                    | §4.3       |
-| A3  | Retention               | Deleted 90 days after creation, read or unread; mark as unread exists; badge "9+" is the UI's.                                                                                                                                                                        | §4.2       |
+| A3  | Retention               | Deleted 90 days after creation, read or unread; no mark as unread; mark all read only up to the newest item shown; badge "9+" is the UI's.                                                                                                                            | §4.2       |
 | A4  | Needs cover             | Effective teacher away (one-off), archived or double-booked; not started; 8 weeks ahead; no "check substitute" badge.                                                                                                                                                 | §5.2       |
 | A5  | Picker                  | One-off away is a warning; archived teachers not listed; current substitute first; hints `KNOWS_GROUP`, `SAME_DAY`, `FEWEST_HOURS`; notify preview from the server.                                                                                                   | §5.3       |
 | A6  | Started / ended lessons | Started: teachers notified, students not. Ended: nobody notified, changes allowed for 7 days. Remove refused with `REGULAR_TEACHER_BUSY`.                                                                                                                             | §5.4, §5.6 |
 | A7  | Ratings                 | ≥ 3 ended, attended lessons; open at half-term until 14 days after term end (`opensAt`, `editableUntil` from the server); no delete; admins can hide.                                                                                                                 | §6         |
-| A8  | Feed                    | 30 days back to 180 days ahead; UTC instants; §7.6 titles plus "Not attending"; links created on request; admin revoke never shows or creates a link.                                                                                                                 | §7         |
+| A8  | Feed                    | 30 days back to 180 days ahead; UTC instants; no meeting links; §7.6 titles plus "Not attending"; links created on request; admin revoke never shows or creates a link.                                                                                               | §7         |
 
 **Open questions for the owner:**
 
