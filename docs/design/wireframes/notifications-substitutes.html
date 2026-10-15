@@ -120,7 +120,9 @@
 
       /* App header with bell */
       const bell = (count) =>
-        `<button aria-label="Notifications${count ? `, ${count} unread` : ""}" class="relative h-10 w-10 rounded-md hover:bg-muted inline-flex items-center justify-center text-lg">🔔${count ? `<span aria-hidden="true" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-xs leading-[18px] tnum">${count > 9 ? "9+" : count}</span>` : ""}</button>`;
+        count === null
+          ? ""
+          : `<button aria-label="Notifications${count ? `, ${count} unread` : ""}" class="relative h-10 w-10 rounded-md hover:bg-muted inline-flex items-center justify-center text-lg">🔔${count ? `<span aria-hidden="true" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-xs leading-[18px] tnum">${count > 99 ? "99+" : count}</span>` : ""}</button>`;
       const appHeader = (count, who = "Anna") =>
         `<header class="h-14 flex items-center gap-3 border-b border-border bg-white px-4"><span class="h-8 w-8 rounded bg-primary text-white grid place-items-center text-xs font-semibold">LL</span><strong>Lingua Language School</strong><div class="ml-auto flex items-center gap-2">${bell(count)}<span class="inline-flex items-center gap-2"><span class="h-8 w-8 rounded-full bg-slate-200 grid place-items-center text-xs">AV</span>${who} ▾</span></div></header>`;
       const desktop = (inner, count = 3, who) =>
@@ -165,7 +167,7 @@
           u: 0,
           i: "📅",
           t: "Your timetable for Autumn 2026 changed",
-          d: "12 lessons changed from 3 Nov",
+          d: "12 with a new teacher · 2 cancelled · from 3 Nov",
           ago: "Yesterday",
           go: "Open timetable ›",
           day: "Yesterday",
@@ -197,7 +199,7 @@
           <div class="flex-1 min-w-0"><p class="${n.u ? "font-semibold" : ""}">${n.u ? `<span class="sr-only">Unread: </span>` : ""}${n.t}</p>
             ${n.d ? `<p class="text-muted-foreground tnum">${n.d}</p>` : ""}
             <div class="flex justify-between text-xs text-muted-foreground mt-1"><time title="Mon 20 Oct 2026, 14:05">${n.ago}</time>${n.gone ? `<span>No longer available.</span>` : `<span class="text-primary font-medium">${n.go}</span>`}</div></div>
-          ${compact ? "" : `<button class="h-8 w-8 rounded hover:bg-muted self-start" aria-label="More actions for this notification">⋯</button>`}</div></a>`;
+          ${compact || !n.u ? "" : `<button class="h-8 w-8 rounded hover:bg-muted self-start" aria-label="More actions for this notification">⋯</button>`}</div></a>`;
 
       function bellScreen(i) {
         const count = i === 1 ? 0 : 3;
@@ -263,7 +265,7 @@
                     .join("")}</div>`,
               )
               .join("") +
-            `<div class="text-center">${btn("Load more", "outline")}</div><p class="text-center text-xs text-muted-foreground">Notifications older than 90 days are removed.</p>`;
+            `<div class="text-center">${btn("Load more", "outline")}</div><p class="text-center text-xs text-muted-foreground">Read notifications are removed after 90 days, unread ones after 180 days.</p>`;
         }
         const filter = `<div role="group" class="inline-flex rounded-md border border-input bg-white p-0.5">${["All", "Unread (3)"].map((t, k) => `<button aria-pressed="${(k === 1) === (unreadOnly || i === 4)}" class="px-3 h-8 rounded ${(k === 1) === (unreadOnly || i === 4) ? "bg-accent text-accent-foreground font-medium" : ""}">${t}</button>`).join("")}</div>`;
         return desktop(
@@ -290,17 +292,17 @@
           },
           {
             u: 1,
-            i: "⭐",
-            t: "How are your lessons with Tomas Horvat?",
-            d: "Rate by 20 Dec",
+            i: "🔁",
+            t: "Your replacement in B1 Morning on Thu 23 Oct was cancelled",
+            d: "Your makeup credit is back.",
             ago: "2 h ago",
-            go: "Rate ›",
+            go: "Open lesson ›",
           },
           {
             u: 0,
             i: "🔁",
-            t: "Your replacement on Thu 16 Oct was changed by the school",
-            d: "Moved to B1 Morning",
+            t: "You're booked into B1 Morning on Thu 16 Oct as a replacement",
+            d: "",
             ago: "Yesterday",
             go: "Open ›",
           },
@@ -326,15 +328,15 @@
           [
             "Tue 21 Oct · 09:00–10:30",
             "👤 Jan Novak · A2",
-            "Eva Simon",
-            "Away (one-off)",
+            "Ana Kral (substitute)",
+            "Double-booked",
             0,
           ],
           [
             "Wed 22 Oct · 18:00–19:30",
             "👥 C1 Business · C1",
             "Peter Varga",
-            "Teacher archived",
+            "Archived",
             0,
           ],
         ];
@@ -360,7 +362,7 @@
           return `<table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["When", "Lesson", "Teacher", "Why", ""].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${needs
             .map(
               (r) =>
-                `<tr class="border-t border-border"><td class="px-3 py-2 tnum"><a href="#" class="text-primary">${r[0]}</a> ${r[4] ? badge("Soon", "danger") : ""}</td><td class="px-3 py-2">${r[1]}</td><td class="px-3 py-2">${r[2]}</td><td class="px-3 py-2">${r[3]}</td><td class="px-3 py-2 text-right"><span data-go="picker">${btn("Find substitute", "outline", "h-8")}</span></td></tr>`,
+                `<tr class="border-t border-border"><td class="px-3 py-2 tnum"><a href="#" class="text-primary">${r[0]}</a> ${r[4] ? badge("Soon", "danger") : ""}</td><td class="px-3 py-2">${r[1]}</td><td class="px-3 py-2">${r[2]}</td><td class="px-3 py-2">${r[3]}</td><td class="px-3 py-2 text-right"><span data-go="picker">${btn(r[2].includes("(substitute)") ? "Change substitute" : "Find substitute", "outline", "h-8")}</span></td></tr>`,
             )
             .join("")}</tbody></table>`;
         return `<table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["When", "Lesson", "Teacher", "Substitute", "Assigned", ""].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${covered
@@ -373,14 +375,14 @@
       function substitutionsScreen(i) {
         const tab = i === 1 ? 1 : 0;
         const tabs = `<div role="tablist" class="flex gap-1 border-b border-border">${["Needs cover (3)", "Covered (5)", "Past"].map((t, k) => `<button role="tab" aria-selected="${k === tab}" class="px-3 py-2 -mb-px border-b-2 ${k === tab ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}">${t}</button>`).join("")}</div>`;
-        const filters = `<div class="flex gap-3 items-center">Teacher ${btn("Any ▾", "outline")} Dates ${btn("20 Oct – 14 Dec ▾", "outline")} Level ${btn("Any ▾", "outline")}</div>`;
+        const filters = `<div class="flex gap-3 items-center">Teacher ${btn("Any ▾", "outline")} Dates ${btn("20 Oct – 3 Nov ▾", "outline")} Level ${btn("Any ▾", "outline")}</div>`;
         let body;
         if (i === 2)
           body = card(
             empty(
               "👤⚙",
-              "No lessons need cover.",
-              "When a teacher is away on a lesson's date, the lesson shows up here.",
+              "No lessons need cover in the next 14 days.",
+              "When a teacher is away or can't teach a lesson, it shows up here.",
             ),
           );
         else if (i === 3)
@@ -392,11 +394,12 @@
             ? `<div class="fixed inset-0 bg-black/50 grid place-items-center z-40"><div class="w-[440px] rounded-lg bg-white p-6 shadow-lg space-y-4"><h2 class="text-lg font-semibold">Cover a teacher</h2>
               <label class="block space-y-2"><span class="font-medium">Teacher (required)</span>${btn("Tomas Horvat ▾", "outline", "w-full justify-between")}</label>
               <div class="grid grid-cols-2 gap-3"><label class="space-y-2"><span class="font-medium">From</span>${btn("20 Oct 2026", "outline", "w-full")}</label><label class="space-y-2"><span class="font-medium">To</span>${btn("22 Oct 2026", "outline", "w-full")}</label></div>
-              <label class="flex gap-2 items-start text-muted-foreground"><input type="checkbox" checked class="mt-1"> Also mark Tomas Horvat as away on these dates <em>(open question Q2)</em></label>
+              <label class="flex gap-2 items-start text-muted-foreground"><input type="checkbox" checked class="mt-1"> Also mark Tomas Horvat as away on these dates</label>
               <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Show lessons")}</div></div></div>`
             : "";
         return desktop(
           `<div class="flex items-center justify-between"><h1 class="text-2xl font-semibold">Substitutions</h1><span data-state="4">${btn("Cover a teacher…")}</span></div>${tabs}${filters}${body}${dialog}`,
+          null,
         );
       }
 
@@ -426,7 +429,7 @@
               ok("Teaches B1") +
                 ok("Free at this time") +
                 ok("6 h → 7.5 h this week (max 10 h)"),
-              "Has taught B1 Evening before",
+              "Has taught B1 Evening · Already teaching that day",
             ) +
             row(
               "lucia",
@@ -435,7 +438,7 @@
               ok("Teaches B1") +
                 ok("Free at this time") +
                 ok("4 h → 5.5 h this week (no max)"),
-              "Fewest hours this week",
+              "Covered 2 lessons this term",
             ) +
             row(
               "eva",
@@ -447,7 +450,7 @@
             );
         const footerWarn =
           i === 1
-            ? `<div class="space-y-2">${alert("Peter Varga has warnings for this lesson:<br>⚠ Doesn't teach B1 (teaches A1–A2)", "warning")}<label class="flex gap-2"><input type="checkbox"> Assign anyway</label></div>`
+            ? `<div class="space-y-2">${alert("Peter Varga has warnings for this lesson:", "warning")}<label class="flex gap-2"><input type="checkbox"> ⚠ Doesn't teach B1 (teaches A1–A2) — I've checked this</label><label class="block space-y-1"><span class="text-sm font-medium">Reason (optional)</span><input class="h-9 w-full rounded-md border border-input px-3" maxlength="300"></label></div>`
             : "";
         const stale =
           i === 3
@@ -466,12 +469,12 @@
             <input class="mt-2 h-9 w-full rounded-md border border-input px-3" placeholder="Search teachers…"></div>
           <div class="flex-1 overflow-auto p-4 space-y-4">${stale}
             <section role="group" aria-labelledby="s1" class="space-y-1"><h3 id="s1" class="font-semibold">Suggested (${noneSuggested ? 0 : 3})</h3>${suggested}</section>
-            <section role="group" aria-labelledby="s2" class="space-y-1"><h3 id="s2" class="font-semibold">Possible with a warning (2)</h3>
+            <section role="group" aria-labelledby="s2" class="space-y-1"><h3 id="s2" class="font-semibold">Possible with a warning (3)</h3>
               ${row("peter", "", "Peter Varga", warn("Doesn't teach B1 (teaches A1–A2)") + ok("Free at this time"))}
-              ${row("marta", "", "Marta Holub", warn("Unavailable Mon 16:00–20:00 (weekly)") + ok("Teaches B1"))}</section>
-            <details ${noneSuggested ? "open" : ""} class="space-y-1"><summary class="font-semibold cursor-pointer">Not possible (2)</summary>
-              ${row("jozef", "", "Jozef Kovac", no("Teaching C1 Business, 17:00–18:30"), "", true)}
-              ${row("ivana", "", "Ivana Mraz", no("Away on 20 Oct (one-off)"), "", true)}</details></div>
+              ${row("marta", "", "Marta Holub", warn("Unavailable Mon 16:00–20:00 (weekly)") + ok("Teaches B1"))}
+              ${row("ivana", "", "Ivana Mraz", warn("Away on 20 Oct (one-off)") + ok("Teaches B1"))}</section>
+            <details ${noneSuggested ? "open" : ""} class="space-y-1"><summary class="font-semibold cursor-pointer">Not possible (1)</summary>
+              ${row("jozef", "", "Jozef Kovac", no("Teaching C1 Business, 17:00–18:30"), "", true)}</details></div>
           <div class="p-4 border-t border-border space-y-3">${footerWarn}
             ${name ? `<p class="text-muted-foreground">ⓘ ${name}, Tomas Horvat and the 8 students of B1 Evening will be notified.</p>` : ""}
             <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${name ? btn(`Assign ${name}`) : btn("Assign", "disabled")}</div></div></aside>`;
@@ -553,10 +556,9 @@
         const c = (name, grp, body) =>
           `<div class="rounded-lg border border-border p-4 space-y-1"><div class="font-semibold">${name}</div><div class="text-muted-foreground">${grp}</div>${body}</div>`;
         return phone(`<h1 class="text-2xl font-semibold">Rate your teachers</h1><p class="text-muted-foreground">Autumn 2026</p>
-          ${alert("🔒 Only the school's admins see ratings. Teachers don't.")}
+          ${alert("🔒 Only the school office sees ratings. Teachers never do.")}
           ${c("Tomas Horvat", "B1 Evening", `<div class="flex justify-between items-center"><span>Not rated yet</span><span data-go="rate">${btn("Rate ›", "primary", "h-11")}</span></div>`)}
-          ${c("Ana Kral (substitute)", "B1 Evening", `<div><span class="text-amber-500" aria-hidden="true">★★★★☆</span> <span class="sr-only">4 out of 5, </span>Very good · Rated 12 Nov</div><div class="flex justify-between items-center"><span class="text-muted-foreground text-sm">You can change it until 20 Dec.</span>${btn("Edit ›", "outline", "h-11")}</div>`)}
-          ${c("Eva Simon", "Conversation club", `<p class="text-muted-foreground">You can rate Eva Simon from 3 Nov.</p>`)}
+          ${c("Ana Kral (substitute)", "B1 Evening", `<div><span class="text-amber-500" aria-hidden="true">★★★★☆</span> <span class="sr-only">4 out of 5, </span>Very good · Rated 12 Nov</div><div class="flex justify-between items-center"><span class="text-muted-foreground text-sm">You can change it until 3 Jan.</span>${btn("Edit ›", "outline", "h-11")}</div>`)}
           <details class="text-muted-foreground"><summary class="py-2">Earlier terms</summary></details>`);
       }
       function rateForm(i) {
@@ -572,46 +574,47 @@
           )}</div>${val ? `<p class="font-medium">${labels[val - 1]}</p>` : ""}${i === 2 ? `<p class="text-destructive text-sm">Choose a rating from 1 to 5 stars.</p>` : ""}`;
         return phone(`<a href="#" class="text-primary">‹ Rate your teachers</a>
           <h1 class="text-2xl font-semibold">How are your lessons with Tomas Horvat?</h1><p class="text-muted-foreground">Autumn 2026 · B1 Evening</p>
-          ${i === 3 ? alert("This term has ended. Ratings can no longer be changed.", "info") : alert("🔒 Only the school's admins see this. Tomas Horvat won't see it.")}
+          ${i === 3 ? alert("Rating for Autumn 2026 has closed. You can no longer change it.", "info") : alert("🔒 Only the school office sees your rating. Your teacher never does.")}
           <div class="space-y-2"><span id="rl" class="font-medium">Your rating (required)</span>${stars}</div>
           <label class="block space-y-2"><span class="font-medium">Comment (optional)</span><textarea ${i === 3 ? "disabled" : ""} class="w-full rounded-md border border-input p-3 h-28" placeholder="What's going well? What could be better?">${val ? "Clear explanations, lots of speaking practice. Homework is sometimes unclear." : ""}</textarea><span class="block text-right text-xs text-muted-foreground tnum">${val ? 78 : 0}/1000</span></label>
-          ${i === 3 ? "" : btn(i === 1 ? "Submit rating" : "Submit rating", "primary", "h-11 w-full")}`);
+          ${i === 3 ? "" : btn(i === 1 ? "Save changes" : "Submit rating", "primary", "h-11 w-full")}${i === 1 ? btn("Delete rating…", "link", "h-11 w-full text-destructive") : ""}`);
       }
       function adminRatings(i) {
+        const adminDesk = (inner) => desktop(inner, null);
         const bars = (d) =>
           `<div class="space-y-0.5 text-xs" aria-label="5 stars: ${d[0]}, 4 stars: ${d[1]}, 3 stars: ${d[2]}, 2 stars: ${d[3]}, 1 star: ${d[4]}">${d.map((n, k) => `<div class="flex items-center gap-1"><span class="w-3 tnum">${5 - k}</span><span class="h-2 bg-amber-500 rounded-sm" style="width:${n * 6}px"></span><span class="tnum text-muted-foreground">${n}</span></div>`).join("")}</div>`;
         const head = (t) =>
           `<div class="flex items-center justify-between"><h1 class="text-2xl font-semibold">${t}</h1><div class="flex items-center gap-2">Term ${btn("Autumn 2026 ▾", "outline")}</div></div>${alert("🔒 Only admins can see ratings. Teachers and students can't.")}`;
         if (i === 2)
-          return desktop(
+          return adminDesk(
             head("Ratings") +
               card(
                 empty(
                   "⭐",
                   "No ratings for Autumn 2026 yet.",
-                  "Students can rate their teachers from 3 Nov.",
+                  "Students can rate a teacher after 3 lessons with them.",
                 ),
               ),
           );
         if (i === 3) {
           const r = (s, stars, c, who) =>
             `<li class="py-3 space-y-1"><div><span class="text-amber-500" aria-hidden="true">${"★".repeat(stars)}${"☆".repeat(5 - stars)}</span> <span class="font-medium">${["Poor", "Fair", "Good", "Very good", "Excellent"][stars - 1]}</span></div><p>${c}</p><p class="text-xs text-muted-foreground">${who}</p></li>`;
-          return desktop(`<a href="#" class="text-primary">‹ Ratings</a>${head("Tomas Horvat")}
+          return adminDesk(`<a href="#" class="text-primary">‹ Ratings</a>${head("Tomas Horvat")}
             <div class="grid grid-cols-3 gap-6">${card(`<h2 class="font-semibold">Autumn 2026</h2><p class="text-3xl font-semibold tnum">★ 3.9 <span class="text-base text-muted-foreground">out of 5</span></p><p class="text-muted-foreground">22 ratings</p>${bars([8, 7, 4, 2, 1])}`)}
-            ${card(`<div class="flex justify-between mb-2"><h2 class="font-semibold">Ratings</h2>${btn("All groups ▾", "outline")}</div><ul class="divide-y divide-border">${r("", 5, "Clear explanations, lots of speaking practice.", "Jan Novak · B1 Evening · 12 Nov")}${r("", 2, "Lessons often start late.", "Mia Kos · B2 Evening · 10 Nov · Edited")}</ul>${btn("Load more", "outline")}`, "col-span-2")}</div>`);
+            ${card(`<div class="flex justify-between mb-2"><h2 class="font-semibold">Ratings</h2>${btn("All groups ▾", "outline")}</div><ul class="divide-y divide-border">${r("", 5, "Clear explanations, lots of speaking practice.", "Jan Novak · B1 Evening · 12 Nov")}${r("", 2, "Lessons often start late.", "Mia Kos · B2 Evening · 10 Nov · Edited")}<li class="py-3 text-muted-foreground">Hidden by Anna V. on 9 Nov · <a href="#" class="text-primary">Show</a> · <a href="#" class="text-primary">Unhide</a></li></ul>${btn("Load more", "outline")}`, "col-span-2")}</div>`);
         }
         if (i === 1)
-          return desktop(
+          return adminDesk(
             head("Ratings") +
               `<div class="rounded-lg border border-border bg-white p-4 space-y-2">${skel(5, "h-10")}</div>`,
           );
         const rows = [
           ["Ana Kral", "★ 4.6", 14, [9, 4, 1, 0, 0], "2 days ago"],
           ["Tomas Horvat", "★ 3.9", 22, [8, 7, 4, 2, 1], "Today"],
-          ["Eva Simon", "Too few (2)", 2, null, "10 Nov"],
+          ["Eva Simon", "—", "2 · too few to average", null, "10 Nov"],
           ["Peter Varga", "No ratings", 0, null, "—"],
         ];
-        return desktop(
+        return adminDesk(
           head("Ratings") +
             `<div class="rounded-lg border border-border bg-white overflow-hidden"><table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["Teacher ↕", "Average ↕", "Ratings ↕", "Distribution", "Last rated"].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${rows
               .map(
@@ -635,12 +638,7 @@
       function calendarBody(i, mobile) {
         const h = mobile ? "h-11" : "";
         let linkCard;
-        if (i === 0)
-          linkCard = card(
-            `<h2 class="text-lg font-semibold">Your calendar link</h2><p class="text-muted-foreground">You don't have a calendar link yet.</p>${btn("Create my calendar link", "primary", `${h} ${mobile ? "w-full" : ""} mt-3`)}`,
-            mobile ? "p-4" : "",
-          );
-        else if (i === 5)
+        if (i === 5)
           linkCard = card(
             `<div class="space-y-3">${skel(1, "h-6")}${skel(1, "h-10")}</div>`,
           );
@@ -654,23 +652,23 @@
             ${copied ? `<p role="status" class="sr-only">Copied</p>` : ""}
             ${btn("Subscribe on this device", mobile ? "primary" : "link", `${h} ${mobile ? "w-full" : "h-auto"}`)}
             ${alert("⚠ Anyone with this link can see your lessons. Don't share it. If it leaks, reset it.", "warning")}
-            <div class="flex justify-between items-center text-muted-foreground"><span>Created 14 Oct 2026</span><span data-state="3">${btn("Reset link…", "outline", h)}</span></div></div>`,
+            <div class="flex justify-between items-center text-muted-foreground"><span>Created 14 Oct 2026</span><span data-state="2">${btn("Reset link…", "outline", h)}</span></div></div>`,
             mobile ? "p-4" : "",
           );
         }
-        const info = `<section class="space-y-2"><h2 class="text-lg font-semibold">What's in it</h2><ul class="list-disc pl-5 text-muted-foreground"><li>Your lessons from 4 weeks ago to the end of next term</li><li>Cancelled lessons, marked "Cancelled"</li><li>Substitutes: who teaches each lesson</li></ul></section>
+        const info = `<section class="space-y-2"><h2 class="text-lg font-semibold">What's in it</h2><ul class="list-disc pl-5 text-muted-foreground"><li>Your lessons from 30 days ago to 180 days ahead</li><li>Cancelled lessons stay, marked "Cancelled"</li><li>Who teaches each lesson, including substitutes</li><li>No other students' names, notes or absence reasons</li></ul></section>
           <section class="space-y-2"><h2 class="text-lg font-semibold">How to add it</h2>${["Google Calendar", "Apple Calendar", "Outlook"].map((a) => `<details class="border-b border-border"><summary class="py-2 cursor-pointer ${mobile ? "min-h-11" : ""}">${a}</summary><p class="pb-2 text-muted-foreground">${a === "Google Calendar" ? 'Copy the link. On a computer, open Google Calendar, next to "Other calendars" click +, choose "From URL", paste the link and click "Add calendar".' : a === "Apple Calendar" ? 'On your iPhone or Mac, tap "Subscribe on this device" and confirm.' : 'Copy the link. In Outlook on the web, go to "Add calendar", choose "Subscribe from web", paste the link and save.'}</p></details>`).join("")}
           <p class="text-xs text-muted-foreground">Calendar apps check for changes every few hours, so a change can take a while to show up.</p></section>`;
         const dlg =
           i === 3
-            ? `<div class="fixed inset-0 bg-black/50 grid place-items-center z-40 p-4"><div role="alertdialog" aria-labelledby="rt" class="max-w-md rounded-lg bg-white p-6 shadow-lg space-y-4"><h2 id="rt" class="text-lg font-semibold">Reset your calendar link?</h2><p class="text-muted-foreground">Your current link stops working right away. Calendars that use it will stop updating, so you'll need to add the new link to them.</p><div class="flex justify-end gap-2 flex-wrap">${btn("Keep current link", "outline")}<span data-state="4">${btn("Reset link", "destructive")}</span></div></div></div>`
+            ? `<div class="fixed inset-0 bg-black/50 grid place-items-center z-40 p-4"><div role="alertdialog" aria-labelledby="rt" class="max-w-md rounded-lg bg-white p-6 shadow-lg space-y-4"><h2 id="rt" class="text-lg font-semibold">Reset your calendar link?</h2><p class="text-muted-foreground">Your current link stops working right away. Calendars that use it will stop updating, so you'll need to add the new link to them.</p><div class="flex justify-end gap-2 flex-wrap">${btn("Keep current link", "outline")}<span data-state="3">${btn("Reset link", "destructive")}</span></div></div></div>`
             : "";
         return `<h1 class="text-2xl font-semibold">Calendar subscription</h1><p class="text-muted-foreground">See your lessons in Google Calendar, Apple Calendar or Outlook. Your calendar updates by itself when lessons change.</p>${linkCard}${info}${dlg}`;
       }
-      const calendarStudent = (i) => phone(calendarBody(i, true));
+      const calendarStudent = (i) => phone(calendarBody(i + 1, true));
       const calendarTeacher = (i) =>
         desktop(
-          `<div class="max-w-2xl space-y-6">${calendarBody(i, false)}</div>`,
+          `<div class="max-w-2xl space-y-6">${calendarBody(i + 1, false)}</div>`,
           1,
           "Tomas",
         );
@@ -732,7 +730,7 @@
         {
           k: "rate",
           label: "Rate form",
-          states: ["new", "filled", "validation", "term ended"],
+          states: ["new", "editing", "validation", "window closed"],
           fn: rateForm,
         },
         {
@@ -751,8 +749,7 @@
           k: "calS",
           label: "Calendar (student)",
           states: [
-            "no link",
-            "link",
+            "link (created on first visit)",
             "copied",
             "reset dialog",
             "after reset",
@@ -765,8 +762,7 @@
           k: "calT",
           label: "Calendar (teacher)",
           states: [
-            "no link",
-            "link",
+            "link (created on first visit)",
             "copied",
             "reset dialog",
             "after reset",
