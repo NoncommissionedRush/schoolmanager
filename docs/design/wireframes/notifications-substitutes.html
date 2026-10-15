@@ -290,17 +290,17 @@
           },
           {
             u: 1,
-            i: "⭐",
-            t: "How are your lessons with Tomas Horvat?",
-            d: "Rate by 20 Dec",
+            i: "🗓",
+            t: "The school reported you absent from B1 Evening on Wed 22 Oct",
+            d: "You got a makeup credit.",
             ago: "2 h ago",
-            go: "Rate ›",
+            go: "Open absences ›",
           },
           {
             u: 0,
             i: "🔁",
-            t: "Your replacement on Thu 16 Oct was changed by the school",
-            d: "Moved to B1 Morning",
+            t: "The school moved your replacement to B1 Morning on Thu 16 Oct",
+            d: "Was B1 Afternoon, Wed 15 Oct · Note from the school: the room was full",
             ago: "Yesterday",
             go: "Open ›",
           },
@@ -327,14 +327,14 @@
             "Tue 21 Oct · 09:00–10:30",
             "👤 Jan Novak · A2",
             "Eva Simon",
-            "Away (one-off)",
+            "Teaching A2 Morning",
             0,
           ],
           [
-            "Wed 22 Oct · 18:00–19:30",
-            "👥 C1 Business · C1",
-            "Peter Varga",
-            "Teacher archived",
+            "Thu 23 Oct · 17:00–18:30",
+            "👥 B2 Evening · B2",
+            "Ana Kral (substitute)",
+            "Substitute away",
             0,
           ],
         ];
@@ -356,6 +356,25 @@
             1,
           ],
         ];
+        const past = [
+          [
+            "Fri 17 Oct · 17:00–18:30",
+            "👥 B1 Evening · B1",
+            "Tomas Horvat",
+            "Ana Kral",
+            "Anna V., 17 Oct (after the lesson)",
+            0,
+          ],
+          [
+            "Mon 6 Oct · 09:00–10:30",
+            "👥 A2 Morning · A2",
+            "Eva Simon",
+            "Lucia Benova",
+            "Anna V., 3 Oct",
+            "locked",
+          ],
+        ];
+        const rowsFor = tab === 2 ? past : covered;
         if (tab === 0)
           return `<table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["When", "Lesson", "Teacher", "Why", ""].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${needs
             .map(
@@ -363,15 +382,15 @@
                 `<tr class="border-t border-border"><td class="px-3 py-2 tnum"><a href="#" class="text-primary">${r[0]}</a> ${r[4] ? badge("Soon", "danger") : ""}</td><td class="px-3 py-2">${r[1]}</td><td class="px-3 py-2">${r[2]}</td><td class="px-3 py-2">${r[3]}</td><td class="px-3 py-2 text-right"><span data-go="picker">${btn("Find substitute", "outline", "h-8")}</span></td></tr>`,
             )
             .join("")}</tbody></table>`;
-        return `<table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["When", "Lesson", "Teacher", "Substitute", "Assigned", ""].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${covered
+        return `<table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["When", "Lesson", "Teacher", "Substitute", "Assigned", ""].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${rowsFor
           .map(
             (r) =>
-              `<tr class="border-t border-border"><td class="px-3 py-2 tnum"><a href="#" class="text-primary">${r[0]}</a></td><td class="px-3 py-2">${r[1]}</td><td class="px-3 py-2">${r[2]}</td><td class="px-3 py-2"><span class="text-cyan-900">👤⚙ ${r[3]}</span> ${r[5] ? badge("⚠ Check substitute", "warning") : ""}</td><td class="px-3 py-2 text-muted-foreground">${r[4]}</td><td class="px-3 py-2 text-right"><button class="h-8 w-8 rounded hover:bg-muted" aria-label="Actions">⋯</button></td></tr>`,
+              `<tr class="border-t border-border"><td class="px-3 py-2 tnum"><a href="#" class="text-primary">${r[0]}</a></td><td class="px-3 py-2">${r[1]}</td><td class="px-3 py-2">${r[2]}</td><td class="px-3 py-2"><span class="text-cyan-900">👤⚙ ${r[3]}</span></td><td class="px-3 py-2 text-muted-foreground">${r[4]}</td><td class="px-3 py-2 text-right">${r[5] === "locked" ? `<span class="text-xs text-muted-foreground">Ended more than 7 days ago</span>` : `<button class="h-8 w-8 rounded hover:bg-muted" aria-label="Actions: Change substitute…, Remove substitute…">⋯</button>`}</td></tr>`,
           )
           .join("")}</tbody></table>`;
       };
       function substitutionsScreen(i) {
-        const tab = i === 1 ? 1 : 0;
+        const tab = i === 1 ? 1 : i === 5 ? 2 : 0;
         const tabs = `<div role="tablist" class="flex gap-1 border-b border-border">${["Needs cover (3)", "Covered (5)", "Past"].map((t, k) => `<button role="tab" aria-selected="${k === tab}" class="px-3 py-2 -mb-px border-b-2 ${k === tab ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}">${t}</button>`).join("")}</div>`;
         const filters = `<div class="flex gap-3 items-center">Teacher ${btn("Any ▾", "outline")} Dates ${btn("20 Oct – 14 Dec ▾", "outline")} Level ${btn("Any ▾", "outline")}</div>`;
         let body;
@@ -392,7 +411,7 @@
             ? `<div class="fixed inset-0 bg-black/50 grid place-items-center z-40"><div class="w-[440px] rounded-lg bg-white p-6 shadow-lg space-y-4"><h2 class="text-lg font-semibold">Cover a teacher</h2>
               <label class="block space-y-2"><span class="font-medium">Teacher (required)</span>${btn("Tomas Horvat ▾", "outline", "w-full justify-between")}</label>
               <div class="grid grid-cols-2 gap-3"><label class="space-y-2"><span class="font-medium">From</span>${btn("20 Oct 2026", "outline", "w-full")}</label><label class="space-y-2"><span class="font-medium">To</span>${btn("22 Oct 2026", "outline", "w-full")}</label></div>
-              <label class="flex gap-2 items-start text-muted-foreground"><input type="checkbox" checked class="mt-1"> Also mark Tomas Horvat as away on these dates <em>(open question Q2)</em></label>
+              <label class="flex gap-2 items-start text-muted-foreground"><input type="checkbox" checked class="mt-1"> Also mark Tomas Horvat as away on these dates <em class="text-xs">(Q2, needs the owner's yes)</em></label>
               <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Show lessons")}</div></div></div>`
             : "";
         return desktop(
@@ -407,8 +426,12 @@
       const no = (t) =>
         `<span class="text-red-700"><span aria-hidden="true">✗</span> ${t}</span>`;
       function pickerScreen(i) {
+        if (i >= 6) return removeDialog(i - 6);
         const noneSuggested = i === 2;
-        const sel = i === 1 ? "peter" : noneSuggested ? "" : "ana";
+        const current = i === 4;
+        const ended = i === 5;
+        const sel =
+          i === 1 ? "peter" : noneSuggested ? "" : current ? "lucia" : "ana";
         const row = (id, rank, name, reasons, hint = "", disabled = false) =>
           `<label class="flex gap-3 px-3 py-2 rounded-md ${sel === id ? "bg-accent" : "hover:bg-muted"} ${disabled ? "opacity-80 cursor-not-allowed" : "cursor-pointer"}">
             <input type="radio" name="sub" ${sel === id ? "checked" : ""} ${disabled ? 'aria-disabled="true" disabled' : ""} class="mt-1">
@@ -456,26 +479,40 @@
                 "warning",
               )
             : "";
-        const name = { ana: "Ana Kral", peter: "Peter Varga", "": "" }[
-          i === 3 ? "" : sel
-        ];
+        const name = {
+          ana: "Ana Kral",
+          peter: "Peter Varga",
+          lucia: "Lucia Benova",
+          "": "",
+        }[i === 3 ? "" : sel];
         const sheet = `<aside class="absolute right-0 top-0 bottom-0 w-[520px] bg-white shadow-lg border-l border-border flex flex-col z-20" aria-labelledby="ph">
           <div class="p-6 space-y-1 border-b border-border"><div class="flex justify-between"><h2 id="ph" class="text-lg font-semibold">Find a substitute</h2><button aria-label="Close">✕</button></div>
             <p class="font-medium">B1 Evening · 👥 Group · B1</p><p class="text-muted-foreground tnum">Mon 20 Oct 2026, 17:00–18:30 · Room 3</p>
             <p class="text-muted-foreground">Regular teacher: Tomas Horvat (away, one-off)</p>
+            ${current ? `<p class="text-muted-foreground">Current substitute: Marek Bel</p>` : ""}
             <input class="mt-2 h-9 w-full rounded-md border border-input px-3" placeholder="Search teachers…"></div>
           <div class="flex-1 overflow-auto p-4 space-y-4">${stale}
+            ${ended ? alert("This lesson has ended. Changing the substitute only corrects the record; nobody is notified.", "warning") : ""}
+            ${current ? `<div class="rounded-md border border-cyan-600 bg-cyan-50 px-3 py-2 space-y-1"><div class="font-medium">Marek Bel ${badge("Current", "cyan")}</div><div class="flex flex-wrap gap-x-3 text-xs">${warn("Away on 20 Oct (one-off)")}</div><span data-state="6">${btn("Remove substitute…", "outline", "h-8")}</span></div>` : ""}
             <section role="group" aria-labelledby="s1" class="space-y-1"><h3 id="s1" class="font-semibold">Suggested (${noneSuggested ? 0 : 3})</h3>${suggested}</section>
-            <section role="group" aria-labelledby="s2" class="space-y-1"><h3 id="s2" class="font-semibold">Possible with a warning (2)</h3>
+            <section role="group" aria-labelledby="s2" class="space-y-1"><h3 id="s2" class="font-semibold">Possible with a warning (3)</h3>
               ${row("peter", "", "Peter Varga", warn("Doesn't teach B1 (teaches A1–A2)") + ok("Free at this time"))}
-              ${row("marta", "", "Marta Holub", warn("Unavailable Mon 16:00–20:00 (weekly)") + ok("Teaches B1"))}</section>
-            <details ${noneSuggested ? "open" : ""} class="space-y-1"><summary class="font-semibold cursor-pointer">Not possible (2)</summary>
-              ${row("jozef", "", "Jozef Kovac", no("Teaching C1 Business, 17:00–18:30"), "", true)}
-              ${row("ivana", "", "Ivana Mraz", no("Away on 20 Oct (one-off)"), "", true)}</details></div>
+              ${row("marta", "", "Marta Holub", warn("Unavailable Mon 16:00–20:00 (weekly)") + ok("Teaches B1"))}
+              ${row("ivana", "", "Ivana Mraz", warn("Away on 20 Oct (one-off)") + ok("Teaches B1"))}</section>
+            <details ${noneSuggested ? "open" : ""} class="space-y-1"><summary class="font-semibold cursor-pointer">Not possible (1)</summary>
+              ${row("jozef", "", "Jozef Kovac", no("Teaching C1 Business, 17:00–18:30"), "", true)}</details></div>
           <div class="p-4 border-t border-border space-y-3">${footerWarn}
-            ${name ? `<p class="text-muted-foreground">ⓘ ${name}, Tomas Horvat and the 8 students of B1 Evening will be notified.</p>` : ""}
+            ${name ? `<p class="text-muted-foreground">ⓘ ${ended ? "Nobody is notified, because the lesson has ended." : `${name}, Tomas Horvat and the 8 students of B1 Evening will be notified.`}</p>` : ""}
             <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${name ? btn(`Assign ${name}`) : btn("Assign", "disabled")}</div></div></aside>`;
         return `<div class="relative">${substitutionsScreen(0)}<div class="absolute inset-0 bg-black/50 z-10"></div>${sheet}</div>`;
+      }
+
+      function removeDialog(i) {
+        const busy = i === 1;
+        const body = busy
+          ? `<p>Tomas Horvat is teaching B2 Evening at this time, so the substitute can't be removed. Pick another substitute instead.</p><div class="flex justify-end gap-2">${btn("Close", "outline")}<span data-state="4">${btn("Find another substitute")}</span></div>`
+          : `<p class="text-muted-foreground">Tomas Horvat teaches this lesson again.</p>${alert("Tomas Horvat is away at this time. The lesson will need cover again.", "warning")}<label class="flex gap-2"><input type="checkbox"> Remove anyway</label><p class="text-muted-foreground">ⓘ Ana Kral, Tomas Horvat and the 8 students of B1 Evening will be notified.</p><div class="flex justify-end gap-2">${btn("Keep substitute", "outline")}${btn("Remove substitute", "destructive")}</div>`;
+        return `<div class="relative">${substitutionsScreen(1)}<div class="absolute inset-0 bg-black/50 z-10 grid place-items-center"><div role="alertdialog" aria-labelledby="rmt" class="w-[480px] rounded-lg bg-white p-6 shadow-lg space-y-4"><h2 id="rmt" class="text-lg font-semibold">Remove Ana Kral from B1 Evening on Mon 20 Oct?</h2>${body}</div></div></div>`;
       }
 
       function coveredScreen(i) {
@@ -572,7 +609,7 @@
           )}</div>${val ? `<p class="font-medium">${labels[val - 1]}</p>` : ""}${i === 2 ? `<p class="text-destructive text-sm">Choose a rating from 1 to 5 stars.</p>` : ""}`;
         return phone(`<a href="#" class="text-primary">‹ Rate your teachers</a>
           <h1 class="text-2xl font-semibold">How are your lessons with Tomas Horvat?</h1><p class="text-muted-foreground">Autumn 2026 · B1 Evening</p>
-          ${i === 3 ? alert("This term has ended. Ratings can no longer be changed.", "info") : alert("🔒 Only the school's admins see this. Tomas Horvat won't see it.")}
+          ${i === 3 ? alert("Rating for Autumn 2026 has closed. Your rating can no longer be changed.", "info") : alert("🔒 Only the school's admins see this. Tomas Horvat won't see it.")}
           <div class="space-y-2"><span id="rl" class="font-medium">Your rating (required)</span>${stars}</div>
           <label class="block space-y-2"><span class="font-medium">Comment (optional)</span><textarea ${i === 3 ? "disabled" : ""} class="w-full rounded-md border border-input p-3 h-28" placeholder="What's going well? What could be better?">${val ? "Clear explanations, lots of speaking practice. Homework is sometimes unclear." : ""}</textarea><span class="block text-right text-xs text-muted-foreground tnum">${val ? 78 : 0}/1000</span></label>
           ${i === 3 ? "" : btn(i === 1 ? "Submit rating" : "Submit rating", "primary", "h-11 w-full")}`);
@@ -595,10 +632,10 @@
           );
         if (i === 3) {
           const r = (s, stars, c, who) =>
-            `<li class="py-3 space-y-1"><div><span class="text-amber-500" aria-hidden="true">${"★".repeat(stars)}${"☆".repeat(5 - stars)}</span> <span class="font-medium">${["Poor", "Fair", "Good", "Very good", "Excellent"][stars - 1]}</span></div><p>${c}</p><p class="text-xs text-muted-foreground">${who}</p></li>`;
+            `<li class="py-3 space-y-1"><div class="flex justify-between"><span><span class="text-amber-500" aria-hidden="true">${"★".repeat(stars)}${"☆".repeat(5 - stars)}</span> <span class="font-medium">${["Poor", "Fair", "Good", "Very good", "Excellent"][stars - 1]}</span></span>${s === "hidden" ? btn("Unhide", "outline", "h-8") : `<button class="h-8 w-8 rounded hover:bg-muted" aria-label="Actions: Hide rating">⋯</button>`}</div><p>${c}</p><p class="text-xs text-muted-foreground">${who}</p></li>`;
           return desktop(`<a href="#" class="text-primary">‹ Ratings</a>${head("Tomas Horvat")}
-            <div class="grid grid-cols-3 gap-6">${card(`<h2 class="font-semibold">Autumn 2026</h2><p class="text-3xl font-semibold tnum">★ 3.9 <span class="text-base text-muted-foreground">out of 5</span></p><p class="text-muted-foreground">22 ratings</p>${bars([8, 7, 4, 2, 1])}`)}
-            ${card(`<div class="flex justify-between mb-2"><h2 class="font-semibold">Ratings</h2>${btn("All groups ▾", "outline")}</div><ul class="divide-y divide-border">${r("", 5, "Clear explanations, lots of speaking practice.", "Jan Novak · B1 Evening · 12 Nov")}${r("", 2, "Lessons often start late.", "Mia Kos · B2 Evening · 10 Nov · Edited")}</ul>${btn("Load more", "outline")}`, "col-span-2")}</div>`);
+            <div class="grid grid-cols-3 gap-6">${card(`<h2 class="font-semibold">Autumn 2026</h2><p class="text-3xl font-semibold tnum">★ 3.9 <span class="text-base text-muted-foreground">out of 5</span></p><p class="text-muted-foreground">22 ratings (1 hidden, not counted)</p>${bars([8, 7, 4, 2, 1])}`)}
+            ${card(`<div class="flex justify-between mb-2"><h2 class="font-semibold">Ratings</h2>${btn("All groups ▾", "outline")}</div><ul class="divide-y divide-border">${r("", 5, "Clear explanations, lots of speaking practice.", "Jan Novak · B1 Evening · 12 Nov")}${r("", 2, "Lessons often start late.", "Mia Kos · B2 Evening · 10 Nov · Edited")}</ul>${btn("Load more", "outline")}<details class="mt-4 border-t border-border pt-2"><summary class="cursor-pointer font-medium">Hidden ratings (1)</summary><ul>${r("hidden", 1, "[abusive comment]", "Petr Hlad · B1 Evening · 8 Nov · Hidden by Anna V., 9 Nov")}</ul></details>`, "col-span-2")}</div>`);
         }
         if (i === 1)
           return desktop(
@@ -608,7 +645,7 @@
         const rows = [
           ["Ana Kral", "★ 4.6", 14, [9, 4, 1, 0, 0], "2 days ago"],
           ["Tomas Horvat", "★ 3.9", 22, [8, 7, 4, 2, 1], "Today"],
-          ["Eva Simon", "Too few (2)", 2, null, "10 Nov"],
+          ["Eva Simon", "Too few to average", 2, null, "10 Nov"],
           ["Peter Varga", "No ratings", 0, null, "—"],
         ];
         return desktop(
@@ -635,9 +672,9 @@
       function calendarBody(i, mobile) {
         const h = mobile ? "h-11" : "";
         let linkCard;
-        if (i === 0)
+        if (i === 0 || i === 7)
           linkCard = card(
-            `<h2 class="text-lg font-semibold">Your calendar link</h2><p class="text-muted-foreground">You don't have a calendar link yet.</p>${btn("Create my calendar link", "primary", `${h} ${mobile ? "w-full" : ""} mt-3`)}`,
+            `<h2 class="text-lg font-semibold">Your calendar link</h2>${i === 7 ? alert("The school turned off your previous link. Create a new one to keep your calendar up to date.") : ""}<p class="text-muted-foreground">You don't have a calendar link yet.</p>${btn("Create my calendar link", "primary", `${h} ${mobile ? "w-full" : ""} mt-3`)}`,
             mobile ? "p-4" : "",
           );
         else if (i === 5)
@@ -658,7 +695,7 @@
             mobile ? "p-4" : "",
           );
         }
-        const info = `<section class="space-y-2"><h2 class="text-lg font-semibold">What's in it</h2><ul class="list-disc pl-5 text-muted-foreground"><li>Your lessons from 4 weeks ago to the end of next term</li><li>Cancelled lessons, marked "Cancelled"</li><li>Substitutes: who teaches each lesson</li></ul></section>
+        const info = `<section class="space-y-2"><h2 class="text-lg font-semibold">What's in it</h2><ul class="list-disc pl-5 text-muted-foreground"><li>Your lessons from 30 days ago to 6 months ahead</li><li>Cancelled lessons, marked "Cancelled"</li>${mobile ? `<li>Lessons you reported you'll miss, marked "Not attending"</li>` : ""}<li>Substitutes: who teaches each lesson</li></ul></section>
           <section class="space-y-2"><h2 class="text-lg font-semibold">How to add it</h2>${["Google Calendar", "Apple Calendar", "Outlook"].map((a) => `<details class="border-b border-border"><summary class="py-2 cursor-pointer ${mobile ? "min-h-11" : ""}">${a}</summary><p class="pb-2 text-muted-foreground">${a === "Google Calendar" ? 'Copy the link. On a computer, open Google Calendar, next to "Other calendars" click +, choose "From URL", paste the link and click "Add calendar".' : a === "Apple Calendar" ? 'On your iPhone or Mac, tap "Subscribe on this device" and confirm.' : 'Copy the link. In Outlook on the web, go to "Add calendar", choose "Subscribe from web", paste the link and save.'}</p></details>`).join("")}
           <p class="text-xs text-muted-foreground">Calendar apps check for changes every few hours, so a change can take a while to show up.</p></section>`;
         const dlg =
@@ -704,13 +741,23 @@
             "empty",
             "loading",
             "cover a teacher",
+            "past (7-day corrections)",
           ],
           fn: substitutionsScreen,
         },
         {
           k: "picker",
           label: "Find a substitute",
-          states: ["suggested", "warning pick", "nobody suggested", "stale"],
+          states: [
+            "suggested",
+            "warning pick",
+            "nobody suggested",
+            "stale",
+            "current substitute",
+            "lesson ended",
+            "remove dialog",
+            "remove: regular teacher busy",
+          ],
           fn: pickerScreen,
         },
         {
@@ -732,7 +779,7 @@
         {
           k: "rate",
           label: "Rate form",
-          states: ["new", "filled", "validation", "term ended"],
+          states: ["new", "filled", "validation", "window closed"],
           fn: rateForm,
         },
         {
@@ -758,6 +805,7 @@
             "after reset",
             "loading",
             "reset error",
+            "turned off by school (Q6)",
           ],
           fn: calendarStudent,
         },
