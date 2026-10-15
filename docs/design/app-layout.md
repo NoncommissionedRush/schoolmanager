@@ -132,9 +132,10 @@ Teacher
 | Teaching | My timetable         | `nav.myTimetable`   | `calendar-days`    | P1    |
 | Teaching | My groups & students | `nav.myGroups`      | `users`            | P1    |
 | Teaching | Lesson log           | `nav.lessonLog`     | `notebook-pen`     | P2    |
-| Teaching | Ratings              | `nav.ratings`       | `star`             | P5    |
 | Me       | My absences          | `nav.myAbsences`    | `calendar-x`       | P3    |
 | Me       | Substitutions        | `nav.substitutions` | `user-round-cog`   | P5    |
+
+Teachers have no _Ratings_ item: only admins see ratings (owner decision 2026-10-15, `notifications-substitutes.md` §2).
 
 Student (bottom tabs marked ★)
 

@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Wireframe — Notifications, substitutes, ratings & iCal (CARM-63)
+    </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .sub {
+        background: #ecfeff;
+        border-left: 3px solid #0891b2;
+        color: #164e63;
+      }
+      .covered {
+        background: #f8fafc;
+        border-left: 3px dashed #94a3b8;
+        color: #475569;
+      }
+      .grp {
+        background: #eff6ff;
+        border-left: 3px solid #2563eb;
+        color: #1e3a8a;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Phase 5</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* --------------------------------------------------------------- helpers */
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          link: "text-primary hover:underline px-0",
+          destructive: "bg-destructive text-white",
+          disabled: "bg-slate-200 text-slate-500 cursor-not-allowed",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center justify-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const badge = (t, tone = "muted") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+          cyan: "bg-cyan-50 text-cyan-900 border-cyan-600",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border ${c}">${t}</span>`;
+      };
+      const alert = (t, tone = "info") => {
+        const c = {
+          info: "bg-blue-50 text-blue-800 border-blue-300",
+          warning: "bg-amber-50 text-amber-800 border-amber-300",
+          danger: "bg-red-50 text-red-800 border-red-300",
+          success: "bg-green-50 text-green-800 border-green-300",
+        }[tone];
+        return `<div role="${tone === "danger" ? "alert" : "status"}" class="rounded-md border px-3 py-2 ${c}">${t}</div>`;
+      };
+      const card = (inner, extra = "") =>
+        `<section class="rounded-lg border border-border bg-white p-6 ${extra}">${inner}</section>`;
+      const empty = (icon, title, desc, action = "") =>
+        `<div class="flex flex-col items-center text-center gap-2 py-10"><div class="text-4xl text-slate-400" aria-hidden="true">${icon}</div><h2 class="text-lg font-semibold">${title}</h2><p class="text-muted-foreground max-w-sm">${desc}</p>${action}</div>`;
+      const skel = (n, h = "h-12") =>
+        Array.from(
+          { length: n },
+          () => `<div class="skeleton ${h}"></div>`,
+        ).join("");
+
+      /* App header with bell */
+      const bell = (count) =>
+        `<button aria-label="Notifications${count ? `, ${count} unread` : ""}" class="relative h-10 w-10 rounded-md hover:bg-muted inline-flex items-center justify-center text-lg">🔔${count ? `<span aria-hidden="true" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-xs leading-[18px] tnum">${count > 9 ? "9+" : count}</span>` : ""}</button>`;
+      const appHeader = (count, who = "Anna") =>
+        `<header class="h-14 flex items-center gap-3 border-b border-border bg-white px-4"><span class="h-8 w-8 rounded bg-primary text-white grid place-items-center text-xs font-semibold">LL</span><strong>Lingua Language School</strong><div class="ml-auto flex items-center gap-2">${bell(count)}<span class="inline-flex items-center gap-2"><span class="h-8 w-8 rounded-full bg-slate-200 grid place-items-center text-xs">AV</span>${who} ▾</span></div></header>`;
+      const desktop = (inner, count = 3, who) =>
+        `<div class="w-[1180px] rounded-lg overflow-hidden border border-slate-300 bg-muted">${appHeader(count, who)}<main class="p-6 space-y-6">${inner}</main></div>`;
+      const phone = (inner, count = 2) =>
+        `<div class="w-[390px] min-h-[760px] rounded-[2rem] border-8 border-slate-800 bg-white overflow-hidden text-base flex flex-col">
+          <header class="h-14 flex items-center gap-2 border-b border-border px-3"><button class="h-11 w-11 text-lg" aria-label="Menu">☰</button><strong class="text-sm">Lingua Language School</strong><div class="ml-auto">${bell(count)}</div></header>
+          <main class="flex-1 p-4 space-y-4">${inner}</main>
+          <nav class="h-16 border-t border-border grid grid-cols-5 text-xs text-center">${["🏠 Home", "📅 Timetable", "📋 Homework", "🗓 Absences", "☰ More"].map((t) => `<a class="grid place-items-center" href="#">${t}</a>`).join("")}</nav>
+        </div>`;
+
+      /* ------------------------------------------------------ notifications */
+      const NOTES = [
+        {
+          u: 1,
+          i: "👤⚙",
+          t: "Ana Kral is substituting in B1 Evening",
+          d: "Mon 20 Oct 2026, 17:00–18:30 · Room 3",
+          ago: "5 min ago",
+          go: "Open lesson ›",
+          day: "Today",
+        },
+        {
+          u: 1,
+          i: "⊘",
+          t: "C1 Business on Wed 22 Oct is cancelled",
+          d: "Reason: Teacher ill",
+          ago: "1 h ago",
+          go: "Open lesson ›",
+          day: "Today",
+        },
+        {
+          u: 1,
+          i: "🗓",
+          t: "Jan Novak won't be at B1 Evening on Mon 20 Oct",
+          d: "",
+          ago: "3 h ago",
+          go: "Open lesson ›",
+          day: "Today",
+        },
+        {
+          u: 0,
+          i: "📅",
+          t: "Your timetable for Autumn 2026 changed",
+          d: "12 lessons changed from 3 Nov",
+          ago: "Yesterday",
+          go: "Open timetable ›",
+          day: "Yesterday",
+        },
+        {
+          u: 0,
+          i: "🕘",
+          t: "A2 Morning moved to Thu 23 Oct, 09:00",
+          d: "Was Wed 22 Oct, 08:00",
+          ago: "Yesterday",
+          go: "Open lesson ›",
+          day: "Yesterday",
+        },
+        {
+          u: 0,
+          i: "👤✕",
+          t: "You're no longer substituting in A1 Evening on Tue 14 Oct",
+          d: "",
+          ago: "13 Oct",
+          go: "",
+          gone: 1,
+          day: "Earlier",
+        },
+      ];
+      const noteItem = (n, compact) =>
+        `<a href="#" class="block ${compact ? "px-4 py-3 hover:bg-muted" : "rounded-lg border border-border bg-white p-4 hover:bg-accent"} ${n.gone ? "pointer-events-none" : ""}">
+          <div class="flex gap-3"><span class="w-2 mt-2 shrink-0">${n.u ? `<span class="block h-2 w-2 rounded-full bg-primary" aria-hidden="true"></span>` : ""}</span>
+          <span class="w-6 shrink-0" aria-hidden="true">${n.i}</span>
+          <div class="flex-1 min-w-0"><p class="${n.u ? "font-semibold" : ""}">${n.u ? `<span class="sr-only">Unread: </span>` : ""}${n.t}</p>
+            ${n.d ? `<p class="text-muted-foreground tnum">${n.d}</p>` : ""}
+            <div class="flex justify-between text-xs text-muted-foreground mt-1"><time title="Mon 20 Oct 2026, 14:05">${n.ago}</time>${n.gone ? `<span>No longer available.</span>` : `<span class="text-primary font-medium">${n.go}</span>`}</div></div>
+          ${compact ? "" : `<button class="h-8 w-8 rounded hover:bg-muted self-start" aria-label="More actions for this notification">⋯</button>`}</div></a>`;
+
+      function bellScreen(i) {
+        const count = i === 1 ? 0 : 3;
+        let body;
+        if (i === 2) body = `<div class="p-4 space-y-3">${skel(3)}</div>`;
+        else if (i === 3)
+          body = `<div class="p-4">${alert(`Couldn't load notifications. ${btn("Try again", "outline", "ml-2 h-8")}`, "danger")}</div>`;
+        else if (i === 1)
+          body = empty(
+            "🔕",
+            "You're all caught up.",
+            "We'll let you know when something changes.",
+          );
+        else
+          body = `<div class="divide-y divide-border max-h-[420px] overflow-auto">${NOTES.slice(
+            0,
+            5,
+          )
+            .map((n) => noteItem(n, true))
+            .join("")}</div>`;
+        const pop = `<div class="absolute right-20 top-12 w-[380px] rounded-lg border border-border bg-white shadow-lg z-10">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-border"><h2 class="font-semibold">Notifications</h2>${count ? btn("Mark all as read", "link", "h-auto") : ""}</div>
+          ${body}
+          <div class="border-t border-border text-center py-2">${btn("See all notifications", "link", "h-auto")}</div></div>`;
+        return `<div class="relative">${desktop(
+          `<h1 class="text-2xl font-semibold">Good morning, Tomas</h1><div class="grid grid-cols-3 gap-6">${card(`<h2 class="font-semibold">Next lesson</h2><p class="text-muted-foreground">B1 Evening · 17:00</p>`)}${card(`<h2 class="font-semibold">Today</h2>`, "col-span-2")}</div>`,
+          count,
+          "Tomas",
+        )}${pop}</div>`;
+      }
+
+      function inboxScreen(i) {
+        const unreadOnly = i === 1;
+        let list;
+        if (i === 2) list = `<div class="space-y-3">${skel(5, "h-20")}</div>`;
+        else if (i === 3)
+          list = card(
+            empty(
+              "🔔",
+              "No notifications yet",
+              "When a lesson is cancelled, moved or covered by a substitute, you'll see it here.",
+            ),
+          );
+        else if (i === 4)
+          list = card(
+            empty(
+              "✓",
+              "You're all caught up.",
+              "",
+              `<a href="#" class="text-primary">Show all</a>`,
+            ),
+          );
+        else {
+          const items = NOTES.filter((n) => !unreadOnly || n.u);
+          const days = [...new Set(items.map((n) => n.day))];
+          list =
+            days
+              .map(
+                (d) =>
+                  `<h2 class="text-lg font-semibold mt-2">${d}</h2><div class="space-y-2">${items
+                    .filter((n) => n.day === d)
+                    .map((n) => noteItem(n))
+                    .join("")}</div>`,
+              )
+              .join("") +
+            `<div class="text-center">${btn("Load more", "outline")}</div><p class="text-center text-xs text-muted-foreground">Notifications older than 90 days are removed.</p>`;
+        }
+        const filter = `<div role="group" class="inline-flex rounded-md border border-input bg-white p-0.5">${["All", "Unread (3)"].map((t, k) => `<button aria-pressed="${(k === 1) === (unreadOnly || i === 4)}" class="px-3 h-8 rounded ${(k === 1) === (unreadOnly || i === 4) ? "bg-accent text-accent-foreground font-medium" : ""}">${t}</button>`).join("")}</div>`;
+        return desktop(
+          `<div class="max-w-3xl mx-auto space-y-4"><div class="flex items-center justify-between"><h1 class="text-2xl font-semibold">Notifications</h1>${i === 3 || i === 4 ? "" : btn("Mark all as read", "outline")}</div>${filter}${list}</div>`,
+          i === 3 || i === 4 ? 0 : 3,
+          "Tomas",
+        );
+      }
+
+      function inboxMobile(i) {
+        if (i === 1)
+          return phone(
+            `<h1 class="text-2xl font-semibold">Notifications</h1>${empty("🔔", "No notifications yet", "When a lesson is cancelled, moved or covered by a substitute, you'll see it here.")}`,
+            0,
+          );
+        const S = [
+          {
+            u: 1,
+            i: "👤⚙",
+            t: "Ana Kral is teaching B1 Evening on Mon 20 Oct",
+            d: "17:00–18:30 · Room 3",
+            ago: "5 min ago",
+            go: "Open lesson ›",
+          },
+          {
+            u: 1,
+            i: "⭐",
+            t: "How are your lessons with Tomas Horvat?",
+            d: "Rate by 20 Dec",
+            ago: "2 h ago",
+            go: "Rate ›",
+          },
+          {
+            u: 0,
+            i: "🔁",
+            t: "Your replacement on Thu 16 Oct was changed by the school",
+            d: "Moved to B1 Morning",
+            ago: "Yesterday",
+            go: "Open ›",
+          },
+        ];
+        return phone(
+          `<div class="flex items-center justify-between"><h1 class="text-2xl font-semibold">Notifications</h1>${btn("Mark all as read", "link", "h-11")}</div>
+           <div class="inline-flex rounded-md border border-input p-0.5"><button class="px-3 h-10 rounded bg-accent text-accent-foreground font-medium">All</button><button class="px-3 h-10 rounded">Unread (2)</button></div>
+           <h2 class="text-lg font-semibold">Today</h2><div class="space-y-2">${S.map((n) => noteItem(n)).join("")}</div>`,
+          2,
+        );
+      }
+
+      /* -------------------------------------------------------- substitutes */
+      const subTable = (tab) => {
+        const needs = [
+          [
+            "Mon 20 Oct · 17:00–18:30",
+            "👥 B1 Evening · B1",
+            "Tomas Horvat",
+            "Away (one-off)",
+            1,
+          ],
+          [
+            "Tue 21 Oct · 09:00–10:30",
+            "👤 Jan Novak · A2",
+            "Eva Simon",
+            "Away (one-off)",
+            0,
+          ],
+          [
+            "Wed 22 Oct · 18:00–19:30",
+            "👥 C1 Business · C1",
+            "Peter Varga",
+            "Teacher archived",
+            0,
+          ],
+        ];
+        const covered = [
+          [
+            "Thu 23 Oct · 17:00–18:30",
+            "👥 B2 Evening · B2",
+            "Tomas Horvat",
+            "Ana Kral",
+            "Anna V., 18 Oct",
+            0,
+          ],
+          [
+            "Fri 24 Oct · 10:00–11:30",
+            "👥 A1 Morning · A1",
+            "Eva Simon",
+            "Lucia Benova",
+            "Anna V., 17 Oct",
+            1,
+          ],
+        ];
+        if (tab === 0)
+          return `<table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["When", "Lesson", "Teacher", "Why", ""].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${needs
+            .map(
+              (r) =>
+                `<tr class="border-t border-border"><td class="px-3 py-2 tnum"><a href="#" class="text-primary">${r[0]}</a> ${r[4] ? badge("Soon", "danger") : ""}</td><td class="px-3 py-2">${r[1]}</td><td class="px-3 py-2">${r[2]}</td><td class="px-3 py-2">${r[3]}</td><td class="px-3 py-2 text-right"><span data-go="picker">${btn("Find substitute", "outline", "h-8")}</span></td></tr>`,
+            )
+            .join("")}</tbody></table>`;
+        return `<table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["When", "Lesson", "Teacher", "Substitute", "Assigned", ""].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${covered
+          .map(
+            (r) =>
+              `<tr class="border-t border-border"><td class="px-3 py-2 tnum"><a href="#" class="text-primary">${r[0]}</a></td><td class="px-3 py-2">${r[1]}</td><td class="px-3 py-2">${r[2]}</td><td class="px-3 py-2"><span class="text-cyan-900">👤⚙ ${r[3]}</span> ${r[5] ? badge("⚠ Check substitute", "warning") : ""}</td><td class="px-3 py-2 text-muted-foreground">${r[4]}</td><td class="px-3 py-2 text-right"><button class="h-8 w-8 rounded hover:bg-muted" aria-label="Actions">⋯</button></td></tr>`,
+          )
+          .join("")}</tbody></table>`;
+      };
+      function substitutionsScreen(i) {
+        const tab = i === 1 ? 1 : 0;
+        const tabs = `<div role="tablist" class="flex gap-1 border-b border-border">${["Needs cover (3)", "Covered (5)", "Past"].map((t, k) => `<button role="tab" aria-selected="${k === tab}" class="px-3 py-2 -mb-px border-b-2 ${k === tab ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}">${t}</button>`).join("")}</div>`;
+        const filters = `<div class="flex gap-3 items-center">Teacher ${btn("Any ▾", "outline")} Dates ${btn("20 Oct – 14 Dec ▾", "outline")} Level ${btn("Any ▾", "outline")}</div>`;
+        let body;
+        if (i === 2)
+          body = card(
+            empty(
+              "👤⚙",
+              "No lessons need cover.",
+              "When a teacher is away on a lesson's date, the lesson shows up here.",
+            ),
+          );
+        else if (i === 3)
+          body = `<div class="rounded-lg border border-border bg-white p-4 space-y-2">${skel(4, "h-9")}</div>`;
+        else
+          body = `<div class="rounded-lg border border-border bg-white overflow-hidden">${subTable(tab)}</div>`;
+        const dialog =
+          i === 4
+            ? `<div class="fixed inset-0 bg-black/50 grid place-items-center z-40"><div class="w-[440px] rounded-lg bg-white p-6 shadow-lg space-y-4"><h2 class="text-lg font-semibold">Cover a teacher</h2>
+              <label class="block space-y-2"><span class="font-medium">Teacher (required)</span>${btn("Tomas Horvat ▾", "outline", "w-full justify-between")}</label>
+              <div class="grid grid-cols-2 gap-3"><label class="space-y-2"><span class="font-medium">From</span>${btn("20 Oct 2026", "outline", "w-full")}</label><label class="space-y-2"><span class="font-medium">To</span>${btn("22 Oct 2026", "outline", "w-full")}</label></div>
+              <label class="flex gap-2 items-start text-muted-foreground"><input type="checkbox" checked class="mt-1"> Also mark Tomas Horvat as away on these dates <em>(open question Q2)</em></label>
+              <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Show lessons")}</div></div></div>`
+            : "";
+        return desktop(
+          `<div class="flex items-center justify-between"><h1 class="text-2xl font-semibold">Substitutions</h1><span data-state="4">${btn("Cover a teacher…")}</span></div>${tabs}${filters}${body}${dialog}`,
+        );
+      }
+
+      const ok = (t) =>
+        `<span class="text-green-700"><span aria-hidden="true">✓</span> ${t}</span>`;
+      const warn = (t) =>
+        `<span class="text-amber-700"><span aria-hidden="true">⚠</span> ${t}</span>`;
+      const no = (t) =>
+        `<span class="text-red-700"><span aria-hidden="true">✗</span> ${t}</span>`;
+      function pickerScreen(i) {
+        const noneSuggested = i === 2;
+        const sel = i === 1 ? "peter" : noneSuggested ? "" : "ana";
+        const row = (id, rank, name, reasons, hint = "", disabled = false) =>
+          `<label class="flex gap-3 px-3 py-2 rounded-md ${sel === id ? "bg-accent" : "hover:bg-muted"} ${disabled ? "opacity-80 cursor-not-allowed" : "cursor-pointer"}">
+            <input type="radio" name="sub" ${sel === id ? "checked" : ""} ${disabled ? 'aria-disabled="true" disabled' : ""} class="mt-1">
+            <div class="flex-1"><div class="font-medium">${rank ? `<span class="text-muted-foreground tnum mr-1">${rank}</span>` : ""}${name}</div>
+            <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">${reasons}</div>${hint ? `<div class="text-xs text-amber-800 mt-1"><span aria-hidden="true">★</span> ${hint}</div>` : ""}</div></label>`;
+        const suggested = noneSuggested
+          ? alert(
+              "No teacher meets all the rules for this lesson. You can still pick someone below with a warning.",
+              "warning",
+            )
+          : row(
+              "ana",
+              "1",
+              "Ana Kral",
+              ok("Teaches B1") +
+                ok("Free at this time") +
+                ok("6 h → 7.5 h this week (max 10 h)"),
+              "Has taught B1 Evening before",
+            ) +
+            row(
+              "lucia",
+              "2",
+              "Lucia Benova",
+              ok("Teaches B1") +
+                ok("Free at this time") +
+                ok("4 h → 5.5 h this week (no max)"),
+              "Fewest hours this week",
+            ) +
+            row(
+              "eva",
+              "3",
+              "Eva Simon",
+              ok("Teaches B1") +
+                ok("Free at this time") +
+                ok("9 h → 10.5 h this week (max 12 h)"),
+            );
+        const footerWarn =
+          i === 1
+            ? `<div class="space-y-2">${alert("Peter Varga has warnings for this lesson:<br>⚠ Doesn't teach B1 (teaches A1–A2)", "warning")}<label class="flex gap-2"><input type="checkbox"> Assign anyway</label></div>`
+            : "";
+        const stale =
+          i === 3
+            ? alert(
+                "Ana Kral is no longer free at this time. Pick someone else.",
+                "warning",
+              )
+            : "";
+        const name = { ana: "Ana Kral", peter: "Peter Varga", "": "" }[
+          i === 3 ? "" : sel
+        ];
+        const sheet = `<aside class="absolute right-0 top-0 bottom-0 w-[520px] bg-white shadow-lg border-l border-border flex flex-col z-20" aria-labelledby="ph">
+          <div class="p-6 space-y-1 border-b border-border"><div class="flex justify-between"><h2 id="ph" class="text-lg font-semibold">Find a substitute</h2><button aria-label="Close">✕</button></div>
+            <p class="font-medium">B1 Evening · 👥 Group · B1</p><p class="text-muted-foreground tnum">Mon 20 Oct 2026, 17:00–18:30 · Room 3</p>
+            <p class="text-muted-foreground">Regular teacher: Tomas Horvat (away, one-off)</p>
+            <input class="mt-2 h-9 w-full rounded-md border border-input px-3" placeholder="Search teachers…"></div>
+          <div class="flex-1 overflow-auto p-4 space-y-4">${stale}
+            <section role="group" aria-labelledby="s1" class="space-y-1"><h3 id="s1" class="font-semibold">Suggested (${noneSuggested ? 0 : 3})</h3>${suggested}</section>
+            <section role="group" aria-labelledby="s2" class="space-y-1"><h3 id="s2" class="font-semibold">Possible with a warning (2)</h3>
+              ${row("peter", "", "Peter Varga", warn("Doesn't teach B1 (teaches A1–A2)") + ok("Free at this time"))}
+              ${row("marta", "", "Marta Holub", warn("Unavailable Mon 16:00–20:00 (weekly)") + ok("Teaches B1"))}</section>
+            <details ${noneSuggested ? "open" : ""} class="space-y-1"><summary class="font-semibold cursor-pointer">Not possible (2)</summary>
+              ${row("jozef", "", "Jozef Kovac", no("Teaching C1 Business, 17:00–18:30"), "", true)}
+              ${row("ivana", "", "Ivana Mraz", no("Away on 20 Oct (one-off)"), "", true)}</details></div>
+          <div class="p-4 border-t border-border space-y-3">${footerWarn}
+            ${name ? `<p class="text-muted-foreground">ⓘ ${name}, Tomas Horvat and the 8 students of B1 Evening will be notified.</p>` : ""}
+            <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${name ? btn(`Assign ${name}`) : btn("Assign", "disabled")}</div></div></aside>`;
+        return `<div class="relative">${substitutionsScreen(0)}<div class="absolute inset-0 bg-black/50 z-10"></div>${sheet}</div>`;
+      }
+
+      function coveredScreen(i) {
+        if (i === 2) {
+          const list = (title, rows) =>
+            `<section class="rounded-lg border border-border bg-white p-6 space-y-3"><h2 class="text-lg font-semibold">${title}</h2><ul class="divide-y divide-border">${rows.map((r) => `<li class="py-2 flex gap-4 tnum"><a href="#" class="text-primary w-56">${r[0]}</a><span class="flex-1">${r[1]}</span><span class="text-muted-foreground">${r[2]}</span></li>`).join("")}</ul></section>`;
+          return desktop(
+            `<div class="max-w-3xl space-y-6"><div class="flex justify-between items-center"><h1 class="text-2xl font-semibold">Substitutions</h1><label class="flex gap-2 items-center"><input type="checkbox"> Show past</label></div>
+            ${list("You're covering", [["Thu 23 Oct · 17:00–18:30", "👥 B2 Evening · B2 · Room 2", "for Tomas Horvat"]])}
+            ${list("Covered for you", [["Mon 20 Oct · 17:00–18:30", "👥 B1 Evening", "by Ana Kral"]])}</div>`,
+            0,
+            "Ana",
+          );
+        }
+        const asSub = i === 0;
+        const block = (cls, lines) =>
+          `<div class="${cls} rounded-sm p-2 text-xs space-y-0.5">${lines}</div>`;
+        const days = ["Mon 20", "Tue 21", "Wed 22", "Thu 23"];
+        const grid = `<div class="grid grid-cols-4 gap-2">${days
+          .map((d, k) => {
+            let b = "";
+            if (asSub && k === 0)
+              b = block(
+                "sub",
+                `<div class="tnum">17:00–18:30</div><div class="font-semibold">B1 Evening</div>${badge("👤⚙ You're substituting", "cyan")}<div>for Tomas Horvat</div>`,
+              );
+            if (asSub && k === 1)
+              b = block(
+                "grp",
+                `<div class="tnum">09:00–10:30</div><div class="font-semibold">A1 Morning</div><div>Room 1 · A1</div>`,
+              );
+            if (!asSub && k === 0)
+              b = block(
+                "covered",
+                `<div class="tnum">17:00–18:30</div><div class="font-semibold">B1 Evening</div><div><span aria-hidden="true">👤⚙</span> Covered by Ana Kral</div>`,
+              );
+            if (!asSub && k === 2)
+              b = block(
+                "grp",
+                `<div class="tnum">18:00–19:30</div><div class="font-semibold">C1 Business</div><div>Room 2 · C1</div>`,
+              );
+            return `<div class="space-y-2"><div class="text-center font-medium">${d}</div><div class="h-40 rounded border border-border bg-white p-1">${b}</div></div>`;
+          })
+          .join("")}</div>`;
+        const dash = asSub
+          ? card(
+              `<h2 class="text-lg font-semibold">Substitutions</h2><p>You're covering 2 lessons in the next 14 days</p><ul class="text-muted-foreground tnum"><li>Mon 20 Oct · B1 Evening</li><li>Thu 23 Oct · B2 Evening</li></ul><a href="#" class="text-primary">See all</a>`,
+            )
+          : card(
+              `<h2 class="text-lg font-semibold">Today</h2><ul class="divide-y divide-border"><li class="py-2 text-muted-foreground tnum">17:00 · B1 Evening — Covered by Ana Kral</li><li class="py-2 tnum">19:00 · B2 Evening · Room 2</li></ul>`,
+            );
+        const banner = alert(
+          asSub
+            ? "👤⚙ You're substituting for Tomas Horvat in this lesson."
+            : "👤⚙ Ana Kral is substituting in this lesson. You can both edit it.",
+        );
+        return desktop(
+          `<h1 class="text-2xl font-semibold">${asSub ? "Ana Kral (substitute) — my week" : "Tomas Horvat (regular teacher) — my week"}</h1>
+          <div class="grid grid-cols-3 gap-6"><div class="col-span-2 space-y-4">${card(`<h2 class="text-lg font-semibold mb-3">My timetable</h2>${grid}`)}</div><div class="space-y-4">${dash}${card(`<h2 class="font-semibold mb-2">Lesson page banner</h2>${banner}`)}</div></div>`,
+          1,
+          asSub ? "Ana" : "Tomas",
+        );
+      }
+
+      /* ------------------------------------------------------------ ratings */
+      function ratingsList(i) {
+        if (i === 1)
+          return phone(
+            `<h1 class="text-2xl font-semibold">Rate your teachers</h1>${empty("⭐", "No teachers to rate yet", "After a few lessons with a teacher, you can rate them here.")}`,
+          );
+        if (i === 2)
+          return phone(`<h1 class="text-2xl font-semibold">Hi, Jan</h1>
+            <section class="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3"><h2 class="font-semibold">Rate your teacher</h2><p>How are your lessons with Tomas Horvat?</p><div class="flex gap-2">${btn("Rate now", "primary", "h-11 flex-1")}${btn("Not now", "outline", "h-11")}</div></section>
+            <section class="rounded-lg border border-border p-4"><h2 class="font-semibold">Next lesson</h2><p class="text-muted-foreground">Mon 20 Oct · 17:00 · B1 Evening</p></section>`);
+        const c = (name, grp, body) =>
+          `<div class="rounded-lg border border-border p-4 space-y-1"><div class="font-semibold">${name}</div><div class="text-muted-foreground">${grp}</div>${body}</div>`;
+        return phone(`<h1 class="text-2xl font-semibold">Rate your teachers</h1><p class="text-muted-foreground">Autumn 2026</p>
+          ${alert("🔒 Only the school's admins see ratings. Teachers don't.")}
+          ${c("Tomas Horvat", "B1 Evening", `<div class="flex justify-between items-center"><span>Not rated yet</span><span data-go="rate">${btn("Rate ›", "primary", "h-11")}</span></div>`)}
+          ${c("Ana Kral (substitute)", "B1 Evening", `<div><span class="text-amber-500" aria-hidden="true">★★★★☆</span> <span class="sr-only">4 out of 5, </span>Very good · Rated 12 Nov</div><div class="flex justify-between items-center"><span class="text-muted-foreground text-sm">You can change it until 20 Dec.</span>${btn("Edit ›", "outline", "h-11")}</div>`)}
+          ${c("Eva Simon", "Conversation club", `<p class="text-muted-foreground">You can rate Eva Simon from 3 Nov.</p>`)}
+          <details class="text-muted-foreground"><summary class="py-2">Earlier terms</summary></details>`);
+      }
+      function rateForm(i) {
+        const val = i === 1 || i === 3 ? 4 : 0;
+        const labels = ["Poor", "Fair", "Good", "Very good", "Excellent"];
+        const stars = `<div role="radiogroup" aria-labelledby="rl" class="flex gap-1">${labels
+          .map(
+            (l, k) =>
+              `<label class="h-11 w-11 grid place-items-center text-3xl cursor-pointer ${k < val ? "text-amber-500" : "text-slate-400"}"><input type="radio" name="r" class="sr-only" ${k + 1 === val ? "checked" : ""} ${i === 3 ? "disabled" : ""} aria-label="${k + 1} — ${l}">${k < val ? "★" : "☆"}</label>`,
+          )
+          .join(
+            "",
+          )}</div>${val ? `<p class="font-medium">${labels[val - 1]}</p>` : ""}${i === 2 ? `<p class="text-destructive text-sm">Choose a rating from 1 to 5 stars.</p>` : ""}`;
+        return phone(`<a href="#" class="text-primary">‹ Rate your teachers</a>
+          <h1 class="text-2xl font-semibold">How are your lessons with Tomas Horvat?</h1><p class="text-muted-foreground">Autumn 2026 · B1 Evening</p>
+          ${i === 3 ? alert("This term has ended. Ratings can no longer be changed.", "info") : alert("🔒 Only the school's admins see this. Tomas Horvat won't see it.")}
+          <div class="space-y-2"><span id="rl" class="font-medium">Your rating (required)</span>${stars}</div>
+          <label class="block space-y-2"><span class="font-medium">Comment (optional)</span><textarea ${i === 3 ? "disabled" : ""} class="w-full rounded-md border border-input p-3 h-28" placeholder="What's going well? What could be better?">${val ? "Clear explanations, lots of speaking practice. Homework is sometimes unclear." : ""}</textarea><span class="block text-right text-xs text-muted-foreground tnum">${val ? 78 : 0}/1000</span></label>
+          ${i === 3 ? "" : btn(i === 1 ? "Submit rating" : "Submit rating", "primary", "h-11 w-full")}`);
+      }
+      function adminRatings(i) {
+        const bars = (d) =>
+          `<div class="space-y-0.5 text-xs" aria-label="5 stars: ${d[0]}, 4 stars: ${d[1]}, 3 stars: ${d[2]}, 2 stars: ${d[3]}, 1 star: ${d[4]}">${d.map((n, k) => `<div class="flex items-center gap-1"><span class="w-3 tnum">${5 - k}</span><span class="h-2 bg-amber-500 rounded-sm" style="width:${n * 6}px"></span><span class="tnum text-muted-foreground">${n}</span></div>`).join("")}</div>`;
+        const head = (t) =>
+          `<div class="flex items-center justify-between"><h1 class="text-2xl font-semibold">${t}</h1><div class="flex items-center gap-2">Term ${btn("Autumn 2026 ▾", "outline")}</div></div>${alert("🔒 Only admins can see ratings. Teachers and students can't.")}`;
+        if (i === 2)
+          return desktop(
+            head("Ratings") +
+              card(
+                empty(
+                  "⭐",
+                  "No ratings for Autumn 2026 yet.",
+                  "Students can rate their teachers from 3 Nov.",
+                ),
+              ),
+          );
+        if (i === 3) {
+          const r = (s, stars, c, who) =>
+            `<li class="py-3 space-y-1"><div><span class="text-amber-500" aria-hidden="true">${"★".repeat(stars)}${"☆".repeat(5 - stars)}</span> <span class="font-medium">${["Poor", "Fair", "Good", "Very good", "Excellent"][stars - 1]}</span></div><p>${c}</p><p class="text-xs text-muted-foreground">${who}</p></li>`;
+          return desktop(`<a href="#" class="text-primary">‹ Ratings</a>${head("Tomas Horvat")}
+            <div class="grid grid-cols-3 gap-6">${card(`<h2 class="font-semibold">Autumn 2026</h2><p class="text-3xl font-semibold tnum">★ 3.9 <span class="text-base text-muted-foreground">out of 5</span></p><p class="text-muted-foreground">22 ratings</p>${bars([8, 7, 4, 2, 1])}`)}
+            ${card(`<div class="flex justify-between mb-2"><h2 class="font-semibold">Ratings</h2>${btn("All groups ▾", "outline")}</div><ul class="divide-y divide-border">${r("", 5, "Clear explanations, lots of speaking practice.", "Jan Novak · B1 Evening · 12 Nov")}${r("", 2, "Lessons often start late.", "Mia Kos · B2 Evening · 10 Nov · Edited")}</ul>${btn("Load more", "outline")}`, "col-span-2")}</div>`);
+        }
+        if (i === 1)
+          return desktop(
+            head("Ratings") +
+              `<div class="rounded-lg border border-border bg-white p-4 space-y-2">${skel(5, "h-10")}</div>`,
+          );
+        const rows = [
+          ["Ana Kral", "★ 4.6", 14, [9, 4, 1, 0, 0], "2 days ago"],
+          ["Tomas Horvat", "★ 3.9", 22, [8, 7, 4, 2, 1], "Today"],
+          ["Eva Simon", "Too few (2)", 2, null, "10 Nov"],
+          ["Peter Varga", "No ratings", 0, null, "—"],
+        ];
+        return desktop(
+          head("Ratings") +
+            `<div class="rounded-lg border border-border bg-white overflow-hidden"><table class="w-full text-left"><thead class="bg-muted text-muted-foreground"><tr>${["Teacher ↕", "Average ↕", "Ratings ↕", "Distribution", "Last rated"].map((h) => `<th class="px-3 py-2 font-medium">${h}</th>`).join("")}</tr></thead><tbody>${rows
+              .map(
+                (r) =>
+                  `<tr class="border-t border-border align-top"><td class="px-3 py-2"><a href="#" data-state="3" class="text-primary">${r[0]}</a></td><td class="px-3 py-2 tnum ${r[3] ? "font-semibold" : "text-muted-foreground"}">${r[1]}</td><td class="px-3 py-2 tnum">${r[2]}</td><td class="px-3 py-2">${r[3] ? bars(r[3]) : "—"}</td><td class="px-3 py-2 text-muted-foreground">${r[4]}</td></tr>`,
+              )
+              .join("")}</tbody></table></div>`,
+        );
+      }
+      function forbidden() {
+        return desktop(
+          `<div class="max-w-md mx-auto text-center space-y-3 py-16"><div class="text-5xl" aria-hidden="true">🔒</div><h1 class="text-2xl font-semibold">You don't have access to this page</h1><p class="text-muted-foreground">A teacher opened /admin/ratings. There is no teacher route for ratings at all.</p>${btn("Go to my dashboard")}</div>`,
+          0,
+          "Tomas",
+        );
+      }
+
+      /* ------------------------------------------------------------- iCal */
+      const FEED_URL =
+        "https://app.lingua.example/api/calendar/7Hk2pQ9xVb4LmZ8wR1sT.ics";
+      function calendarBody(i, mobile) {
+        const h = mobile ? "h-11" : "";
+        let linkCard;
+        if (i === 0)
+          linkCard = card(
+            `<h2 class="text-lg font-semibold">Your calendar link</h2><p class="text-muted-foreground">You don't have a calendar link yet.</p>${btn("Create my calendar link", "primary", `${h} ${mobile ? "w-full" : ""} mt-3`)}`,
+            mobile ? "p-4" : "",
+          );
+        else if (i === 5)
+          linkCard = card(
+            `<div class="space-y-3">${skel(1, "h-6")}${skel(1, "h-10")}</div>`,
+          );
+        else {
+          const copied = i === 2;
+          linkCard = card(
+            `<div class="space-y-3"><h2 class="text-lg font-semibold">Your calendar link</h2>
+            ${i === 4 ? alert("New link created. Add it to your calendar apps.", "success") : ""}
+            ${i === 6 ? alert("Couldn't reset your calendar link. Your current link still works.", "danger") : ""}
+            <div class="flex ${mobile ? "flex-col" : ""} gap-2"><input readonly value="${FEED_URL}" class="h-9 ${h} flex-1 min-w-0 rounded-md border border-input px-3 bg-muted overflow-x-auto" aria-label="Your calendar link">${btn(copied ? "✓ Copied" : "⧉ Copy link", "outline", h)}</div>
+            ${copied ? `<p role="status" class="sr-only">Copied</p>` : ""}
+            ${btn("Subscribe on this device", mobile ? "primary" : "link", `${h} ${mobile ? "w-full" : "h-auto"}`)}
+            ${alert("⚠ Anyone with this link can see your lessons. Don't share it. If it leaks, reset it.", "warning")}
+            <div class="flex justify-between items-center text-muted-foreground"><span>Created 14 Oct 2026</span><span data-state="3">${btn("Reset link…", "outline", h)}</span></div></div>`,
+            mobile ? "p-4" : "",
+          );
+        }
+        const info = `<section class="space-y-2"><h2 class="text-lg font-semibold">What's in it</h2><ul class="list-disc pl-5 text-muted-foreground"><li>Your lessons from 4 weeks ago to the end of next term</li><li>Cancelled lessons, marked "Cancelled"</li><li>Substitutes: who teaches each lesson</li></ul></section>
+          <section class="space-y-2"><h2 class="text-lg font-semibold">How to add it</h2>${["Google Calendar", "Apple Calendar", "Outlook"].map((a) => `<details class="border-b border-border"><summary class="py-2 cursor-pointer ${mobile ? "min-h-11" : ""}">${a}</summary><p class="pb-2 text-muted-foreground">${a === "Google Calendar" ? 'Copy the link. On a computer, open Google Calendar, next to "Other calendars" click +, choose "From URL", paste the link and click "Add calendar".' : a === "Apple Calendar" ? 'On your iPhone or Mac, tap "Subscribe on this device" and confirm.' : 'Copy the link. In Outlook on the web, go to "Add calendar", choose "Subscribe from web", paste the link and save.'}</p></details>`).join("")}
+          <p class="text-xs text-muted-foreground">Calendar apps check for changes every few hours, so a change can take a while to show up.</p></section>`;
+        const dlg =
+          i === 3
+            ? `<div class="fixed inset-0 bg-black/50 grid place-items-center z-40 p-4"><div role="alertdialog" aria-labelledby="rt" class="max-w-md rounded-lg bg-white p-6 shadow-lg space-y-4"><h2 id="rt" class="text-lg font-semibold">Reset your calendar link?</h2><p class="text-muted-foreground">Your current link stops working right away. Calendars that use it will stop updating, so you'll need to add the new link to them.</p><div class="flex justify-end gap-2 flex-wrap">${btn("Keep current link", "outline")}<span data-state="4">${btn("Reset link", "destructive")}</span></div></div></div>`
+            : "";
+        return `<h1 class="text-2xl font-semibold">Calendar subscription</h1><p class="text-muted-foreground">See your lessons in Google Calendar, Apple Calendar or Outlook. Your calendar updates by itself when lessons change.</p>${linkCard}${info}${dlg}`;
+      }
+      const calendarStudent = (i) => phone(calendarBody(i, true));
+      const calendarTeacher = (i) =>
+        desktop(
+          `<div class="max-w-2xl space-y-6">${calendarBody(i, false)}</div>`,
+          1,
+          "Tomas",
+        );
+
+      /* ------------------------------------------------------------ screens */
+      const SCREENS = [
+        {
+          k: "bell",
+          label: "Bell & popover",
+          states: ["unread", "empty", "loading", "error"],
+          fn: bellScreen,
+        },
+        {
+          k: "inbox",
+          label: "Inbox (desktop)",
+          states: ["all", "unread filter", "loading", "empty", "all read"],
+          fn: inboxScreen,
+        },
+        {
+          k: "inboxM",
+          label: "Inbox (student)",
+          states: ["list", "empty"],
+          fn: inboxMobile,
+        },
+        {
+          k: "subs",
+          label: "Substitutions",
+          states: [
+            "needs cover",
+            "covered",
+            "empty",
+            "loading",
+            "cover a teacher",
+          ],
+          fn: substitutionsScreen,
+        },
+        {
+          k: "picker",
+          label: "Find a substitute",
+          states: ["suggested", "warning pick", "nobody suggested", "stale"],
+          fn: pickerScreen,
+        },
+        {
+          k: "covered",
+          label: "Covered lesson views",
+          states: [
+            "substitute",
+            "regular teacher",
+            "teacher substitutions page",
+          ],
+          fn: coveredScreen,
+        },
+        {
+          k: "ratingsS",
+          label: "Student ratings",
+          states: ["list", "empty", "home card"],
+          fn: ratingsList,
+        },
+        {
+          k: "rate",
+          label: "Rate form",
+          states: ["new", "filled", "validation", "term ended"],
+          fn: rateForm,
+        },
+        {
+          k: "ratingsA",
+          label: "Admin ratings",
+          states: ["table", "loading", "empty term", "teacher detail"],
+          fn: adminRatings,
+        },
+        {
+          k: "forbidden",
+          label: "403 (teacher → ratings)",
+          states: ["forbidden"],
+          fn: forbidden,
+        },
+        {
+          k: "calS",
+          label: "Calendar (student)",
+          states: [
+            "no link",
+            "link",
+            "copied",
+            "reset dialog",
+            "after reset",
+            "loading",
+            "reset error",
+          ],
+          fn: calendarStudent,
+        },
+        {
+          k: "calT",
+          label: "Calendar (teacher)",
+          states: [
+            "no link",
+            "link",
+            "copied",
+            "reset dialog",
+            "after reset",
+            "loading",
+            "reset error",
+          ],
+          fn: calendarTeacher,
+        },
+      ];
+      let cur = { screen: "bell", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>
