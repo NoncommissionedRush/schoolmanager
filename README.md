@@ -73,21 +73,22 @@ SCHEDULING_TEST_DATABASE_URL=postgresql://schoolmanager:schoolmanager@localhost:
 
 ## Scripts
 
-| Script                   | What it does                                    |
-| ------------------------ | ----------------------------------------------- |
-| `pnpm dev`               | Start the dev server on http://localhost:3000   |
-| `pnpm build`             | Production build                                |
-| `pnpm start`             | Serve the production build                      |
-| `pnpm lint`              | ESLint                                          |
-| `pnpm format`            | Format with Prettier (`format:check` to verify) |
-| `pnpm typecheck`         | Generate route types and run `tsc --noEmit`     |
-| `pnpm test`              | Unit tests (Vitest)                             |
-| `pnpm test:e2e`          | End-to-end tests (Playwright; needs the DB up)  |
-| `pnpm db:migrate`        | Create/apply migrations in development          |
-| `pnpm db:migrate:deploy` | Apply existing migrations (CI / production)     |
-| `pnpm db:seed`           | Seed demo data                                  |
-| `pnpm db:reset`          | Drop, re-migrate and re-seed the database       |
-| `pnpm db:generate`       | Regenerate the Prisma client                    |
+| Script                     | What it does                                    |
+| -------------------------- | ----------------------------------------------- |
+| `pnpm dev`                 | Start the dev server on http://localhost:3000   |
+| `pnpm build`               | Production build                                |
+| `pnpm start`               | Serve the production build                      |
+| `pnpm lint`                | ESLint                                          |
+| `pnpm format`              | Format with Prettier (`format:check` to verify) |
+| `pnpm typecheck`           | Generate route types and run `tsc --noEmit`     |
+| `pnpm test`                | Unit tests (Vitest)                             |
+| `pnpm test:e2e`            | End-to-end tests (Playwright; needs the DB up)  |
+| `pnpm db:migrate`          | Create/apply migrations in development          |
+| `pnpm db:migrate:deploy`   | Apply existing migrations (CI / production)     |
+| `pnpm db:seed`             | Seed demo data                                  |
+| `pnpm db:reset`            | Drop, re-migrate and re-seed the database       |
+| `pnpm db:generate`         | Regenerate the Prisma client                    |
+| `pnpm notifications:purge` | Delete notifications older than 90 days         |
 
 First Playwright run: `pnpm exec playwright install chromium`.
 
