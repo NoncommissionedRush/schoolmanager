@@ -682,8 +682,11 @@ export function summarizeLessonChanges(
   const pairs: [LessonSnapshot | null, LessonSnapshot | null][] = [];
 
   // Pair by id first, then a vanished lesson with a new one of the same
-  // occurrence.
-  const lostByOccurrence = new Map<string, LessonSnapshot>();
+  // occurrence (group and date). A group can have several lessons on one
+  // date, so each occurrence keeps a list: a new lesson takes an identical
+  // lost one first, then one with the same time, else the nearest start
+  // (ties by id).
+  const lostByOccurrence = new Map<string, LessonSnapshot[]>();
   const lost: LessonSnapshot[] = [];
   for (const b of [...before].sort(byId)) {
     const a = afterById.get(b.id) ?? null;
@@ -691,20 +694,43 @@ export function summarizeLessonChanges(
       pairs.push([b, a]);
     } else if (!b.cancelled) {
       lost.push(b);
-      if (b.occurrence) lostByOccurrence.set(b.occurrence, b);
+      if (b.occurrence) {
+        const list = lostByOccurrence.get(b.occurrence) ?? [];
+        list.push(b);
+        lostByOccurrence.set(b.occurrence, list);
+      }
     }
   }
+  const created = [...after]
+    .filter((a) => !beforeById.has(a.id) && !a.cancelled)
+    .sort(byId);
   const matched = new Set<string>();
-  for (const a of [...after].sort(byId)) {
-    if (beforeById.has(a.id) || a.cancelled) continue;
-    const b = a.occurrence ? lostByOccurrence.get(a.occurrence) : undefined;
-    if (b && !matched.has(b.id)) {
+  const partner = new Map<string, LessonSnapshot>();
+  const sameTime = (a: LessonSnapshot, b: LessonSnapshot) =>
+    a.startsAt.getTime() === b.startsAt.getTime() &&
+    a.endsAt.getTime() === b.endsAt.getTime();
+  const identical = (a: LessonSnapshot, b: LessonSnapshot) =>
+    sameTime(a, b) &&
+    a.roomId === b.roomId &&
+    a.teacherId === b.teacherId &&
+    a.substituteId === b.substituteId;
+  const gap = (a: LessonSnapshot, b: LessonSnapshot) =>
+    Math.abs(a.startsAt.getTime() - b.startsAt.getTime());
+  // Passes: identical lesson, then same time, then nearest start.
+  const passes = [identical, sameTime, () => true];
+  for (const fits of passes) {
+    for (const a of created) {
+      if (partner.has(a.id) || !a.occurrence) continue;
+      const candidates = (lostByOccurrence.get(a.occurrence) ?? [])
+        .filter((b) => !matched.has(b.id) && fits(a, b))
+        .sort((x, y) => gap(a, x) - gap(a, y) || x.id.localeCompare(y.id));
+      const b = candidates[0];
+      if (!b) continue;
       matched.add(b.id);
-      pairs.push([b, a]);
-    } else {
-      pairs.push([null, a]);
+      partner.set(a.id, b);
     }
   }
+  for (const a of created) pairs.push([partner.get(a.id) ?? null, a]);
   for (const b of lost) if (!matched.has(b.id)) pairs.push([b, null]);
 
   const out = new Map<string, Map<string, ChangeSummary>>();

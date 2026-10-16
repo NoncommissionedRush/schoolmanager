@@ -627,6 +627,77 @@ describe("summarizeLessonChanges", () => {
     ).toBe(true);
   });
 
+  it("two lessons of a group on one date, both recreated unchanged: nothing to report", () => {
+    const lesson = (id: string, hour: number): LessonSnapshot => ({
+      id,
+      termId: "T",
+      occurrence: "g1|2026-10-26",
+      startsAt: new Date(`2026-10-26T${String(hour).padStart(2, "0")}:00:00Z`),
+      endsAt: new Date(
+        `2026-10-26T${String(hour + 1).padStart(2, "0")}:30:00Z`,
+      ),
+      roomId: "r1",
+      teacherId: "u-t1",
+      substituteId: null,
+      cancelled: false,
+      attendees,
+    });
+    const ctx = { now: SUMMARY_NOW, timeZone: TZ };
+    // Ids sort so that a greedy pairing would cross them.
+    const before = [lesson("a", 7), lesson("b", 12)];
+    const after = [lesson("d", 7), lesson("c", 12)];
+    expect(summarizeLessonChanges(before, after, ctx).size).toBe(0);
+    // One of them moved: exactly one move, nothing added or cancelled.
+    const moved = [lesson("d", 7), { ...lesson("c", 12), roomId: "r2" }];
+    const people = summarizeLessonChanges(before, moved, ctx).get("T")!;
+    expect(people.map((p) => p.counts)).toEqual(
+      people.map(() => ({
+        added: 0,
+        cancelled: 0,
+        moved: 1,
+        teacherChanged: 0,
+      })),
+    );
+  });
+
+  it("deleting and identically recreating any timetable reports nothing", () => {
+    // Property-style: random groups, dates and up to three lessons a day.
+    let seed = 7;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      return seed % n;
+    };
+    for (let run = 0; run < 50; run++) {
+      const before: LessonSnapshot[] = [];
+      for (let i = 0; i < 12; i++) {
+        const day = 26 + rand(4);
+        const hour = 7 + rand(10);
+        before.push({
+          id: `b${run}-${i}`,
+          termId: "T",
+          occurrence: `g${rand(3)}|2026-10-${day}`,
+          startsAt: new Date(Date.UTC(2026, 9, day, hour)),
+          endsAt: new Date(Date.UTC(2026, 9, day, hour + 1)),
+          roomId: `r${rand(2)}`,
+          teacherId: `u-t${rand(3)}`,
+          substituteId: null,
+          cancelled: false,
+          attendees,
+        });
+      }
+      const after = before.map((b, i) => ({
+        ...b,
+        id: `a${run}-${(i * 7) % 12}`,
+      }));
+      expect(
+        summarizeLessonChanges(before, after, {
+          now: SUMMARY_NOW,
+          timeZone: TZ,
+        }).size,
+      ).toBe(0);
+    }
+  });
+
   it("a teacher change counts for the old and the new teacher", () => {
     const s1 = slot("s1");
     const lessons = stored([s1]);
