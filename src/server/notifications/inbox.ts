@@ -76,19 +76,6 @@ export async function purgeOwn(db: SchoolDb, viewer: InboxViewer, now: Date) {
   });
 }
 
-/** Deletes every expired row of every school (`pnpm notifications:purge`). */
-export async function purgeExpired(
-  client: {
-    notification: { deleteMany: SchoolDb["notification"]["deleteMany"] };
-  },
-  now: Date,
-): Promise<number> {
-  const { count } = await client.notification.deleteMany({
-    where: { createdAt: { lte: retentionCutoff(now) } },
-  });
-  return count;
-}
-
 /**
  * One page of the viewer's notifications, newest first (§2.7). Runs the
  * purge first. Each item has its `href` for the viewer's role, or null.

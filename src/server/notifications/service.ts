@@ -6,7 +6,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { ACTIVE_REPLACEMENT } from "@/server/replacements/release";
-import type { SchoolDb, Tx } from "@/server/timetable/service";
+import type { Tx } from "@/server/timetable/service";
 import { membersAt } from "@/server/timetable/week";
 
 import { registeredChannels } from "./channels";

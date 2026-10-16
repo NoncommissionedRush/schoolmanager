@@ -1,0 +1,122 @@
+{
+  "title": "Notifications",
+  "bell": {
+    "label": "{count, plural, =0 {Notifications} one {Notifications, # unread} other {Notifications, # unread}}",
+    "badgeMany": "9+"
+  },
+  "markAllRead": "Mark all as read",
+  "markedAllRead": "All notifications marked as read.",
+  "markRead": "Mark as read",
+  "rowMenu": "More actions for this notification",
+  "unread": "Unread",
+  "seeAll": "See all notifications",
+  "filter": {
+    "label": "Show",
+    "all": "All",
+    "unread": "Unread ({count})"
+  },
+  "group": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "earlier": "Earlier"
+  },
+  "loadMore": "Load more",
+  "retention": "Notifications older than {days} days are removed.",
+  "gone": "No longer available.",
+  "open": {
+    "lesson": "Open lesson",
+    "timetable": "Open timetable",
+    "review": "Review",
+    "absences": "Open absences",
+    "calendar": "Open calendar settings"
+  },
+  "empty": {
+    "title": "No notifications yet",
+    "description": "When a lesson is cancelled, moved or covered by a substitute, you'll see it here.",
+    "unread": "You're all caught up.",
+    "popover": "We'll let you know when something changes.",
+    "showAll": "Show all"
+  },
+  "error": {
+    "load": "Couldn't load notifications.",
+    "markAll": "Couldn't mark notifications as read. Try again.",
+    "retry": "Try again"
+  },
+  "types": {
+    "LESSON_CANCELLED": {
+      "teacher": "{group} on {date} is cancelled",
+      "student": "{lessonType, select, ONE_ON_ONE {Your lesson} other {{group}}} on {date} is cancelled"
+    },
+    "LESSON_MOVED": {
+      "teacher": "{group} moved to {date}, {time}",
+      "student": "{lessonType, select, ONE_ON_ONE {Your lesson} other {{group}}} moved to {date}, {time}",
+      "teacherRoom": "{group} on {date} is now in {room}",
+      "studentRoom": "{lessonType, select, ONE_ON_ONE {Your lesson} other {{group}}} on {date} is now in {room}"
+    },
+    "SUBSTITUTE_ASSIGNED": {
+      "substitute": "You're substituting in {group} on {date}",
+      "regular": "{substitute} is covering your {group} lesson on {date}",
+      "student": "{substitute} is teaching {lessonType, select, ONE_ON_ONE {your lesson} other {{group}}} on {date}"
+    },
+    "SUBSTITUTE_REMOVED": {
+      "substitute": "You're no longer substituting in {group} on {date}",
+      "regular": "You're teaching {group} on {date} again",
+      "student": "{teacher} is teaching {lessonType, select, ONE_ON_ONE {your lesson} other {{group}}} on {date} again"
+    },
+    "ABSENCE_REPORTED": {
+      "teacher": "{student} won't be at {group} on {date}",
+      "student": "The school reported you absent from {lessonType, select, ONE_ON_ONE {your lesson} other {{group}}} on {date}"
+    },
+    "REPLACEMENT_BOOKED": {
+      "teacher": "{student} joins {group} on {date} as a replacement",
+      "student": "The school booked you into {group} on {date} as a replacement"
+    },
+    "REPLACEMENT_ENDED": {
+      "teacher": "{student} no longer joins {group} on {date}",
+      "studentCancelled": "Your replacement in {group} on {date} is cancelled",
+      "studentRejected": "The school rejected your replacement in {group} on {date}"
+    },
+    "REPLACEMENT_MOVED": {
+      "student": "The school moved your replacement to {group} on {date}"
+    },
+    "REPLACEMENT_REVIEW_PENDING": {
+      "admin": "{count, plural, one {# new replacement booking to review} other {# new replacement bookings to review}}"
+    },
+    "TIMETABLE_PUBLISHED": {
+      "teacher": "The timetable for {term} is ready"
+    },
+    "TIMETABLE_CHANGED": {
+      "teacher": "Your timetable for {term} changed"
+    },
+    "CALENDAR_FEED_REVOKED": {
+      "teacher": "The school turned off your calendar link"
+    }
+  },
+  "detail": {
+    "reason": "Reason: {reason}",
+    "was": "Was {oldDate}, {oldTime}",
+    "wasRoom": "Was {oldRoom}",
+    "time": "{time}",
+    "timeRoom": "{time} · {room}",
+    "forTeacher": "For {teacher} · {time} · {room}",
+    "forTeacherNoRoom": "For {teacher} · {time}",
+    "noLongerCovers": "{substitute} no longer covers it",
+    "withCredit": "{withCredit, select, yes {You got a makeup credit.} other {No makeup credit for this one.}}",
+    "fromGroup": "From {fromGroup}",
+    "forMissed": "For your missed {fromGroup} lesson",
+    "outcome": "{outcome, select, cancelled {Booking cancelled} rejected {Rejected by the school} moved {Moved to another lesson} other {}}",
+    "creditBack": "{creditBack, select, yes {Your makeup credit is back.} other {The credit was used.}}",
+    "note": "Note from the school: {note}",
+    "movedFrom": "Was {fromGroup}, {oldDate}",
+    "firstLesson": "Your first lesson: {date}, {time}",
+    "noLessons": "You have no lessons in this term yet.",
+    "added": "{count, plural, one {# lesson added} other {# lessons added}}",
+    "cancelled": "{count, plural, one {# cancelled} other {# cancelled}}",
+    "moved": "{count, plural, one {# moved} other {# moved}}",
+    "teacherChanged": "{count, plural, one {# with a new teacher} other {# with a new teacher}}",
+    "range": "{from} – {to}",
+    "day": "{date}",
+    "feedRevoked": "Create a new link to keep your calendar up to date."
+  },
+  "unreadLabel": "Unread: "
+}

@@ -22,6 +22,7 @@ import lessons from "./lessons.json";
 import levels from "./levels.json";
 import metadata from "./metadata.json";
 import nav from "./nav.json";
+import notifications from "./notifications.json";
 import people from "./people.json";
 import replacements from "./replacements.json";
 import reschedule from "./reschedule.json";
@@ -58,6 +59,7 @@ const messages = {
   levels,
   metadata,
   nav,
+  notifications,
   people,
   replacements,
   reschedule,
