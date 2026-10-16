@@ -13,6 +13,7 @@ import {
   SubstituteBanner,
 } from "@/components/lessons/lesson-header";
 import { ReadOnlyLogCard } from "@/components/lessons/lesson-log-form";
+import { SubstituteActions } from "@/components/substitutes/substitute-actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import type { LessonPage } from "@/server/lessons/teacher";
@@ -38,6 +39,7 @@ export function AdminLessonClient({
   timetableHref,
   slotHref,
   reschedule,
+  substitute,
 }: {
   lesson: LessonPage;
   internalNotes: LessonNotes;
@@ -50,6 +52,8 @@ export function AdminLessonClient({
   slotHref: string | null;
   /** 1-on-1 lessons: the admin reschedule (replacements.md §7). */
   reschedule: AdminRescheduleInfo | null;
+  /** Substitute actions (phase5-rules.md §3.5); null when not allowed. */
+  substitute: { hasSubstitute: boolean } | null;
 }) {
   const t = useTranslations("lessons");
   const tl = useTranslations("lessonLog");
@@ -99,6 +103,12 @@ export function AdminLessonClient({
             <SquarePen aria-hidden="true" />
             {t("admin.openSlot")}
           </Link>
+        )}
+        {substitute && (
+          <SubstituteActions
+            lessonId={lesson.id}
+            hasSubstitute={substitute.hasSubstitute}
+          />
         )}
         {reschedule && <AdminRescheduleActions info={reschedule} />}
       </div>

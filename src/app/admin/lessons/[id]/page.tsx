@@ -8,6 +8,7 @@ import { loadAdminLesson } from "@/server/lessons/admin";
 import { loadLessonNotes } from "@/server/notes/teacher-notes";
 import { loadAdminRescheduleInfo } from "@/server/replacements/reschedule";
 import { loadLessonRoster } from "@/server/replacements/views";
+import { substituteLessonReasons } from "@/server/scheduling";
 import { mondayOf } from "@/server/timetable/week";
 
 import { AdminLessonClient } from "./lesson-page-client";
@@ -22,11 +23,28 @@ async function AdminLesson({
   const now = new Date();
   const lesson = await loadAdminLesson(db, id, now, viewer.school.timezone);
   if (!lesson) notFound();
-  const [internalNotes, roster, reschedule] = await Promise.all([
+  const [internalNotes, roster, reschedule, row] = await Promise.all([
     loadLessonNotes(db, { role: viewer.role }, lesson.id, now),
     loadLessonRoster(db, lesson.id, now),
     loadAdminRescheduleInfo(db, lesson.id, now),
+    db.lesson.findUniqueOrThrow({
+      where: { id: lesson.id },
+      select: {
+        status: true,
+        endsAt: true,
+        substituteTeacherId: true,
+        term: { select: { timetablePublishedAt: true } },
+      },
+    }),
   ]);
+  // Phase 5 substitutes (rules §3.2): hidden when cancelled or too late.
+  const substitute =
+    substituteLessonReasons(row, {
+      published: row.term.timetablePublishedAt !== null,
+      now,
+    }).length === 0
+      ? { hasSubstitute: row.substituteTeacherId !== null }
+      : null;
 
   const t = await getTranslations("lessons.back");
   const fromList = (await searchParams).from === "list";
@@ -44,6 +62,7 @@ async function AdminLesson({
       query={fromList ? "?from=list" : ""}
       timetableHref={timetableHref}
       reschedule={reschedule}
+      substitute={substitute}
       slotHref={
         lesson.slotId
           ? `/admin/timetable/edit?term=${lesson.termId}&slot=${lesson.slotId}&asOf=${lesson.date}`

@@ -12,6 +12,7 @@ import type { TodayLesson } from "@/server/lessons/teacher";
  */
 export async function TodayCard({ lessons }: { lessons: TodayLesson[] }) {
   const t = await getTranslations("dashboard.teacher.today");
+  const tt = await getTranslations("timetable.substitute");
   return (
     <Card>
       <CardHeader>
@@ -44,7 +45,9 @@ export async function TodayCard({ lessons }: { lessons: TodayLesson[] }) {
                       className={
                         lesson.cancelled
                           ? "min-w-0 flex-1 truncate text-muted-foreground line-through"
-                          : "min-w-0 flex-1 truncate"
+                          : lesson.cover?.role === "covered"
+                            ? "min-w-0 flex-1 truncate text-muted-foreground"
+                            : "min-w-0 flex-1 truncate"
                       }
                     >
                       {lesson.groupName}
@@ -53,6 +56,21 @@ export async function TodayCard({ lessons }: { lessons: TodayLesson[] }) {
                         {lesson.roomName ?? t("noRoom")}
                       </span>
                     </span>
+                    {!lesson.cancelled && lesson.cover && (
+                      <span
+                        className={
+                          lesson.cover.role === "substituting"
+                            ? "rounded-full bg-lesson-substitute-surface px-2 py-0.5 text-xs font-medium text-lesson-substitute-text"
+                            : "text-sm text-muted-foreground"
+                        }
+                      >
+                        {lesson.cover.role === "substituting"
+                          ? tt("youAre")
+                          : tt("coveredBy", {
+                              substitute: lesson.cover.substitute,
+                            })}
+                      </span>
+                    )}
                     {lesson.cancelled && (
                       <span className="text-sm text-muted-foreground">
                         {t("cancelled")}

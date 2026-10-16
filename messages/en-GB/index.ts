@@ -30,6 +30,7 @@ import rooms from "./rooms.json";
 import scheduling from "./scheduling.json";
 import settings from "./settings.json";
 import students from "./students.json";
+import substitutes from "./substitutes.json";
 import teacherNotes from "./teacherNotes.json";
 import teachers from "./teachers.json";
 import terms from "./terms.json";
@@ -67,6 +68,7 @@ const messages = {
   scheduling,
   settings,
   students,
+  substitutes,
   teacherNotes,
   teachers,
   terms,

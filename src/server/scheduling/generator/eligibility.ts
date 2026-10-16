@@ -4,6 +4,7 @@
 import type { Conflict } from "../conflict-types";
 import { checkSlot, holidaysOfTerm } from "../conflicts";
 import { slotOccurrenceDates } from "../generate-lessons";
+import { teacherConflictReasons } from "../teacher-reasons";
 import type { IsoDate } from "../time";
 import { includedGroups, type Prepared, timeAsSlot } from "./readiness";
 import type {
@@ -47,41 +48,16 @@ export type Eligibility = {
 const timeSignature = (t: DraftTime) =>
   `${t.weekday}|${t.startMinute}|${t.endMinute}|${t.validFrom ?? ""}|${t.validUntil ?? ""}`;
 
-/** Rule-3 reasons from the teacher-typed conflicts of one time. */
+/**
+ * Rule-3 reasons from the teacher-typed conflicts of one time (shared with
+ * the substitute picker, `teacher-reasons.ts`). One-off unavailability is a
+ * warning for the generator (§3.1), not a reason.
+ */
 export function rule3Reasons(
   time: DraftTime,
   conflicts: readonly Conflict[],
 ): TeacherReason[] {
-  const out: TeacherReason[] = [];
-  for (const c of conflicts) {
-    if (c.type === "TEACHER_UNAVAILABLE_WEEKLY") {
-      out.push({
-        code: "UNAVAILABLE_WEEKLY",
-        params: {
-          weekday: time.weekday,
-          time: c.params.time ?? "",
-          allDay: c.params.allDay ?? "no",
-        },
-        refs: c.refs,
-      });
-    }
-  }
-  for (const c of conflicts) {
-    if (c.type === "TEACHER_DOUBLE_BOOKED") {
-      out.push({
-        code: "BUSY",
-        params: {
-          weekday: time.weekday,
-          otherGroup: c.params.otherGroup ?? "",
-          otherTime: c.params.otherTime ?? "",
-          dateCount: c.params.dateCount ?? 0,
-          firstDate: c.params.firstDate ?? "",
-        },
-        refs: c.refs,
-      });
-    }
-  }
-  return out;
+  return teacherConflictReasons(time.weekday, conflicts) as TeacherReason[];
 }
 
 export function computeEligibility(prepared: Prepared): Eligibility {

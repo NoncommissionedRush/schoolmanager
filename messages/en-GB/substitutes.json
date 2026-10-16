@@ -1,0 +1,181 @@
+{
+  "title": "Substitutions",
+  "desktopRecommended": "This page works best on a larger screen.",
+  "tab": {
+    "label": "Substitution lists",
+    "needsCover": "Needs cover ({count})",
+    "covered": "Covered ({count})",
+    "past": "Past"
+  },
+  "coverTeacher": {
+    "action": "Cover a teacher…",
+    "title": "Cover a teacher",
+    "description": "See all of a teacher's lessons in a date range and cover them one by one.",
+    "teacher": "Teacher (required)",
+    "chooseTeacher": "Choose a teacher",
+    "from": "From",
+    "to": "To",
+    "markAway": "Also mark {teacher} as away on these dates",
+    "markAwayGeneric": "Also mark the teacher as away on these dates",
+    "submit": "Show lessons",
+    "cancel": "Cancel",
+    "marked": "{count, plural, one {Marked away on # day.} other {Marked away on # days.}}",
+    "showing": "Showing every lesson of {teacher} from {from} to {to}.",
+    "clear": "Show all lessons that need cover"
+  },
+  "filters": {
+    "label": "Filters",
+    "teacher": "Teacher",
+    "level": "Level",
+    "from": "From",
+    "to": "To",
+    "term": "Term",
+    "any": "Any",
+    "apply": "Apply"
+  },
+  "col": {
+    "when": "When",
+    "lesson": "Lesson",
+    "teacher": "Teacher",
+    "why": "Why",
+    "substitute": "Substitute",
+    "assigned": "Assigned",
+    "actions": "Actions"
+  },
+  "why": {
+    "UNAVAILABLE_ON_DATE": "Away (one-off)",
+    "ARCHIVED": "Archived",
+    "DOUBLE_BOOKED": "Teaching {otherGroup}",
+    "substitute": {
+      "UNAVAILABLE_ON_DATE": "Substitute away",
+      "ARCHIVED": "Substitute archived",
+      "DOUBLE_BOOKED": "Substitute teaching {otherGroup}"
+    },
+    "none": "Lesson of {teacher}"
+  },
+  "type": {
+    "GROUP": "Group",
+    "ONE_ON_ONE": "1-on-1"
+  },
+  "teacherIsSubstitute": "{name} (substitute)",
+  "assignedBy": "{name}, {date}",
+  "assignedAt": "{date}",
+  "soon": "Soon",
+  "find": "Find substitute",
+  "findEllipsis": "Find substitute…",
+  "change": "Change substitute…",
+  "removeAction": "Remove substitute…",
+  "rowMenu": "More actions for {group} on {date}",
+  "picker": {
+    "title": "Find a substitute",
+    "description": "Pick a teacher for this lesson. Suggestions come first.",
+    "regular": "Regular teacher: {teacher}",
+    "regularWhy": "Regular teacher: {teacher} ({why})",
+    "current": "Current substitute: {name}",
+    "currentBadge": "Current",
+    "search": "Search teachers…",
+    "suggested": "Suggested ({count})",
+    "withWarning": "Possible with a warning ({count})",
+    "notPossible": "Not possible ({count})",
+    "rank": "Suggestion {rank}",
+    "noMatch": "No teachers match '{query}'.",
+    "noneSuggested": "No teacher meets all the rules for this lesson.",
+    "noneSuggestedHint": "You can still pick someone below with a warning.",
+    "nobody": "No other teacher can take this lesson: everyone is teaching at this time.",
+    "moveLesson": "Move the lesson",
+    "assignAnyway": "Assign anyway",
+    "warningsFor": "{name} has warnings for this lesson:",
+    "notifyPreview": "{names} and {count, plural, one {# student} other {# students}} of {group} will be notified.",
+    "notifyPreviewNoStudents": "{names} will be notified.",
+    "notifyNobody": "Nobody is notified, because the lesson has ended.",
+    "assign": "Assign {name}",
+    "assignNone": "Assign",
+    "assigning": "Assigning…",
+    "started": "This lesson has started. Students won't be notified.",
+    "ended": "This lesson has ended. Changing the substitute only corrects the record; nobody is notified.",
+    "cancel": "Cancel",
+    "loading": "Loading teachers…",
+    "reasonLabel": "Reason (optional, only in the history)",
+    "lessonLine": "{group} · {type}{level, select, none {} other { · {level}}}",
+    "whenLine": "{when}{room, select, none {} other { · {room}}}"
+  },
+  "reason": {
+    "teachesLevel": "Teaches {level}",
+    "free": "Free at this time",
+    "hours": "{current} → {with} this week ({max, select, none {no max} other {max {max}}})",
+    "notLevel": "Doesn't teach {level}{levels, select, none {} other { (teaches {levels})}}",
+    "unavailableWeekly": "Unavailable {weekday, select, 1 {Mon} 2 {Tue} 3 {Wed} 4 {Thu} 5 {Fri} 6 {Sat} other {Sun}}{allDay, select, yes {} other { {time}}} (weekly)",
+    "unavailableDate": "Away on {date}{allDay, select, yes {} other { {time}}} (one-off)",
+    "overMax": "{current} → {with} this week (max {max})",
+    "busy": "Teaching {otherGroup}, {otherTime}",
+    "archived": "Archived",
+    "hoursValue": "{hours} h"
+  },
+  "hint": {
+    "KNOWS_GROUP": "Has taught {group} before",
+    "SAME_DAY": "Already teaching that day",
+    "FEWEST_HOURS": "Fewest hours this week"
+  },
+  "lessonReasons": {
+    "LESSON_CANCELLED": "This lesson is cancelled, so it can't have a substitute.",
+    "TERM_NOT_PUBLISHED": "This lesson's timetable isn't published yet.",
+    "TOO_LATE_TO_RECORD": "This lesson ended more than 7 days ago. Its substitute can no longer be changed."
+  },
+  "assigned": "{name} is substituting in {group} on {date}.",
+  "nextLesson": "Next lesson",
+  "stale": "{name} is no longer free at this time. Pick someone else.",
+  "lessonChanged": "This lesson changed while you were choosing. Reload to see it.",
+  "reload": "Reload",
+  "error": {
+    "assign": "Couldn't assign the substitute. Nothing was changed.",
+    "remove": "Couldn't remove the substitute. Nothing was changed.",
+    "load": "Couldn't load the teachers.",
+    "retry": "Try again"
+  },
+  "remove": {
+    "title": "Remove {substitute} from {group} on {date}?",
+    "description": "{teacher} teaches this lesson again.",
+    "anyway": "Remove anyway",
+    "regularBusy": "{teacher} is teaching {otherGroup} at this time, so the substitute can't be removed. Pick another substitute instead.",
+    "findAnother": "Find another substitute",
+    "close": "Close",
+    "stillAway": "{teacher} has a warning at this time. The lesson may need cover again:",
+    "keep": "Keep substitute",
+    "confirm": "Remove substitute",
+    "removing": "Removing…"
+  },
+  "removed": "{substitute} no longer substitutes in {group} on {date}.",
+  "admin": {
+    "banner": "{substitute} is substituting for {teacher}."
+  },
+  "dashboard": {
+    "needsCover": "{count, plural, one {# lesson needs cover} other {# lessons need cover}}"
+  },
+  "empty": {
+    "needsCover": {
+      "title": "No lessons need cover.",
+      "description": "When a teacher is away on a lesson's date, the lesson shows up here."
+    },
+    "covered": "No upcoming lessons have a substitute.",
+    "past": "No substitutions this term.",
+    "teacherLessons": "{teacher} has no lessons in these dates."
+  },
+  "teacher": {
+    "title": "Substitutions",
+    "covering": "You're covering",
+    "coveredForYou": "Covered for you",
+    "for": "for {teacher}",
+    "by": "by {substitute}",
+    "showPast": "Show past",
+    "showUpcoming": "Show upcoming",
+    "empty": {
+      "title": "No substitutions.",
+      "description": "When you cover a lesson or someone covers yours, it shows up here."
+    },
+    "sectionEmpty": "Nothing here.",
+    "card": "{count, plural, one {You're covering # lesson in the next 14 days} other {You're covering # lessons in the next 14 days}}",
+    "cardTitle": "Substitutions",
+    "seeAll": "See all",
+    "coveredToday": "Covered by {substitute}"
+  }
+}

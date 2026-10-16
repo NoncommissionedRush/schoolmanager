@@ -80,6 +80,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/substitutions",
       icon: "user-round-cog",
       phase: 5,
+      enabled: true,
       section: "schedule",
     },
     {
@@ -209,6 +210,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/teacher/substitutions",
       icon: "user-round-cog",
       phase: 5,
+      enabled: true,
       section: "me",
     },
   ],

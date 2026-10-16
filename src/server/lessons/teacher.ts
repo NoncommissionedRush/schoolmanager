@@ -584,6 +584,14 @@ export type TodayLesson = {
   /** "−{n} · +{r}" (absences.md §6.3); zero on cancelled lessons. */
   notComing: number;
   replacements: number;
+  /**
+   * Substitutes (design notifications-substitutes.md §5.5): the viewer
+   * covers this lesson, or someone covers it for them (shown muted).
+   */
+  cover:
+    | { role: "substituting"; teacher: string }
+    | { role: "covered"; substitute: string }
+    | null;
 };
 
 /**
@@ -615,8 +623,13 @@ export async function loadTeacherToday(
       startsAt: true,
       endsAt: true,
       status: true,
+      teacherId: true,
       group: { select: { name: true } },
       room: { select: { name: true } },
+      teacher: { select: { user: { select: { name: true } } } },
+      substituteTeacher: {
+        select: { id: true, user: { select: { name: true } } },
+      },
     },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
   });
@@ -639,6 +652,14 @@ export async function loadTeacherToday(
       roomName: row.room?.name ?? null,
       cancelled: row.status === "CANCELLED",
       ...(roster ? rosterCounts(roster) : { notComing: 0, replacements: 0 }),
+      cover: !row.substituteTeacher
+        ? null
+        : row.substituteTeacher.id === teacherId
+          ? { role: "substituting" as const, teacher: row.teacher.user.name }
+          : {
+              role: "covered" as const,
+              substitute: row.substituteTeacher.user.name,
+            },
     };
   });
 }
