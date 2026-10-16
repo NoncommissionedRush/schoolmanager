@@ -173,7 +173,8 @@ export async function hasActiveFeed(
 /**
  * An admin turns a user's link off (§5.1): revoked, no new link (the admin
  * never sees one), audited, and the user gets `CALENDAR_FEED_REVOKED`.
- * Returns false when there was no active link.
+ * Returns false when there was no active link; a user who isn't a teacher
+ * or student of this school is "not found".
  */
 export async function revokeFeedAsAdmin(
   db: SchoolDb,
@@ -181,13 +182,16 @@ export async function revokeFeedAsAdmin(
   userId: string,
   now: Date,
 ): Promise<boolean> {
-  if (!isUuid(userId)) return false;
+  if (!isUuid(userId)) throw new AdminError(msg("common.error.notFound"));
   return db.$transaction(async (tx) => {
     const membership = await tx.membership.findFirst({
       where: { userId },
       select: { role: true },
     });
-    if (!membership || !canHaveFeed(membership.role)) return false;
+    // Another school's user (or an admin) is "not found", like elsewhere.
+    if (!membership || !canHaveFeed(membership.role)) {
+      throw new AdminError(msg("common.error.notFound"));
+    }
     const active = await tx.calendarFeed.findFirst({
       where: { userId, revokedAt: null },
       select: { id: true },

@@ -28,6 +28,10 @@ export default defineConfig({
       AUTH_SECRET:
         process.env.AUTH_SECRET ??
         "e2e-only-secret-not-for-production-0123456789",
+      // Calendar links (phase5-rules.md §5.1) need a signing secret too.
+      ICAL_TOKEN_SECRET:
+        process.env.ICAL_TOKEN_SECRET ??
+        "e2e-only-ical-secret-not-for-production-0123456789",
     },
   },
 });

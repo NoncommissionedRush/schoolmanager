@@ -18,6 +18,8 @@ const TIMETABLE = "src/app/admin/timetable/actions.ts";
 const LESSONS = "src/app/admin/lessons/actions.ts";
 const ABSENCES = "src/app/admin/absences/actions.ts";
 const SUBSTITUTES = "src/app/admin/substitutions/actions.ts";
+const RATINGS = "src/app/admin/ratings/actions.ts";
+const CALENDAR = "src/app/admin/_people/calendar-actions.ts";
 
 /** A substitute action's input for `lessonId` (the lesson as last seen). */
 const substitute = (lessonId: string, extra: Record<string, unknown>) => ({
@@ -611,6 +613,23 @@ export function crossSchoolCases(
       args: [
         { teacherId: target.teacher, from: DATE, to: DATE, markAway: true },
       ],
+    },
+    // Ratings and calendar links (CARM-66). The seed has no ratings, so the
+    // rating id is a guessed one; the Phase 5 suite (CARM-67) adds more.
+    {
+      name: "hide a rating",
+      action: [RATINGS, "setRatingHiddenAction"],
+      args: [{ ratingId: target.teacher, hidden: true }],
+    },
+    {
+      name: "turn off their teacher's calendar link",
+      action: [CALENDAR, "revokeCalendarFeedAction"],
+      args: [target.teacherUser],
+    },
+    {
+      name: "turn off their student's calendar link",
+      action: [CALENDAR, "revokeCalendarFeedAction"],
+      args: [target.studentUser],
     },
   ];
 }

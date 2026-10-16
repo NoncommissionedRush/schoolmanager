@@ -819,14 +819,9 @@ describe.skipIf(!url)("ratings and calendar feeds (database)", () => {
       ]);
       // Another school's admin can't reach this user's link.
       await createMyFeed(db, owner("Tomas", "TEACHER"), NOW);
-      expect(
-        await revokeFeedAsAdmin(
-          otherDb,
-          { userId: user.Admin },
-          user.Tomas,
-          NOW,
-        ),
-      ).toBe(false);
+      await expect(
+        revokeFeedAsAdmin(otherDb, { userId: user.Admin }, user.Tomas, NOW),
+      ).rejects.toBeInstanceOf(AdminError);
       expect(await hasActiveFeed(db, user.Tomas)).toBe(true);
     });
 

@@ -15,7 +15,7 @@ Prerequisites: Node.js 22 (see `.nvmrc`), pnpm 10 (`corepack enable`), Docker.
 
 ```bash
 pnpm install                 # also generates the Prisma client
-cp .env.example .env         # DATABASE_URL + AUTH_SECRET for local dev
+cp .env.example .env         # DATABASE_URL, AUTH_SECRET, ICAL_TOKEN_SECRET
 docker compose up -d --wait  # Postgres 16 on localhost:5432
 pnpm db:migrate              # apply migrations
 pnpm db:seed                 # demo data
@@ -27,7 +27,9 @@ Stop the database with `docker compose down` (add `-v` to wipe its data).
 Upgrading an existing local database: databases created before the CARM-17
 schema (PR #4) need `pnpm db:reset`; otherwise `pnpm db:migrate && pnpm db:seed`
 picks up new migrations and demo passwords. `.env` files from before CARM-19
-need an `AUTH_SECRET` line (copy it from `.env.example`).
+need an `AUTH_SECRET` line, and `.env` files from before CARM-66 an
+`ICAL_TOKEN_SECRET` line (copy both from `.env.example`). Changing
+`ICAL_TOKEN_SECRET` turns off every calendar link already handed out.
 
 ### Demo data
 
@@ -68,6 +70,18 @@ Substitutions_: in the demo data Peter Horváth is away on 27 Oct, so his
 lesson is listed under _Needs cover_. Teachers see their cover under _Me ›
 Substitutions_. Rules: `docs/architecture/phase5-rules.md`; spec:
 `docs/design/notifications-substitutes.md`.
+
+### Ratings and calendar subscriptions
+
+Students rate their teachers under _Rate your teachers_ (student _More_
+menu) once they've attended 3 lessons with them, from half-term until 14
+days after the term ends; only admins see ratings (_Academics › Ratings_),
+teachers never do. In the demo data rating for "Autumn 2026" opens on 21
+Nov 2026, so students see "You can rate … from 21 Nov" until then.
+Teachers and students get a private calendar link (iCal) under _Calendar
+subscription_ in the account menu; the feed is served at
+`/api/calendar/<token>.ics` and needs `ICAL_TOKEN_SECRET`. Admins can turn a
+user's link off from the user's page.
 
 ### Database tests
 
