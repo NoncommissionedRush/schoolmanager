@@ -162,7 +162,10 @@ export function NotificationEntry({
               const result = await markReadAction(item.id);
               announceNotificationsChanged();
               onOpened?.(item.id);
-              router.push(result.href ?? item.href!);
+              // Gone meanwhile (expired, or not ours): show the fresh list
+              // instead of following a link that may no longer be valid.
+              if (!result.ok || !result.href) router.refresh();
+              else router.push(result.href);
             });
           }}
         >

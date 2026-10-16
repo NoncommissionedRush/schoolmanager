@@ -5,6 +5,7 @@
 // that service can call it without an import cycle.
 
 import { notifyReplacementEnded } from "@/server/notifications/emit";
+import { recordReleased } from "@/server/notifications/timetable-changes";
 import { type ReleaseCause, releaseCredit } from "@/server/scheduling";
 import type { Tx } from "@/server/timetable/service";
 
@@ -110,6 +111,7 @@ export async function releaseCancelledLessons(
     });
     // The student hears it from the booking, not as a cancelled lesson
     // (phase5-rules.md §2.2); the teacher is told about the lesson itself.
+    recordReleased(tx, booking.targetLessonId, booking.studentId);
     await notifyReplacementEnded(
       tx,
       { sourceId: audit.id, actorId },

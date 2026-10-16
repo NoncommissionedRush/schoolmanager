@@ -33,6 +33,9 @@ const NOW = zonedTimeToUtc("2026-10-20", 12 * 60, TZ);
 const later = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
 
 describe.skipIf(!url)("notifications (database)", () => {
+  // Unique per file: the cleanup deletes only this file's users, never
+  // those another DB test file is still setting up in parallel.
+  const suffix = randomUUID().slice(0, 8);
   let client: PrismaClient;
   let db: SchoolDb;
   let otherDb: SchoolDb;
@@ -62,7 +65,6 @@ describe.skipIf(!url)("notifications (database)", () => {
     client = new PrismaClient({
       adapter: new PrismaPg({ connectionString: url }),
     });
-    const suffix = randomUUID().slice(0, 8);
     const school = await client.school.create({
       data: { name: `Notif ${suffix}`, slug: `notif-${suffix}`, timezone: TZ },
     });
@@ -176,7 +178,7 @@ describe.skipIf(!url)("notifications (database)", () => {
     await client.school.deleteMany({ where: { id: { in: schools } } });
     await client.user.deleteMany({
       where: {
-        email: { endsWith: "@example.test" },
+        email: { endsWith: `-${suffix}@example.test` },
         memberships: { none: {} },
       },
     });

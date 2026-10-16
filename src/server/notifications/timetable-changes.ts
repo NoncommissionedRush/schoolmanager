@@ -19,6 +19,8 @@ import { loadLessonFacts, notify, type NotifySource } from "./service";
 
 type Tracker = {
   before: Map<string, Snapshot>;
+  /** `lessonId|StudentProfile.id` of bookings released into cancelled lessons. */
+  released: Set<string>;
   created: Set<string>;
   firstPublished: Set<string>;
   source: NotifySource | null;
@@ -32,6 +34,7 @@ export function trackTimetableChanges(tx: Tx): void {
   trackers.set(tx, {
     before: new Map(),
     created: new Set(),
+    released: new Set(),
     firstPublished: new Set(),
     source: null,
   });
@@ -56,6 +59,19 @@ export async function captureBefore(
 }
 
 /** Records lessons created by the action. */
+/**
+ * A replacement booking into a lesson this action cancelled was released:
+ * the student hears it as `REPLACEMENT_ENDED`, so the lesson isn't counted
+ * for them in `TIMETABLE_CHANGED` too (phase5-rules.md §2.2).
+ */
+export function recordReleased(
+  tx: Tx,
+  lessonId: string,
+  studentId: string,
+): void {
+  trackers.get(tx)?.released.add(`${lessonId}|${studentId}`);
+}
+
 export function recordCreated(tx: Tx, lessonIds: readonly string[]): void {
   const tracker = trackers.get(tx);
   if (!tracker) return;
@@ -84,7 +100,7 @@ export async function flushTimetableChanges(
   const tracker = trackers.get(tx);
   trackers.delete(tx);
   if (!tracker?.source) return 0;
-  const { before, created, firstPublished, source } = tracker;
+  const { before, created, released, firstPublished, source } = tracker;
   if (before.size === 0 && created.size === 0 && firstPublished.size === 0) {
     return 0;
   }
@@ -96,7 +112,7 @@ export async function flushTimetableChanges(
   const counted = (s: Snapshot) => s.published && !firstPublished.has(s.termId);
   const after = await loadSnapshots(tx, [...before.keys(), ...created]);
   const summaries = summarizeLessonChanges(
-    [...before.values()].filter(counted),
+    (await withoutReleased(tx, [...before.values()], released)).filter(counted),
     after.filter(counted),
     { now, timeZone: timezone },
   );
@@ -253,5 +269,29 @@ async function loadSnapshots(
     cancelled: row.status === "CANCELLED",
     attendees: facts.get(row.id)?.attendees ?? [],
     published: row.term.timetablePublishedAt !== null,
+  }));
+}
+
+/** Drops students whose booking into the lesson was released (see above). */
+async function withoutReleased(
+  tx: Tx,
+  snapshots: Snapshot[],
+  released: ReadonlySet<string>,
+): Promise<Snapshot[]> {
+  if (released.size === 0) return snapshots;
+  const pairs = [...released].map((key) => key.split("|") as [string, string]);
+  const students = await tx.studentProfile.findMany({
+    where: { id: { in: [...new Set(pairs.map(([, id]) => id))] } },
+    select: { id: true, userId: true },
+  });
+  const userOf = new Map(students.map((s) => [s.id, s.userId]));
+  const gone = new Set(
+    pairs.map(
+      ([lessonId, studentId]) => `${lessonId}|${userOf.get(studentId)}`,
+    ),
+  );
+  return snapshots.map((s) => ({
+    ...s,
+    attendees: s.attendees.filter((userId) => !gone.has(`${s.id}|${userId}`)),
   }));
 }
