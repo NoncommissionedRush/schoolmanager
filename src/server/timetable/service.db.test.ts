@@ -37,6 +37,9 @@ const TERM_END = "2026-11-29";
 const NOW = new Date("2026-10-20T10:00:00Z"); // Tuesday, 12:00 in Bratislava
 
 describe.skipIf(!url)("timetable service (database)", () => {
+  // Unique per file: the cleanup deletes only this file's users, never
+  // those another DB test file is still setting up in parallel.
+  const suffix = randomUUID().slice(0, 8);
   let client: PrismaClient;
   let db: SchoolDb;
   let actor: { userId: string };
@@ -74,7 +77,6 @@ describe.skipIf(!url)("timetable service (database)", () => {
     client = new PrismaClient({
       adapter: new PrismaPg({ connectionString: url }),
     });
-    const suffix = randomUUID().slice(0, 8);
     const school = await client.school.create({
       data: { name: `Scheduling test ${suffix}`, slug: `sched-test-${suffix}` },
     });
@@ -177,7 +179,7 @@ describe.skipIf(!url)("timetable service (database)", () => {
     await client.school.delete({ where: { id: schoolId } });
     await client.user.deleteMany({
       where: {
-        email: { endsWith: "@example.test" },
+        email: { endsWith: `-${suffix}@example.test` },
         memberships: { none: {} },
       },
     });

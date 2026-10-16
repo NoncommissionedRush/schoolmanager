@@ -884,6 +884,52 @@ describe.skipIf(!url)("replacements & reschedules (database)", () => {
     ).toMatchObject({ status: "AVAILABLE", usedAt: null });
   });
 
+  it("bookings, reviews and releases notify the teacher, the student and the admins (phase5-rules.md §2.2)", async () => {
+    const of = (recipient: string, type: string) =>
+      client.notification.findMany({
+        where: { schoolId, recipientId: recipient, type: type as never },
+        orderBy: { createdAt: "asc" },
+      });
+    // The winner's own booking: Tom (teacher of group B) and the review queue.
+    const booked = await of(user.Tom, "REPLACEMENT_BOOKED");
+    expect(booked.map((n) => n.params)).toContainEqual(
+      expect.objectContaining({
+        student: user.Winner === user.Cara ? "Cara" : "Dan",
+      }),
+    );
+    expect(await of(user.Winner, "REPLACEMENT_BOOKED")).toHaveLength(0);
+    const pending = await of(user.Admin, "REPLACEMENT_REVIEW_PENDING");
+    expect(pending).toHaveLength(1);
+    expect(
+      (pending[0].params as { count: number }).count,
+    ).toBeGreaterThanOrEqual(2);
+    // The rejection: the student with the school's note, and Tom.
+    const rejected = (await of(user.Winner, "REPLACEMENT_ENDED")).find(
+      (n) =>
+        (n.params as { note?: string }).note === "Room is needed for an exam.",
+    );
+    expect(rejected).toMatchObject({ audience: "student" });
+    expect(rejected?.params).toMatchObject({
+      outcome: "rejected",
+      creditBack: "yes",
+    });
+    // The override moved the loser's booking to group C: the student is told.
+    const [moved] = await of(user.Loser, "REPLACEMENT_MOVED");
+    expect(moved.params).toMatchObject({ note: "Asked for a harder class." });
+    // The school cancelled group C's lesson: the booking ended, credit back.
+    const ended = await of(user.Loser, "REPLACEMENT_ENDED");
+    expect(ended.at(-1)?.params).toMatchObject({
+      outcome: "cancelled",
+      creditBack: "yes",
+    });
+    // Nobody is told about their own action.
+    expect(
+      await client.notification.count({
+        where: { schoolId, recipientId: user.Admin, actorId: user.Admin },
+      }),
+    ).toBe(0);
+  });
+
   // --- 1-on-1 reschedules ---------------------------------------------------
 
   let firstMove: string;
@@ -945,6 +991,20 @@ describe.skipIf(!url)("replacements & reschedules (database)", () => {
       name: "Olga",
       byAdmin: false,
     });
+    // Tess hears it as a moved lesson (not an absence); Olga moved it herself.
+    const notes = (
+      await client.notification.findMany({
+        where: { schoolId, type: { in: ["LESSON_MOVED", "ABSENCE_REPORTED"] } },
+      })
+    ).filter((n) =>
+      [lessons.oThu, firstMove].includes(
+        (n.link as { lessonId?: string } | null)?.lessonId ?? "",
+      ),
+    );
+    expect(notes.map((n) => [n.recipientId, n.type, n.audience])).toEqual([
+      [user.Tess, "LESSON_MOVED", "teacher"],
+    ]);
+    expect(notes[0].link).toEqual({ kind: "lesson", lessonId: firstMove });
   });
 
   it("moving it again reuses the same credit and never extends it", async () => {

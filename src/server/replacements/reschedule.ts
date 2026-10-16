@@ -9,6 +9,12 @@ import type { Prisma } from "@/generated/prisma/client";
 import { AdminError, msg } from "@/server/admin/result";
 import { isUuid } from "@/server/lessons/access";
 import {
+  notifyLessonCancelled,
+  notifyLessonMoved,
+  notifySubstituteDropped,
+} from "@/server/notifications/emit";
+import type { NotifySource } from "@/server/notifications/service";
+import {
   addDays,
   buildCalendar,
   type Calendar,
@@ -71,6 +77,9 @@ const lessonSelect = {
   room: { select: { kind: true } },
   timetableSlot: { select: { roomId: true } },
   teacher: { select: { user: { select: { name: true } } } },
+  substituteTeacher: {
+    select: { userId: true, user: { select: { name: true } } },
+  },
   spentCredit: {
     select: { id: true, status: true, expiresAt: true, studentId: true },
   },
@@ -445,6 +454,43 @@ async function createRescheduled(
 }
 
 /**
+ * A 1-on-1 moved to a new lesson (phase5-rules.md §2.2, §3.6): its people
+ * get `LESSON_MOVED` (only the teachers when the student did it), and a
+ * substitute of the old lesson `SUBSTITUTE_REMOVED` instead, since the new
+ * lesson starts without one.
+ */
+async function notifyRescheduled(
+  tx: Tx,
+  source: NotifySource,
+  from: Pick<LessonRow, "startsAt" | "endsAt" | "roomId">,
+  moved: Pick<LessonRow, "id" | "substituteTeacher"> | null,
+  toLessonId: string,
+  teachersOnly: boolean,
+  now: Date,
+) {
+  await notifyLessonMoved(
+    tx,
+    source,
+    { lessonId: toLessonId, old: from, teachersOnly },
+    now,
+  );
+  if (moved?.substituteTeacher) {
+    await notifySubstituteDropped(
+      tx,
+      source,
+      {
+        lessonId: moved.id,
+        substitute: {
+          userId: moved.substituteTeacher.userId,
+          name: moved.substituteTeacher.user.name,
+        },
+      },
+      now,
+    );
+  }
+}
+
+/**
  * The student moves their 1-on-1 to `startsAt` (one of the offered
  * times). Under the lock everything is loaded and checked again; the room
  * is picked by the server. Never mints a second credit: a rescheduled
@@ -502,6 +548,8 @@ export async function rescheduleLesson(
           expectCredit: true,
         },
         now,
+        // The teacher hears about it as a moved lesson (below).
+        { notify: false },
       );
       if (reported.status === "cutoffPassed" || !reported.credit) {
         throw refusal("CUTOFF_PASSED");
@@ -539,7 +587,7 @@ export async function rescheduleLesson(
     });
     if (count !== 1) throw refusal("CREDIT_UNAVAILABLE");
 
-    await tx.auditLog.create({
+    const audit = await tx.auditLog.create({
       data: {
         schoolId: school.id,
         actorId: actor.userId,
@@ -556,7 +604,17 @@ export async function rescheduleLesson(
           roomId: chosen.roomId,
         },
       },
+      select: { id: true },
     });
+    await notifyRescheduled(
+      tx,
+      { sourceId: audit.id, actorId: actor.userId },
+      setup.lesson ?? setup.missed,
+      setup.lesson,
+      lesson.id,
+      true,
+      now,
+    );
     return {
       status: "rescheduled",
       lessonId: lesson.id,
@@ -831,7 +889,7 @@ export async function rescheduleByAdmin(
       });
       if (count !== 1) throw refusal("CREDIT_UNAVAILABLE");
     }
-    await tx.auditLog.create({
+    const audit = await tx.auditLog.create({
       data: {
         schoolId: school.id,
         actorId: actor.userId,
@@ -864,7 +922,17 @@ export async function rescheduleByAdmin(
           }),
         ),
       },
+      select: { id: true },
     });
+    await notifyRescheduled(
+      tx,
+      { sourceId: audit.id, actorId: actor.userId },
+      moving ?? missed,
+      moving,
+      created.id,
+      false,
+      now,
+    );
     return {
       status: "rescheduled",
       lessonId: created.id,
@@ -912,7 +980,7 @@ export async function cancelRescheduledLesson(
       now,
       actor.userId,
     );
-    await tx.auditLog.create({
+    const audit = await tx.auditLog.create({
       data: {
         schoolId: school.id,
         actorId: actor.userId,
@@ -921,7 +989,14 @@ export async function cancelRescheduledLesson(
         entityId: lesson.id,
         data: { reason: SCHOOL_CANCELLED, creditsReleased: released.credits },
       },
+      select: { id: true },
     });
+    await notifyLessonCancelled(
+      tx,
+      { sourceId: audit.id, actorId: actor.userId },
+      { lessonId: lesson.id, reason: SCHOOL_CANCELLED },
+      now,
+    );
     return { creditReleased: released.credits > 0 };
   });
 }
