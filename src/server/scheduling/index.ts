@@ -10,3 +10,5 @@ export * from "./time";
 export * from "./types";
 export * from "./replacements";
 export * from "./reschedule";
+export * from "./substitutes";
+export * from "./teacher-reasons";

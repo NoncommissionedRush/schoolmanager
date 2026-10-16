@@ -17,6 +17,17 @@ const TERMS = "src/app/admin/settings/terms/actions.ts";
 const TIMETABLE = "src/app/admin/timetable/actions.ts";
 const LESSONS = "src/app/admin/lessons/actions.ts";
 const ABSENCES = "src/app/admin/absences/actions.ts";
+const SUBSTITUTES = "src/app/admin/substitutions/actions.ts";
+
+/** A substitute action's input for `lessonId` (the lesson as last seen). */
+const substitute = (lessonId: string, extra: Record<string, unknown>) => ({
+  lessonId,
+  expectedSubstituteId: null,
+  expectedStartsAt: "2026-10-20T16:00:00.000Z",
+  acknowledgedKeys: [],
+  reason: null,
+  ...extra,
+});
 
 export type ActionCase = {
   name: string;
@@ -571,6 +582,34 @@ export function crossSchoolCases(
           acknowledgedKeys: [],
           note: null,
         },
+      ],
+    },
+    // Substitutes (CARM-65)
+    {
+      name: "open the substitute sheet of their lesson",
+      action: [SUBSTITUTES, "loadSubstituteSheetAction"],
+      args: [target.lesson],
+    },
+    {
+      name: "assign a substitute to their lesson",
+      action: [SUBSTITUTES, "assignSubstituteAction"],
+      args: [substitute(target.lesson, { teacherId: own.teacher })],
+    },
+    {
+      name: "assign their teacher to own lesson",
+      action: [SUBSTITUTES, "assignSubstituteAction"],
+      args: [substitute(own.lesson, { teacherId: target.teacher })],
+    },
+    {
+      name: "remove the substitute of their lesson",
+      action: [SUBSTITUTES, "removeSubstituteAction"],
+      args: [substitute(target.lesson, { expectedSubstituteId: own.teacher })],
+    },
+    {
+      name: "cover their teacher (mark away)",
+      action: [SUBSTITUTES, "coverTeacherAction"],
+      args: [
+        { teacherId: target.teacher, from: DATE, to: DATE, markAway: true },
       ],
     },
   ];

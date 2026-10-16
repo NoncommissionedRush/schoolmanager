@@ -130,6 +130,14 @@ export const TEACHER_AVAILABILITY: {
     endMinute: h(12),
     note: "Doctor's appointment",
   },
+  {
+    // A whole day away: the lessons show under Substitutions › Needs cover.
+    key: "horvath-sick",
+    teacher: "t-horvath",
+    kind: "DATE_UNAVAILABLE",
+    date: "2026-10-27",
+    note: "Off sick",
+  },
 ];
 
 export const ROOMS = [
