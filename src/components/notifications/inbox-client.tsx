@@ -2,7 +2,6 @@
 
 import { Bell, EllipsisVertical } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -28,7 +27,10 @@ import {
   markAllReadAction,
   markReadAction,
 } from "./actions";
-import { NotificationEntry } from "./notification-item";
+import {
+  announceNotificationsChanged,
+  NotificationEntry,
+} from "./notification-item";
 
 const DAYS = ["today", "yesterday", "earlier"] as const;
 
@@ -45,7 +47,6 @@ export function InboxClient({
   initialUnread: number;
 }) {
   const t = useTranslations("notifications");
-  const router = useRouter();
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [unread, setUnread] = useState(initialUnread);
@@ -67,7 +68,7 @@ export function InboxClient({
         unreadOnly ? [] : list.map((item) => ({ ...item, read: true })),
       );
       toast.success(t("markedAllRead"));
-      router.refresh();
+      announceNotificationsChanged();
     });
 
   const markOne = (item: NotificationItem) =>
@@ -78,7 +79,7 @@ export function InboxClient({
       setItems((list) =>
         list.map((i) => (i.id === item.id ? { ...i, read: true } : i)),
       );
-      router.refresh();
+      announceNotificationsChanged();
     });
 
   const loadMore = () =>

@@ -38,6 +38,16 @@ const ICONS: Record<NotificationIcon, { icon: LucideIcon; tone: string }> = {
   link: { icon: Link2, tone: "text-info" },
 };
 
+/**
+ * Fired on `window` after a notification was marked read, so the header
+ * bell re-reads its count (the layout isn't re-rendered on navigation).
+ */
+export const NOTIFICATIONS_CHANGED = "notifications-changed";
+
+export function announceNotificationsChanged() {
+  window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED));
+}
+
 /** "5 min ago", "Yesterday", with the full date in `title` (§4.3). */
 export function RelativeTime({ iso }: { iso: string }) {
   const format = useFormatter();
@@ -150,6 +160,7 @@ export function NotificationEntry({
             event.preventDefault();
             startTransition(async () => {
               const result = await markReadAction(item.id);
+              announceNotificationsChanged();
               onOpened?.(item.id);
               router.push(result.href ?? item.href!);
             });

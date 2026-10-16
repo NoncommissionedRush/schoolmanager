@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import type { NotificationItem } from "@/server/notifications/view";
 
 import { listNotificationsAction, markAllReadAction } from "./actions";
-import { NotificationEntry } from "./notification-item";
+import { NOTIFICATIONS_CHANGED, NotificationEntry } from "./notification-item";
 
 const POLL_MS = 60_000;
 
@@ -65,10 +65,12 @@ export function NotificationBell({
   useEffect(() => {
     const timer = window.setInterval(refresh, POLL_MS);
     window.addEventListener("focus", refresh);
+    window.addEventListener(NOTIFICATIONS_CHANGED, refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener(NOTIFICATIONS_CHANGED, refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [refresh]);
