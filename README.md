@@ -59,6 +59,16 @@ groups / Skill levels_ and _Settings_ (school, terms & holidays, rooms,
 administrators). Spec: `docs/design/admin-data.md`; server code in
 `src/server/admin/`.
 
+### Notifications and substitutes
+
+Every role has a bell in the header and an inbox at `/{role}/notifications`
+(in-app only; rows older than 90 days are removed, also by
+`pnpm notifications:purge`). Admins arrange cover under _Schedule ›
+Substitutions_: in the demo data Peter Horváth is away on 27 Oct, so his
+lesson is listed under _Needs cover_. Teachers see their cover under _Me ›
+Substitutions_. Rules: `docs/architecture/phase5-rules.md`; spec:
+`docs/design/notifications-substitutes.md`.
+
 ### Database tests
 
 Unit tests run without a database. The service tests that need Postgres
