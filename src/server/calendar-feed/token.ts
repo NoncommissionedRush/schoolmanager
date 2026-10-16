@@ -19,7 +19,9 @@ export class MissingFeedSecretError extends Error {
 }
 
 /** The signing secret; calendar links don't work without it. */
-export function feedSecret(env: NodeJS.ProcessEnv = process.env): string {
+export function feedSecret(
+  env: Record<string, string | undefined> = process.env,
+): string {
   const secret = env.ICAL_TOKEN_SECRET;
   if (!secret || secret.length < MIN_SECRET_LENGTH) {
     throw new MissingFeedSecretError();

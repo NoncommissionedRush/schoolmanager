@@ -26,7 +26,8 @@ export type NavIcon =
   | "chart-column"
   | "settings"
   | "notebook-pen"
-  | "clipboard-list";
+  | "clipboard-list"
+  | "calendar-sync";
 
 export type NavLabel = Exclude<keyof Messages["nav"], "section">;
 export type NavSection = keyof Messages["nav"]["section"];
@@ -135,6 +136,7 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/admin/ratings",
       icon: "star",
       phase: 5,
+      enabled: true,
       section: "academics",
     },
     {
@@ -191,13 +193,8 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       enabled: true,
       section: "teaching",
     },
-    {
-      label: "ratings",
-      href: "/teacher/ratings",
-      icon: "star",
-      phase: 5,
-      section: "teaching",
-    },
+    // No teacher _Ratings_: teachers never see ratings (owner decision,
+    // notifications-substitutes.md §2).
     {
       label: "myAbsences",
       href: "/teacher/absences",
@@ -240,6 +237,21 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       phase: 3,
       enabled: true,
       tab: true,
+    },
+    // In the _More_ sheet (notifications-substitutes.md §2).
+    {
+      label: "rateTeachers",
+      href: "/student/ratings",
+      icon: "star",
+      phase: 5,
+      enabled: true,
+    },
+    {
+      label: "calendar",
+      href: "/student/calendar",
+      icon: "calendar-sync",
+      phase: 5,
+      enabled: true,
     },
     { label: "payments", href: "/student/payments", icon: "wallet", phase: 6 },
   ],

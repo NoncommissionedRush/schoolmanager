@@ -40,6 +40,8 @@ import {
   TeacherTabs,
 } from "./teacher-detail-client";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
+import { RevokeCalendarLink } from "@/components/calendar-feed/admin-revoke";
+import { hasActiveFeed } from "@/server/calendar-feed/service";
 
 async function TeacherPage({
   params,
@@ -59,13 +61,15 @@ async function TeacherPage({
   const today = schoolToday(viewer.school.timezone);
   const todayIso = toIsoDate(today);
 
-  const [availability, passwordSetAt, terms, school, levels] =
+  const tf = await getTranslations("calendarFeed.admin");
+  const [availability, passwordSetAt, terms, school, levels, calendarLink] =
     await Promise.all([
       listAvailability(db, teacher.id),
       lastPasswordChange({ db, ...scope }, teacher.userId),
       listTerms(db),
       db.school.findFirstOrThrow({ select: { teachingWeekdays: true } }),
       rankedLevels(db),
+      hasActiveFeed(db, teacher.userId),
     ]);
   const termParam = param(query, "term");
   const term =
@@ -121,6 +125,21 @@ async function TeacherPage({
           <SetPasswordButton person={person} />
         </CardContent>
       </Card>
+      {calendarLink && (
+        <Card className="h-fit lg:col-start-2">
+          <CardHeader>
+            <CardTitle>
+              <h2>{tf("title")}</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-start gap-3">
+            <p className="text-sm text-muted-foreground">
+              {tf("active", { name: teacher.name })}
+            </p>
+            <RevokeCalendarLink userId={teacher.userId} name={teacher.name} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 

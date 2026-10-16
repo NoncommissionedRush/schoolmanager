@@ -90,6 +90,8 @@
       "noGroup": "—",
       "empty": "No ratings for this teacher in {term}.",
       "loadMore": "Load more"
-    }
+    },
+    "noValue": "—",
+    "caption": "Ratings for {term}"
   }
 }

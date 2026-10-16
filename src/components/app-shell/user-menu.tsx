@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronDown, LogOut } from "lucide-react";
+import { CalendarSync, ChevronDown, LogOut } from "lucide-react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useTransition } from "react";
 
@@ -32,6 +33,7 @@ export function UserMenu({
   role: Role;
 }) {
   const t = useTranslations("layout");
+  const tn = useTranslations("nav");
   const [signingOut, startSignOut] = useTransition();
 
   return (
@@ -64,6 +66,20 @@ export function UserMenu({
           </Badge>
         </div>
         <DropdownMenuSeparator />
+        {role !== "ADMIN" && (
+          <DropdownMenuItem
+            render={
+              <Link
+                href={
+                  role === "TEACHER" ? "/teacher/calendar" : "/student/calendar"
+                }
+              />
+            }
+          >
+            <CalendarSync aria-hidden="true" />
+            {tn("calendar")}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           disabled={signingOut}
           onClick={() => startSignOut(() => signOutAction())}

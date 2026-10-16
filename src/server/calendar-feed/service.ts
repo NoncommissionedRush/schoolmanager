@@ -51,21 +51,22 @@ export async function loadMyFeed(
   origin: string,
 ): Promise<MyCalendarFeed> {
   assertOwner(owner);
-  const latest = await db.calendarFeed.findFirst({
-    where: { userId: owner.userId },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { salt: true, createdAt: true, revokedAt: true },
+  const active = await db.calendarFeed.findFirst({
+    where: { userId: owner.userId, revokedAt: null },
+    select: { salt: true, createdAt: true },
   });
-  if (!latest) return { link: null, revokedByAdmin: false };
-  if (latest.revokedAt) {
-    // A reset always creates a new link, so a newest row that is revoked
-    // was turned off by an admin.
-    return { link: null, revokedByAdmin: true };
+  if (active) {
+    return {
+      link: { url: urlOf(origin, active.salt), createdAt: active.createdAt },
+      revokedByAdmin: false,
+    };
   }
-  return {
-    link: { url: urlOf(origin, latest.salt), createdAt: latest.createdAt },
-    revokedByAdmin: false,
-  };
+  // A reset always creates a new link, so earlier links without an active
+  // one mean an admin turned the last one off.
+  const earlier = await db.calendarFeed.count({
+    where: { userId: owner.userId },
+  });
+  return { link: null, revokedByAdmin: earlier > 0 };
 }
 
 async function schoolIdOf(tx: Tx) {

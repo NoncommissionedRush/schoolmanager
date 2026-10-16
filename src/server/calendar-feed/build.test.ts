@@ -60,7 +60,7 @@ function event(text: string) {
     location: get("location") as string | null,
     url: get("url") as string,
     uid: get("uid") as string,
-    sequence: get("sequence") as number,
+    sequence: get("sequence") as unknown as number,
   };
 }
 

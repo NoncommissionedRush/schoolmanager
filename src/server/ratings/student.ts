@@ -23,6 +23,7 @@ import {
   attendedByTermAndTeacher,
   canRate,
   type CanRateResult,
+  normalizeComment,
   ratingCardState,
   type RatingCardState,
   ratingWindow,
@@ -312,6 +313,7 @@ export async function saveRating(
     const schoolId = (
       await tx.school.findFirstOrThrow({ select: { id: true } })
     ).id;
+    const comment = normalizeComment(input.comment);
     const rating = existing
       ? await tx.teacherRating.update({
           where: {
@@ -322,7 +324,7 @@ export async function saveRating(
               termId: input.termId,
             },
           },
-          data: { score: input.score, comment: input.comment, updatedAt: now },
+          data: { score: input.score, comment, updatedAt: now },
           select: { id: true },
         })
       : await tx.teacherRating.create({
@@ -332,7 +334,7 @@ export async function saveRating(
             teacherId: input.teacherId,
             termId: input.termId,
             score: input.score,
-            comment: input.comment,
+            comment,
             createdAt: now,
             updatedAt: now,
           },

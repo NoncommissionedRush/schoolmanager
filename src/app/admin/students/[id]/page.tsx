@@ -38,6 +38,8 @@ import {
 import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { ReadOnlyNotesCard } from "@/components/lessons/internal-notes-card";
 import { loadStudentNotes } from "@/server/notes/teacher-notes";
+import { RevokeCalendarLink } from "@/components/calendar-feed/admin-revoke";
+import { hasActiveFeed } from "@/server/calendar-feed/service";
 
 const DATE = {
   day: "numeric",
@@ -66,13 +68,16 @@ async function StudentPage({
   const tab =
     tabParam === "groups" || tabParam === "notes" ? tabParam : "profile";
   const today = toIsoDate(todayDate);
-  const [options, groups, passwordSetAt, notes] = await Promise.all([
-    studentFilterOptions(db),
-    groupPickerOptions(db),
-    lastPasswordChange(scope, student.userId),
-    // Internal notes about the student (lessons.md §7): admins only.
-    loadStudentNotes(db, { role: viewer.role }, student.id),
-  ]);
+  const tf = await getTranslations("calendarFeed.admin");
+  const [options, groups, passwordSetAt, notes, calendarLink] =
+    await Promise.all([
+      studentFilterOptions(db),
+      groupPickerOptions(db),
+      lastPasswordChange(scope, student.userId),
+      // Internal notes about the student (lessons.md §7): admins only.
+      loadStudentNotes(db, { role: viewer.role }, student.id),
+      hasActiveFeed(db, student.userId),
+    ]);
   const levels = pickable(options.levels, student.levelId).map((level) => ({
     id: level.id,
     label: level.archivedAt
@@ -149,6 +154,15 @@ async function StudentPage({
                 : tp("neverSet")}
             </p>
           </Card>
+          {calendarLink && (
+            <Card className="max-w-2xl items-start gap-2 p-6">
+              <h2 className="font-medium">{tf("title")}</h2>
+              <p className="text-sm text-muted-foreground">
+                {tf("active", { name: student.name })}
+              </p>
+              <RevokeCalendarLink userId={student.userId} name={student.name} />
+            </Card>
+          )}
         </TabsContent>
         <TabsContent value="groups" className="flex flex-col gap-6 pt-4">
           <section className="flex flex-col gap-3">
