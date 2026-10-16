@@ -411,7 +411,7 @@
             ? `<div class="fixed inset-0 bg-black/50 grid place-items-center z-40"><div class="w-[440px] rounded-lg bg-white p-6 shadow-lg space-y-4"><h2 class="text-lg font-semibold">Cover a teacher</h2>
               <label class="block space-y-2"><span class="font-medium">Teacher (required)</span>${btn("Tomas Horvat ▾", "outline", "w-full justify-between")}</label>
               <div class="grid grid-cols-2 gap-3"><label class="space-y-2"><span class="font-medium">From</span>${btn("20 Oct 2026", "outline", "w-full")}</label><label class="space-y-2"><span class="font-medium">To</span>${btn("22 Oct 2026", "outline", "w-full")}</label></div>
-              <label class="flex gap-2 items-start text-muted-foreground"><input type="checkbox" checked class="mt-1"> Also mark Tomas Horvat as away on these dates <em class="text-xs">(Q2, needs the owner's yes)</em></label>
+              <label class="flex gap-2 items-start text-muted-foreground"><input type="checkbox" checked class="mt-1"> Also mark Tomas Horvat as away on these dates</label>
               <div class="flex justify-end gap-2">${btn("Cancel", "outline")}${btn("Show lessons")}</div></div></div>`
             : "";
         return desktop(
@@ -805,7 +805,7 @@
             "after reset",
             "loading",
             "reset error",
-            "turned off by school (Q6)",
+            "turned off by school",
           ],
           fn: calendarStudent,
         },

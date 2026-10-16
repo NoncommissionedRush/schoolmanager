@@ -52,7 +52,7 @@ UI strings go through next-intl.
 | Notifications         | Own inbox                                                                 | Own inbox                                                                                   | Own inbox                                                                  |
 | Substitutes           | Find, assign, change, remove (`/admin/substitutions`, lesson page, sheet) | Read: lessons they cover and lessons covered for them (`/teacher/substitutions`, timetable) | Read: the substitute's name on the lesson                                  |
 | Ratings               | Read all ratings of the school (`/admin/ratings`)                         | **Nothing** — no page, no count, no average                                                 | Write and edit their own ratings (`/student/ratings`); read only their own |
-| Calendar subscription | Not offered in v1 (admins have no lessons of their own; §11 Q6)           | Own link: create, copy, reset                                                               | Own link: create, copy, reset                                              |
+| Calendar subscription | Not offered in v1 (admins have no lessons of their own; §11 decision 6)   | Own link: create, copy, reset                                                               | Own link: create, copy, reset                                              |
 
 **Server-side rules** the UI only mirrors (QA covers them in CARM-67):
 
@@ -226,31 +226,31 @@ In student copy for a 1-on-1 lesson, "{group}" is written as "your lesson".
 The text uses an ICU `select` on the `lessonType` param, shown below as
 {group|your lesson}.
 
-| Type                         | Icon (color)               | Variant                                                 | Title                                                              | Detail                                                                    | Link                    |
-| ---------------------------- | -------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------- |
-| `LESSON_CANCELLED`           | `ban` (danger)             | teacher                                                 | {group} on {date} is cancelled                                     | Reason: {reason}                                                          | Lesson                  |
-|                              |                            | student                                                 | {group\|your lesson} on {date} is cancelled                        | Reason: {reason}                                                          | Lesson                  |
-| `LESSON_MOVED`               | `calendar-clock` (info)    | teacher                                                 | {group} moved to {date}, {time}                                    | Was {oldDate}, {oldTime}                                                  | Lesson (the new one)    |
-|                              |                            | student                                                 | {group\|your lesson} moved to {date}, {time}                       | Was {oldDate}, {oldTime}                                                  | Lesson                  |
-|                              | `door-open` (info)         | teacherRoom / studentRoom (only the room changed)       | {group\|your lesson} on {date} is now in {room}                    | Was {oldRoom}                                                             | Lesson                  |
-| `SUBSTITUTE_ASSIGNED`        | `user-round-cog` (cyan)    | substitute                                              | You're substituting in {group} on {date}                           | For {teacher} · {time} · {room}                                           | Lesson                  |
-|                              |                            | regular                                                 | {substitute} is covering your {group} lesson on {date}             | {time} · {room}                                                           | Lesson                  |
-|                              |                            | student                                                 | {substitute} is teaching {group\|your lesson} on {date}            | {time} · {room}                                                           | Lesson                  |
-| `SUBSTITUTE_REMOVED`         | `user-round-x` (cyan)      | substitute                                              | You're no longer substituting in {group} on {date}                 | —                                                                         | Timetable week          |
-|                              |                            | regular                                                 | You're teaching {group} on {date} again                            | {substitute} no longer covers it                                          | Lesson                  |
-|                              |                            | student                                                 | {teacher} is teaching {group\|your lesson} on {date} again         | —                                                                         | Lesson                  |
-| `ABSENCE_REPORTED`           | `calendar-x` (warning)     | teacher                                                 | {student} won't be at {group} on {date}                            | —                                                                         | Lesson                  |
-|                              |                            | student (an admin reported it)                          | The school reported you absent from {group\|your lesson} on {date} | You got a makeup credit. / No makeup credit for this one. (`withCredit`)  | Absences tab            |
-| `REPLACEMENT_BOOKED`         | `repeat` (amber)           | teacher                                                 | {student} joins {group} on {date} as a replacement                 | From {fromGroup}                                                          | Lesson                  |
-|                              |                            | student (an admin booked it)                            | The school booked you into {group} on {date} as a replacement      | For your missed {fromGroup} lesson                                        | Lesson                  |
-| `REPLACEMENT_ENDED`          | `repeat` (amber)           | teacher                                                 | {student} no longer joins {group} on {date}                        | Booking cancelled / Rejected by the school / Moved to another lesson      | Lesson                  |
-|                              |                            | studentCancelled                                        | Your replacement in {group} on {date} is cancelled                 | Your makeup credit is back. / The credit was used. (`creditBack`)         | Absences tab            |
-|                              |                            | studentRejected                                         | The school rejected your replacement in {group} on {date}          | {note} · Your makeup credit is back.                                      | Absences tab            |
-| `REPLACEMENT_MOVED`          | `repeat` (amber)           | student                                                 | The school moved your replacement to {group} on {date}             | Was {fromGroup}, {oldDate} · {note}                                       | Lesson (the new target) |
-| `REPLACEMENT_REVIEW_PENDING` | `repeat` (warning)         | admin                                                   | {count} new replacement bookings to review                         | —                                                                         | Absences › Review       |
-| `TIMETABLE_PUBLISHED`        | `calendar-check` (success) | teacher, student                                        | The timetable for {term} is ready                                  | Your first lesson: {date}, {time} / You have no lessons in this term yet. | Timetable week          |
-| `TIMETABLE_CHANGED`          | `calendar-days` (info)     | teacher, student                                        | Your timetable for {term} changed                                  | 3 lessons moved · 1 cancelled · 12 with a new teacher, 3 Nov – 15 Dec     | Timetable week          |
-| `CALENDAR_FEED_REVOKED`      | `link` (info)              | teacher, student (only if the owner says yes to §11 Q6) | The school turned off your calendar link                           | Create a new link to keep your calendar up to date.                       | Calendar subscription   |
+| Type                         | Icon (color)               | Variant                                           | Title                                                              | Detail                                                                    | Link                    |
+| ---------------------------- | -------------------------- | ------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------- |
+| `LESSON_CANCELLED`           | `ban` (danger)             | teacher                                           | {group} on {date} is cancelled                                     | Reason: {reason}                                                          | Lesson                  |
+|                              |                            | student                                           | {group\|your lesson} on {date} is cancelled                        | Reason: {reason}                                                          | Lesson                  |
+| `LESSON_MOVED`               | `calendar-clock` (info)    | teacher                                           | {group} moved to {date}, {time}                                    | Was {oldDate}, {oldTime}                                                  | Lesson (the new one)    |
+|                              |                            | student                                           | {group\|your lesson} moved to {date}, {time}                       | Was {oldDate}, {oldTime}                                                  | Lesson                  |
+|                              | `door-open` (info)         | teacherRoom / studentRoom (only the room changed) | {group\|your lesson} on {date} is now in {room}                    | Was {oldRoom}                                                             | Lesson                  |
+| `SUBSTITUTE_ASSIGNED`        | `user-round-cog` (cyan)    | substitute                                        | You're substituting in {group} on {date}                           | For {teacher} · {time} · {room}                                           | Lesson                  |
+|                              |                            | regular                                           | {substitute} is covering your {group} lesson on {date}             | {time} · {room}                                                           | Lesson                  |
+|                              |                            | student                                           | {substitute} is teaching {group\|your lesson} on {date}            | {time} · {room}                                                           | Lesson                  |
+| `SUBSTITUTE_REMOVED`         | `user-round-x` (cyan)      | substitute                                        | You're no longer substituting in {group} on {date}                 | —                                                                         | Timetable week          |
+|                              |                            | regular                                           | You're teaching {group} on {date} again                            | {substitute} no longer covers it                                          | Lesson                  |
+|                              |                            | student                                           | {teacher} is teaching {group\|your lesson} on {date} again         | —                                                                         | Lesson                  |
+| `ABSENCE_REPORTED`           | `calendar-x` (warning)     | teacher                                           | {student} won't be at {group} on {date}                            | —                                                                         | Lesson                  |
+|                              |                            | student (an admin reported it)                    | The school reported you absent from {group\|your lesson} on {date} | You got a makeup credit. / No makeup credit for this one. (`withCredit`)  | Absences tab            |
+| `REPLACEMENT_BOOKED`         | `repeat` (amber)           | teacher                                           | {student} joins {group} on {date} as a replacement                 | From {fromGroup}                                                          | Lesson                  |
+|                              |                            | student (an admin booked it)                      | The school booked you into {group} on {date} as a replacement      | For your missed {fromGroup} lesson                                        | Lesson                  |
+| `REPLACEMENT_ENDED`          | `repeat` (amber)           | teacher                                           | {student} no longer joins {group} on {date}                        | Booking cancelled / Rejected by the school / Moved to another lesson      | Lesson                  |
+|                              |                            | studentCancelled                                  | Your replacement in {group} on {date} is cancelled                 | Your makeup credit is back. / The credit was used. (`creditBack`)         | Absences tab            |
+|                              |                            | studentRejected                                   | The school rejected your replacement in {group} on {date}          | {note} · Your makeup credit is back.                                      | Absences tab            |
+| `REPLACEMENT_MOVED`          | `repeat` (amber)           | student                                           | The school moved your replacement to {group} on {date}             | Was {fromGroup}, {oldDate} · {note}                                       | Lesson (the new target) |
+| `REPLACEMENT_REVIEW_PENDING` | `repeat` (warning)         | admin                                             | {count} new replacement bookings to review                         | —                                                                         | Absences › Review       |
+| `TIMETABLE_PUBLISHED`        | `calendar-check` (success) | teacher, student                                  | The timetable for {term} is ready                                  | Your first lesson: {date}, {time} / You have no lessons in this term yet. | Timetable week          |
+| `TIMETABLE_CHANGED`          | `calendar-days` (info)     | teacher, student                                  | Your timetable for {term} changed                                  | 3 lessons moved · 1 cancelled · 12 with a new teacher, 3 Nov – 15 Dec     | Timetable week          |
+| `CALENDAR_FEED_REVOKED`      | `link` (info)              | teacher, student (§11 decision 6)                 | The school turned off your calendar link                           | Create a new link to keep your calendar up to date.                       | Calendar subscription   |
 
 - **The actor is never notified** of their own action, and nobody is told
   something they couldn't read anyway (rules doc §2.1, §2.4).
@@ -349,7 +349,7 @@ picker, Level `Select`. Primary page action **Cover a teacher…**.
   one. A checkbox, ticked by default, "Also mark {teacher} as away on these
   dates" writes one one-off unavailability per date through the existing
   availability service, so the lessons also appear in _Needs cover_ and the
-  editor knows (§11 Q2, needs the owner's yes).
+  editor knows (§11 decision 2).
 - Mobile: tables become stacked cards; the page shows the
   `layout.desktopRecommended` notice but stays usable (assigning a
   substitute from a phone is allowed).
@@ -646,7 +646,7 @@ A page, not a dialog (comfortable on a phone and survives a reload).
 - Privacy note always visible above the form (`info` style, `lock` icon).
 - Submit → toast "Thanks! Your rating is saved." and back to the list.
   Editing shows "Last changed {date}" and _Save changes_.
-- No delete in v1 (§11 Q4).
+- No delete in v1 (§11 decision 4).
 - States: validation ("Choose a rating from 1 to 5 stars.") · saving ·
   error (inline `Alert`, input kept) · window closed (read-only, "Rating for
   {term} has closed. Your rating can no longer be changed.") · not eligible
@@ -676,7 +676,7 @@ term), caption "Only admins can see ratings."
   count.
 - **Too few:** with fewer than 3 visible ratings the average shows "Too
   few to average" so a single angry rating doesn't look like a trend (§11
-  Q5).
+  decision 5).
 - Hidden ratings (below) are left out of the average, the count and the
   distribution.
 - All non-archived teachers of the school are listed, including those with
@@ -687,7 +687,7 @@ term), caption "Only admins can see ratings."
 **Teacher ratings** (`/admin/ratings/[teacherId]`): back link, h1 the
 teacher's name, term `Select`, summary card (average, count, distribution),
 then the list of ratings newest first: stars + label, comment (full text),
-group, date, and the **student's name** (§11 Q3). Filter by group. 20 per
+group, date, and the **student's name** (§11 decision 3). Filter by group. 20 per
 page with _Load more_. A comment that was edited shows "Edited".
 
 - **Hide** (e.g. an abusive comment): each row has a menu with _Hide
@@ -776,7 +776,7 @@ flowchart TD
 - After reset: the new link is shown, the card gets a `success` line "New
   link created. Add it to your calendar apps." and focus moves to the link
   field. Toast "Calendar link reset."
-- Optional (§11 Q6): an admin can **turn off** a user's link from the
+- Admin turn-off (§11 decision 6): an admin can **turn off** a user's link from the
   user's admin page (lost phone). The admin never sees the link and doesn't
   create a new one. The user gets `CALENDAR_FEED_REVOKED`, and their page
   shows the "no link yet" state with an `info` line "The school turned off
@@ -1174,7 +1174,7 @@ Variant fallback: a teacher audience (`regular`, `substitute`) without its own k
   full-screen sheet; tables become cards; the calendar link field scrolls
   instead of overflowing.
 
-## 11. Agreed with the rules doc, and open questions
+## 11. Agreed with the rules doc, and owner decisions
 
 The spec's assumptions were checked against the rules doc (its §9, CARM-64,
 PR #41). Summary of what was agreed and what changed here:
@@ -1190,28 +1190,30 @@ PR #41). Summary of what was agreed and what changed here:
 | A7  | Ratings                 | ≥ 3 ended, attended lessons; open at half-term until 14 days after term end (`opensAt`, `editableUntil` from the server); no delete; admins can hide.                                                                                                                 | §6         |
 | A8  | Feed                    | 30 days back to 180 days ahead; UTC instants; no meeting links; §7.6 titles plus "Not attending"; links created on request; admin revoke never shows or creates a link.                                                                                               | §7         |
 
-**Open questions for the owner:**
+**Owner decisions (2026-10-16, all defaults accepted):**
 
-1. **Bell on mobile** goes straight to the inbox page instead of opening a
-   popover. OK? (Recommended: yes.)
-2. **Cover a teacher:** should the dialog also record the teacher as
-   unavailable on those dates (so the editor and generator know)?
-   Recommended: yes, as a checked-by-default checkbox "Also mark {teacher}
-   as away on these dates". (The rules doc supports it.)
-3. **Rating anonymity towards admins:** do admins see which student wrote a
-   rating? Recommended: **yes** (admins can follow up on a complaint);
-   teachers never see anything either way.
-4. **Ratings:** can a student delete their rating? Recommended: no, only
-   edit while rating is open (until 14 days after the term ends).
-5. **"Too few" threshold:** hide the average below 3 ratings? Recommended:
-   yes.
-6. **Calendar link for admins**, and **admin turn-off of a user's link**
-   (lost phone)? Recommended: no admin feed in v1; yes to admin turn-off
-   from the user's page (the user then creates a new link; the admin never
-   sees it).
-7. **Several lessons at once:** assigning one substitute to several lessons
-   in one go (e.g. a whole week) is not in v1; the _Next lesson_ shortcut
-   covers it. OK?
+1. **Bell on mobile** goes straight to the inbox page; no popover.
+2. **Cover a teacher** also marks the teacher as away on those dates. The
+   checkbox "Also mark {teacher} as away on these dates" is ticked by
+   default.
+3. **Admins see who wrote each rating.** Teachers see nothing.
+4. **Students can't delete a rating.** They can edit it while rating is
+   open (until 14 days after the term ends).
+5. **The average is hidden below 3 ratings** ("Too few to average").
+6. **No admin calendar feed in v1.** Admins can **turn off** a user's
+   calendar link from the user's page; the user then creates a new one and
+   gets `CALENDAR_FEED_REVOKED`. The admin never sees the link.
+7. **One substitute for several lessons at once** is not in v1; the _Next
+   lesson_ shortcut covers it.
+
+Also confirmed with the rules doc's §8: a student can rate after 3 attended
+lessons with the teacher in the term, from half-term until 14 days after
+term end, one rating per teacher per term; students are notified when a
+substitute is assigned or removed; a substitute can be recorded up to 7
+days after the lesson, without notifications; _Pick anyway_ needs a tick
+per warning and is never possible for a teacher who is busy then.
+
+No open questions remain for this spec.
 
 ## 12. Notes for the Developer (CARM-65, CARM-66)
 
