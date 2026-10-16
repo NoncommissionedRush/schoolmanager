@@ -46,6 +46,7 @@ describe.skipIf(!url)("notifications (database)", () => {
     tess: randomUUID(),
     cara: randomUUID(),
     dan: randomUUID(),
+    eli: randomUUID(), // another group's student, booked in as a replacement
     group: randomUUID(),
     room: randomUUID(),
     term: randomUUID(),
@@ -172,6 +173,7 @@ describe.skipIf(!url)("notifications (database)", () => {
   afterAll(async () => {
     if (!client) return;
     const where = { where: { schoolId: { in: schools } } };
+    await client.replacementRequest.deleteMany(where);
     await client.makeupCredit.deleteMany(where);
     await client.absenceReport.deleteMany(where);
     await client.lesson.deleteMany(where);
@@ -595,6 +597,88 @@ describe.skipIf(!url)("notifications (database)", () => {
         await client.notification.findUnique({ where: { id: oldest.id } }),
       ).toBeNull();
       expect(await unreadCount(db, dan, NOW)).toBe(unread);
+    });
+  });
+
+  it("a released replacement student hears REPLACEMENT_ENDED, not TIMETABLE_CHANGED (recordReleased)", async () => {
+    const eliUser = await client.user.create({
+      data: { name: "Eli", email: `eli-${suffix}@example.test` },
+    });
+    user.Eli = eliUser.id;
+    await client.membership.create({
+      data: { schoolId, userId: eliUser.id, role: "STUDENT" },
+    });
+    await client.studentProfile.create({
+      data: { id: ids.eli, schoolId, userId: eliUser.id },
+    });
+    const thursday = (date: string) =>
+      client.lesson.findFirstOrThrow({
+        where: { schoolId, startsAt: zonedTimeToUtc(date, 17 * 60, TZ) },
+        select: { id: true },
+      });
+    // Eli missed his own lesson (any lesson will do for the FK) and spent
+    // the credit on B1 Evening, Thu 26 Nov.
+    const source = await thursday("2026-10-22");
+    const target = await thursday("2026-11-26");
+    const absence = await client.absenceReport.create({
+      data: { schoolId, lessonId: source.id, studentId: ids.eli },
+    });
+    const credit = await client.makeupCredit.create({
+      data: {
+        schoolId,
+        studentId: ids.eli,
+        sourceLessonId: source.id,
+        absenceReportId: absence.id,
+        status: "USED",
+        usedAt: NOW,
+        expiresAt: zonedTimeToUtc("2026-12-31", 0, TZ),
+      },
+    });
+    await client.replacementRequest.create({
+      data: {
+        schoolId,
+        studentId: ids.eli,
+        originalLessonId: source.id,
+        targetLessonId: target.id,
+        makeupCreditId: credit.id,
+        status: "AUTO_APPROVED",
+      },
+    });
+
+    const at = later(40);
+    await saveHoliday(
+      db,
+      actor(),
+      {
+        holiday: {
+          termId: ids.term,
+          name: "Staff day",
+          startDate: "2026-11-26",
+          endDate: "2026-11-26",
+        },
+      },
+      at,
+    );
+    const sent = await rows({ createdAt: at });
+    const typesOf = (name: string) =>
+      sent
+        .filter((r) => r.recipientId === user[name])
+        .map((r) => r.type)
+        .sort();
+    expect(typesOf("Eli")).toEqual(["REPLACEMENT_ENDED"]);
+    // The group's own people are still told the lesson was cancelled (Dan
+    // left the group in the inbox tests).
+    for (const name of ["Tess", "Cara"]) {
+      expect(typesOf(name)).toEqual(["TIMETABLE_CHANGED"]);
+    }
+    await expect(
+      client.replacementRequest.findFirstOrThrow({
+        where: { schoolId, studentId: ids.eli },
+        select: { status: true, cancelReason: true },
+      }),
+    ).resolves.toEqual({
+      status: "CANCELLED",
+      cancelReason: "LESSON_CANCELLED",
     });
   });
 });

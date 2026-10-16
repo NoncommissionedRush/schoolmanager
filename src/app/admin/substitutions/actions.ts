@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
 import { saveException } from "@/server/admin/availability/service";
 import { exceptionSchema } from "@/server/admin/availability/schema";
@@ -16,6 +16,7 @@ import {
   type RemoveSubstituteInput,
   removeSubstituteSchema,
 } from "@/server/substitutes/schema";
+import { needsCoverTag } from "@/server/substitutes/cache";
 import {
   assignSubstitute,
   loadSubstituteSheet,
@@ -28,7 +29,8 @@ import {
 // re-checks the role; every lesson and teacher id is looked up through the
 // school-scoped client, so another school's id is "not found".
 
-function revalidate(lessonId: string) {
+function revalidate(schoolId: string, lessonId: string) {
+  updateTag(needsCoverTag(schoolId));
   revalidatePath("/admin/substitutions");
   revalidatePath(`/admin/lessons/${lessonId}`);
   revalidatePath("/admin");
@@ -53,7 +55,9 @@ export async function assignSubstituteAction(
     const parsed = parseInput(assignSubstituteSchema, input);
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const result = await assignSubstitute(db, viewer, parsed.data, new Date());
-    if (result.status === "done") revalidate(parsed.data.lessonId);
+    if (result.status === "done") {
+      revalidate(viewer.school.id, parsed.data.lessonId);
+    }
     return ok(result);
   });
 }
@@ -65,7 +69,9 @@ export async function removeSubstituteAction(
     const parsed = parseInput(removeSubstituteSchema, input);
     if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
     const result = await removeSubstitute(db, viewer, parsed.data, new Date());
-    if (result.status === "done") revalidate(parsed.data.lessonId);
+    if (result.status === "done") {
+      revalidate(viewer.school.id, parsed.data.lessonId);
+    }
     return ok(result);
   });
 }
@@ -104,6 +110,7 @@ export async function coverTeacherAction(
       exception.data,
       context.viewer.school.timezone,
     );
+    updateTag(needsCoverTag(context.viewer.school.id));
     revalidatePath("/admin/substitutions");
     return ok({ marked: exception.data.dates.length });
   });

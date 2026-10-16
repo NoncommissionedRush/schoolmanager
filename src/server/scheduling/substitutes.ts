@@ -25,6 +25,8 @@ import type { LessonInfo } from "./types";
 export const SUBSTITUTE_RECORD_DAYS = 7;
 /** The admin's _Needs cover_ tab looks this far ahead (8 weeks). */
 export const NEEDS_COVER_DAYS = 56;
+/** Longest date range the _Needs cover_ / _Covered_ tabs load (about a term). */
+export const SUBSTITUTION_RANGE_MAX_DAYS = 92;
 /** `sameDay`: another lesson ends or starts within this many minutes. */
 export const SAME_DAY_GAP_MINUTES = 90;
 
@@ -434,9 +436,14 @@ export function suggestSubstitutes(
 
 /** §3.5 Remove: the regular teacher checked as the one teaching again. */
 export type RemoveCheck = {
-  /** `REGULAR_TEACHER_BUSY`: they teach another lesson then. */
+  /** Removing is refused (`refusal` says why). */
   refused: boolean;
-  /** That lesson's group, for the dialog. */
+  /**
+   * `REGULAR_TEACHER_ARCHIVED`: they no longer teach (§3.3 rule 3);
+   * `REGULAR_TEACHER_BUSY`: they teach another lesson then.
+   */
+  refusal: "REGULAR_TEACHER_ARCHIVED" | "REGULAR_TEACHER_BUSY" | null;
+  /** The other lesson's group when busy, for the dialog. */
   otherGroup: string | null;
   /** Other teacher-typed conflicts of the regular teacher: overridable. */
   reasons: SubstituteReason[];
@@ -445,7 +452,16 @@ export type RemoveCheck = {
 export function checkSubstituteRemoval(
   calendar: Calendar,
   lesson: LessonInfo,
+  { regularArchived = false }: { regularArchived?: boolean } = {},
 ): RemoveCheck {
+  if (regularArchived) {
+    return {
+      refused: true,
+      refusal: "REGULAR_TEACHER_ARCHIVED",
+      otherGroup: null,
+      reasons: [],
+    };
+  }
   const { timeZone } = calendar.context.school;
   const weekday = isoWeekday(toZonedDateTime(lesson.startsAt, timeZone).date);
   const conflicts = teacherConflicts(calendar, lesson, null);
@@ -474,6 +490,7 @@ export function checkSubstituteRemoval(
   const busy = reasons.find((r) => r.code === "BUSY");
   return {
     refused: busy !== undefined,
+    refusal: busy ? "REGULAR_TEACHER_BUSY" : null,
     otherGroup: busy ? String(busy.params.otherGroup ?? "") : null,
     reasons: reasons.filter((r) => r.code !== "BUSY"),
   };
@@ -546,3 +563,16 @@ export function lessonsNeedingCover(
 /** Local date of an instant, for grouping lists by day. */
 export const localDateOf = (instant: Date, timeZone: string): IsoDate =>
   toZonedDateTime(instant, timeZone).date;
+
+/**
+ * The date filter of the substitutions page: swapped if reversed, and `to`
+ * capped so the range spans at most `SUBSTITUTION_RANGE_MAX_DAYS` days.
+ */
+export function clampSubstitutionRange(
+  from: IsoDate,
+  to: IsoDate,
+): { from: IsoDate; to: IsoDate } {
+  if (to < from) [from, to] = [to, from];
+  const last = addDays(from, SUBSTITUTION_RANGE_MAX_DAYS - 1);
+  return { from, to: to > last ? last : to };
+}

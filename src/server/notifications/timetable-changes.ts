@@ -58,7 +58,6 @@ export async function captureBefore(
   }
 }
 
-/** Records lessons created by the action. */
 /**
  * A replacement booking into a lesson this action cancelled was released:
  * the student hears it as `REPLACEMENT_ENDED`, so the lesson isn't counted
@@ -72,6 +71,7 @@ export function recordReleased(
   trackers.get(tx)?.released.add(`${lessonId}|${studentId}`);
 }
 
+/** Records lessons created by the action. */
 export function recordCreated(tx: Tx, lessonIds: readonly string[]): void {
   const tracker = trackers.get(tx);
   if (!tracker) return;

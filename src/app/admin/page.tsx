@@ -21,7 +21,7 @@ import {
 import { adminContext } from "@/server/admin/context";
 import { loadSetupCounts, setupChecklist } from "@/server/admin/setup";
 import { countReviewQueue } from "@/server/replacements/booking";
-import { substitutionCounts } from "@/server/substitutes/service";
+import { cachedNeedsCoverCount } from "@/server/substitutes/cache";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 
 async function AdminDashboardPage() {
@@ -30,9 +30,9 @@ async function AdminDashboardPage() {
   const t = await getTranslations("dashboard.admin");
   const checklist = setupChecklist(await loadSetupCounts(db));
   const now = new Date();
-  const [toReview, { needsCover }] = await Promise.all([
+  const [toReview, needsCover] = await Promise.all([
     countReviewQueue(db, now),
-    substitutionCounts(db, now),
+    cachedNeedsCoverCount(viewer.school.id),
   ]);
   const ts = await getTranslations("substitutes.dashboard");
   return (

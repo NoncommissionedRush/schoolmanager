@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
 import type { Credentials } from "@/app/admin/_people/actions";
 import {
@@ -26,6 +26,7 @@ import {
   updateTeacher,
 } from "@/server/admin/teachers/service";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
+import { needsCoverTag } from "@/server/substitutes/cache";
 
 const PATH = "/admin/teachers";
 
@@ -106,6 +107,7 @@ export async function saveExceptionAction(
       parsed.data,
       scope.viewer.school.timezone,
     );
+    updateTag(needsCoverTag(scope.viewer.school.id));
     revalidatePath(`${PATH}/${teacherId}`);
     // With affected lessons the client shows its own toast with a link.
     return ok(
@@ -119,6 +121,7 @@ export async function deleteAvailabilityAction(teacherId: string, id: string) {
   return runAdminAction(async (scope) => {
     assertIds(teacherId, id);
     await deleteAvailability(scope, teacherId, id);
+    updateTag(needsCoverTag(scope.viewer.school.id));
     revalidatePath(`${PATH}/${teacherId}`);
     return ok(undefined, msg("availability.deleted"));
   });

@@ -16,6 +16,7 @@ import type { SchoolDb } from "@/server/timetable/service";
 
 import {
   assignSubstitute,
+  countNeedsCover,
   listCovered,
   listNeedsCover,
   listPastSubstitutions,
@@ -279,6 +280,18 @@ describe.skipIf(!url)("substitutes (database)", () => {
     expect(all.map((r) => r.lessonId)).toEqual([lessons.tue, lessons.wed]);
   });
 
+  it("counts needs cover without loading rows, and caps the date range", async () => {
+    expect(await countNeedsCover(db, NOW)).toBe(1);
+    // Ten years asked for: capped to SUBSTITUTION_RANGE_MAX_DAYS (the cap
+    // itself is unit-tested in scheduling/substitutes.test.ts).
+    const rows = await listNeedsCover(
+      db,
+      { from: "2026-10-19", to: "2036-10-19" },
+      NOW,
+    );
+    expect(rows.map((r) => r.lessonId)).toEqual([lessons.tue]);
+  });
+
   it("the sheet ranks the candidates and previews who will be notified", async () => {
     const sheet = await loadSubstituteSheet(db, actor(), lessons.tue, NOW);
     expect(sheet.lesson).toMatchObject({
@@ -492,6 +505,89 @@ describe.skipIf(!url)("substitutes (database)", () => {
     await client.lesson.update({
       where: { id: lessons.busy },
       data: { teacherId: ids.jozef },
+    });
+  });
+
+  it("remove is refused while the regular teacher is archived", async () => {
+    await client.user.update({
+      where: { id: user.Tomas },
+      data: { deletedAt: new Date("2026-10-18") },
+    });
+    try {
+      const sheet = await loadSubstituteSheet(db, actor(), lessons.tue, NOW);
+      expect(sheet.remove).toMatchObject({
+        refused: true,
+        refusal: "REGULAR_TEACHER_ARCHIVED",
+        reasons: [],
+      });
+      const tue = local("2026-10-20", "17:00");
+      expect(
+        await removeSubstitute(
+          db,
+          actor(),
+          input(lessons.tue, ids.eva, tue, {
+            acknowledgedKeys: [`sub:${ids.tomas}|UNAVAILABLE_ON_DATE`],
+          }),
+          NOW,
+        ),
+      ).toEqual({ status: "regularArchived" });
+      expect(
+        (await client.lesson.findUniqueOrThrow({ where: { id: lessons.tue } }))
+          .substituteTeacherId,
+      ).toBe(ids.eva);
+    } finally {
+      await client.user.update({
+        where: { id: user.Tomas },
+        data: { deletedAt: null },
+      });
+    }
+  });
+
+  it("a write landing between the checks and the update is LESSON_CHANGED", async () => {
+    // Writers outside the timetable lock (none today) could still change
+    // the row after the checks: hold its row lock, let remove block on its
+    // conditional update, then change the substitute and commit.
+    const tue = local("2026-10-20", "17:00");
+    const before = (await notifications()).length;
+    let pending: Promise<unknown> | undefined;
+    await client.$transaction(
+      async (other) => {
+        await other.$queryRaw`SELECT id FROM lessons WHERE id = ${lessons.tue}::uuid FOR UPDATE`;
+        pending = removeSubstitute(
+          db,
+          actor(),
+          input(lessons.tue, ids.eva, tue, {
+            acknowledgedKeys: [`sub:${ids.tomas}|UNAVAILABLE_ON_DATE`],
+          }),
+          NOW,
+        );
+        // Wait until remove's UPDATE is blocked on our row lock.
+        for (let i = 0; ; i++) {
+          const [{ n }] = await client.$queryRaw<{ n: number }[]>`
+            SELECT count(*)::int AS n FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'
+              AND query ILIKE '%UPDATE%lessons%substitute_teacher_id%'`;
+          if (n > 0) break;
+          if (i > 200) throw new Error("remove never reached its update");
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        await other.lesson.update({
+          where: { id: lessons.tue },
+          data: { substituteTeacherId: ids.ana },
+        });
+      },
+      { timeout: 15_000 },
+    );
+    await expect(pending).resolves.toEqual({ status: "changed" });
+    expect(
+      await client.auditLog.count({
+        where: { schoolId, action: "lesson.substitute_removed" },
+      }),
+    ).toBe(0);
+    expect(await notifications()).toHaveLength(before);
+    await client.lesson.update({
+      where: { id: lessons.tue },
+      data: { substituteTeacherId: ids.eva },
     });
   });
 
