@@ -1,0 +1,1275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — Payments and reports (CARM-70)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Phase 6</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* --------------------------------------------------------------- helpers */
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          link: "text-primary hover:underline px-0",
+          destructive: "bg-destructive text-white",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center justify-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const badge = (t, tone = "muted", icon = "") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+          cyan: "bg-cyan-50 text-cyan-900 border-cyan-600",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border whitespace-nowrap ${c}">${icon ? `<span aria-hidden="true">${icon}</span>` : ""}${t}</span>`;
+      };
+      const STATUS = {
+        UNPAID: () => badge("Unpaid", "danger", "⊘"),
+        PARTLY_PAID: () => badge("Partly paid", "warning", "◌"),
+        PAID: () => badge("Paid", "success", "✓"),
+        IN_CREDIT: () => badge("In credit", "info", "▣"),
+        NOTHING_DUE: () => badge("Nothing due", "muted", "–"),
+      };
+      const alert = (t, tone = "info") => {
+        const c = {
+          info: "bg-blue-50 text-blue-800 border-blue-300",
+          warning: "bg-amber-50 text-amber-800 border-amber-300",
+          danger: "bg-red-50 text-red-800 border-red-300",
+          success: "bg-green-50 text-green-800 border-green-300",
+        }[tone];
+        return `<div role="${tone === "danger" ? "alert" : "status"}" class="rounded-md border px-3 py-2 ${c}">${t}</div>`;
+      };
+      const card = (inner, extra = "") =>
+        `<section class="rounded-lg border border-border bg-white p-6 ${extra}">${inner}</section>`;
+      const empty = (icon, title, desc, action = "") =>
+        `<div class="flex flex-col items-center text-center gap-2 py-10"><div class="text-4xl text-slate-400" aria-hidden="true">${icon}</div><h2 class="text-lg font-semibold">${title}</h2><p class="text-muted-foreground max-w-sm">${desc}</p>${action}</div>`;
+      const skel = (n, h = "h-10") =>
+        Array.from(
+          { length: n },
+          () => `<div class="skeleton ${h}"></div>`,
+        ).join("");
+      const sel = (label, value, w = "") =>
+        `<label class="inline-flex flex-col gap-1 ${w}"><span class="text-xs font-medium text-muted-foreground">${label}</span><span class="h-9 px-3 rounded-md border border-input bg-white inline-flex items-center justify-between gap-6">${value}<span aria-hidden="true">▾</span></span></label>`;
+      const field = (label, value, hint = "") =>
+        `<div class="space-y-1"><label class="font-medium block">${label}</label><div class="h-9 px-3 rounded-md border border-input bg-white flex items-center">${value}</div>${hint}</div>`;
+      const stat = (label, value, sub = "") =>
+        `<a href="#" class="rounded-lg border border-border bg-white p-4 block hover:bg-accent"><dt class="text-muted-foreground">${label}</dt><dd class="text-2xl font-semibold tnum mt-1">${value}</dd>${sub ? `<dd class="text-xs text-muted-foreground mt-1">${sub}</dd>` : ""}</a>`;
+      const overlay = (bg, dialog) =>
+        `<div class="relative">${bg}<div class="absolute inset-0 bg-black/50 rounded-lg flex items-start justify-center pt-24">${dialog}</div></div>`;
+      const dialog = (title, inner, footer, w = "w-[480px]") =>
+        `<div role="dialog" aria-modal="true" class="${w} rounded-lg bg-white shadow-lg p-6 space-y-4"><div class="flex justify-between"><h2 class="text-lg font-semibold">${title}</h2><button aria-label="Close">✕</button></div>${inner}<div class="flex justify-end gap-2 pt-2">${footer}</div></div>`;
+
+      /* App shells */
+      const NAV = [
+        ["OVERVIEW", ["▣ Dashboard"]],
+        [
+          "SCHEDULE",
+          ["📅 Timetable", "🗓 Absences & replacements", "⚙ Substitutions"],
+        ],
+        ["PEOPLE", ["🎓 Students", "🧑‍🏫 Teachers"]],
+        ["ACADEMICS", ["📖 Courses & groups", "★ Ratings"]],
+        ["FINANCE", ["👛 Payments", "📊 Reports"]],
+      ];
+      const sidebar = (active) =>
+        `<nav aria-label="Main" class="w-56 shrink-0 border-r border-border bg-white p-3 space-y-3 text-sm">${NAV.map(
+          ([s, items]) =>
+            `<div><div class="px-2 text-xs font-semibold text-slate-500">${s}</div>${items
+              .map(
+                (i) =>
+                  `<a href="#" ${i.includes(active) ? 'aria-current="page"' : ""} class="block px-2 py-1.5 rounded-md ${i.includes(active) ? "bg-accent text-accent-foreground font-medium" : "hover:bg-muted"}">${i}</a>`,
+              )
+              .join("")}</div>`,
+        ).join("")}</nav>`;
+      const appHeader = () =>
+        `<header class="h-14 flex items-center gap-3 border-b border-border bg-white px-4"><span class="h-8 w-8 rounded bg-primary text-white grid place-items-center text-xs font-semibold">LL</span><strong>Lingua Language School</strong><div class="ml-auto flex items-center gap-3"><span aria-hidden="true">🔔</span><span class="inline-flex items-center gap-2"><span class="h-8 w-8 rounded-full bg-slate-200 grid place-items-center text-xs">AV</span>Anna ▾</span></div></header>`;
+      const desktop = (inner, active = "Payments") =>
+        `<div class="w-[1240px] rounded-lg overflow-hidden border border-slate-300 bg-muted">${appHeader()}<div class="flex">${sidebar(active)}<main class="flex-1 p-6 space-y-6 min-w-0">${inner}</main></div></div>`;
+      const phone = (inner) =>
+        `<div class="w-[390px] min-h-[780px] rounded-[2rem] border-8 border-slate-800 bg-white overflow-hidden text-base flex flex-col">
+          <header class="h-14 flex items-center gap-2 border-b border-border px-3"><button class="h-11 w-11 text-lg" aria-label="Menu">☰</button><strong class="text-sm">Lingua Language School</strong><div class="ml-auto" aria-hidden="true">🔔</div></header>
+          <main class="flex-1 p-4 space-y-4">${inner}</main>
+          <nav class="h-16 border-t border-border grid grid-cols-5 text-xs text-center">${["🏠 Home", "📅 Timetable", "📋 Homework", "🗓 Absences", "☰ More"].map((t) => `<a class="grid place-items-center ${t.includes("More") ? "text-primary font-medium" : ""}" href="#">${t}</a>`).join("")}</nav>
+        </div>`;
+      const pageHeader = (title, action = "", desc = "") =>
+        `<div class="flex items-start justify-between gap-4"><div><h1 class="text-2xl font-semibold">${title}</h1>${desc ? `<p class="text-muted-foreground mt-1">${desc}</p>` : ""}</div>${action}</div>`;
+      const tabs = (items, active) =>
+        `<div role="tablist" class="inline-flex rounded-md bg-slate-200 p-1">${items.map((t) => `<button role="tab" aria-selected="${t === active}" class="px-3 h-8 rounded ${t === active ? "bg-white shadow-sm font-medium" : "text-slate-600"}">${t}</button>`).join("")}</div>`;
+      const table = (cols, rows, opts = {}) =>
+        `<div class="overflow-x-auto"><table class="w-full text-left">${opts.caption ? `<caption class="sr-only">${opts.caption}</caption>` : ""}<thead class="bg-muted text-slate-600"><tr>${cols.map((c) => `<th scope="col" class="px-3 py-2 font-medium ${c.r ? "text-right" : ""}">${c.t}</th>`).join("")}</tr></thead><tbody class="divide-y divide-border">${rows.map((r) => `<tr class="hover:bg-accent/50">${r.map((v, i) => `<td class="px-3 py-2 align-top ${cols[i] && cols[i].r ? "text-right tnum" : ""}">${v}</td>`).join("")}</tr>`).join("")}</tbody>${opts.foot ? `<tfoot class="font-semibold border-t-2 border-border"><tr>${opts.foot.map((v, i) => `<td class="px-3 py-2 ${cols[i] && cols[i].r ? "text-right tnum" : ""}">${v}</td>`).join("")}</tr></tfoot>` : ""}</table></div>`;
+      const a = (t) =>
+        `<a href="#" class="text-primary hover:underline">${t}</a>`;
+      const forbidden = () =>
+        `<div class="w-[900px] rounded-lg border border-slate-300 bg-white">${appHeader()}<div class="p-16">${empty("🔒", "You don't have access to this page", "Payments and reports are for school admins only.", btn("Go to my dashboard"))}</div></div>`;
+
+      /* ---------------------------------------------------------- balances */
+      const PAY_TABS = ["Balances", "Payments", "Prices"];
+      const payHead = (tab) =>
+        pageHeader("Payments", btn("Record payment…")) + tabs(PAY_TABS, tab);
+      const BAL = [
+        [
+          "Jana Kovac",
+          "B1 Evening",
+          "€240.00",
+          "€0.00",
+          "Owes €240.00",
+          "UNPAID",
+          "—",
+          true,
+        ],
+        [
+          "Petr Hruby",
+          "A2 Morning",
+          "€180.00",
+          "€100.00",
+          "Owes €80.00",
+          "PARTLY_PAID",
+          "3 Oct",
+          true,
+        ],
+        [
+          "Eva Lukac",
+          "B1 Evening, C1 Business",
+          "€390.00",
+          "€300.00",
+          "Owes €90.00",
+          "PARTLY_PAID",
+          "8 Oct",
+          true,
+        ],
+        [
+          "Marek Bielik",
+          "Marek Bielik 1-on-1",
+          "€120.00",
+          "€140.00",
+          "In credit €20.00",
+          "IN_CREDIT",
+          "12 Oct",
+          false,
+        ],
+        [
+          "Lucia Tomas",
+          "B2 Evening",
+          "€240.00",
+          "€240.00",
+          "Settled",
+          "PAID",
+          "1 Sep",
+          false,
+        ],
+        [
+          "Tomas Mraz",
+          "A1 Trial",
+          "€0.00",
+          "€0.00",
+          "Settled",
+          "NOTHING_DUE",
+          "—",
+          false,
+        ],
+      ];
+      function balances(st) {
+        const stats = `<dl class="grid grid-cols-4 gap-4">${stat("Outstanding", "€3,420.00")}${stat("Collected in October", "€5,180.00")}${stat("Students owing", "23 of 112")}${stat("In credit", "€140.00 (4)")}</dl>`;
+        const filters = `<div class="flex flex-wrap items-end gap-3">${sel("Term", "Autumn 2026")}${sel("Status", st === 3 ? "Paid" : "Owing")}${sel("Group", "Any")}<label class="inline-flex flex-col gap-1"><span class="text-xs font-medium text-muted-foreground">Search</span><input class="h-9 px-3 rounded-md border border-input w-56" placeholder="Search students…" /></label><label class="inline-flex items-center gap-2 h-9"><input type="checkbox" /> Include archived students</label></div>`;
+        let body;
+        if (st === 1) body = card(skel(6));
+        else if (st === 2)
+          body = card(
+            empty(
+              "👛",
+              "No prices for Autumn 2026 yet",
+              "Set prices for your courses and groups, then balances show up here.",
+              btn("Set prices"),
+            ),
+          );
+        else if (st === 3)
+          body = card(
+            empty(
+              "✓",
+              "Nobody owes anything for Autumn 2026.",
+              "",
+              a("Show all students"),
+            ),
+          );
+        else if (st === 4)
+          body = alert(
+            "<strong>Couldn't load balances.</strong> " +
+              btn("Try again", "outline", "ml-2"),
+            "danger",
+          );
+        else {
+          const rows = (st === 5 ? BAL : BAL.filter((r) => r[7])).map((r) => [
+            a(r[0]),
+            `<span class="text-muted-foreground">${r[1]}</span>`,
+            r[2],
+            r[3],
+            `<span class="${r[5] === "UNPAID" || r[5] === "PARTLY_PAID" ? "font-semibold" : ""}">${r[4]}</span>`,
+            STATUS[r[5]](),
+            `<span class="tnum">${r[6]}</span>`,
+            `<div class="flex gap-1 justify-end">${r[7] ? btn("Record payment", "outline", "h-8") : ""}<button class="h-8 w-8 rounded-md hover:bg-muted" aria-label="More actions for ${r[0]}">⋯</button></div>`,
+          ]);
+          body = card(
+            table(
+              [
+                { t: "Student ↑" },
+                { t: "Groups" },
+                { t: "Charged", r: 1 },
+                { t: "Paid", r: 1 },
+                { t: "Balance ↓", r: 1 },
+                { t: "Status" },
+                { t: "Last payment" },
+                { t: "" },
+              ],
+              rows,
+            ) +
+              `<div class="flex justify-between items-center pt-4 text-muted-foreground"><span>Showing 1–${rows.length} of ${st === 5 ? 112 : 23}</span><div class="flex gap-2">${btn("‹ Previous", "outline")}${btn("Next ›", "outline")}</div></div>`,
+            "p-4",
+          );
+        }
+        return desktop(
+          payHead("Balances") +
+            (st === 1
+              ? `<div class="grid grid-cols-4 gap-4">${skel(4, "h-20")}</div>`
+              : stats) +
+            filters +
+            body,
+        );
+      }
+
+      /* ------------------------------------------------------- record dialog */
+      function recordDialog(st) {
+        const amount = ["80.00", "30.00", "120.00", "80.00", "80.00"][st];
+        const feedback = [
+          "",
+          alert("ⓘ Partial payment: €50.00 will still be owed.", "info"),
+          alert(
+            "⚠ That's €40.00 more than owed. Petr Hruby will be in credit.",
+            "warning",
+          ),
+          "",
+          "",
+        ][st];
+        const dup =
+          st === 3
+            ? alert(
+                "⚠ A payment of €80.00 was recorded for Petr Hruby 2 min ago by Martin Kral.<label class='flex items-center gap-2 mt-2'><input type='checkbox' /> This is a different payment</label>",
+                "warning",
+              )
+            : "";
+        const err =
+          st === 4
+            ? alert(
+                "Couldn't record the payment. Nothing was saved. " +
+                  btn("Try again", "outline", "ml-2 h-8"),
+                "danger",
+              )
+            : "";
+        const inner = `${err}
+          ${field("Student (required)", "Petr Hruby <span class='ml-auto text-muted-foreground'>▾</span>")}
+          <p class="text-muted-foreground -mt-2">Owes <strong class="text-foreground">€80.00</strong> · Expected by end of term: €60.00 more</p>
+          <div class="space-y-1"><label class="font-medium block" for="amt">Amount (required)</label><div class="h-9 rounded-md border border-input bg-white flex items-center"><span class="px-3 text-muted-foreground border-r border-border h-full grid place-items-center" aria-hidden="true">€</span><input id="amt" inputmode="decimal" class="px-3 h-full flex-1 tnum outline-none" value="${amount}" /></div></div>
+          ${feedback}
+          <div class="grid grid-cols-2 gap-3">${field("Date (required)", "16 Oct 2026 <span class='ml-auto'>▾</span>")}${field("Method (required)", "Cash <span class='ml-auto'>▾</span>")}</div>
+          ${field("Reference", "<span class='text-muted-foreground'>Receipt no. or bank reference</span>", "<p class='text-xs text-muted-foreground'>Shown to the student.</p>")}
+          <div class="space-y-1"><label class="font-medium block">Note (admins only)</label><textarea class="w-full h-16 rounded-md border border-input p-2"></textarea></div>
+          ${dup}`;
+        const primary =
+          st === 3 ? btn("Record anyway") : btn(`Record €${amount}`);
+        return overlay(
+          balances(0),
+          dialog("Record payment", inner, btn("Cancel", "outline") + primary),
+        );
+      }
+
+      /* ------------------------------------------------- student statement */
+      const STMT = [
+        ["1 Sep", "Carried over from Spring 2026", "", "", "€0.00", "none"],
+        [
+          "30 Sep",
+          "B1 Evening · September · 8 lessons",
+          "€120.00",
+          "",
+          "€120.00",
+          "charge",
+        ],
+        [
+          "3 Oct",
+          "Payment · Cash · Receipt 0142",
+          "",
+          "€100.00",
+          "€20.00",
+          "pay",
+        ],
+        ["5 Oct", "Payment · Bank transfer", "", "€50.00", "€20.00", "void"],
+        ["10 Oct", "Correction: Course book", "€15.00", "", "€35.00", "corr"],
+        [
+          "15 Oct",
+          "B1 Evening · October so far · 4 lessons",
+          "€60.00",
+          "",
+          "€95.00",
+          "charge",
+        ],
+        [
+          "16 Oct",
+          "Correction: Sibling goodwill discount",
+          "",
+          "€15.00",
+          "€80.00",
+          "corr",
+        ],
+      ];
+      function statementTable(expanded) {
+        const rows = [];
+        STMT.forEach((r, i) => {
+          const isVoid = r[5] === "void";
+          const desc =
+            r[5] === "charge"
+              ? `<button aria-expanded="${expanded && i === 1}" class="text-left hover:underline"><span aria-hidden="true">${expanded && i === 1 ? "▾" : "▸"}</span> ${r[1]}</button>`
+              : r[1] +
+                (isVoid ? " " + badge("Voided") : "") +
+                (r[5] === "corr" ? " " + badge("Correction") : "");
+          rows.push([
+            `<span class="tnum">${r[0]}</span>`,
+            desc,
+            r[2],
+            isVoid
+              ? `<s>${r[3]}</s><span class="sr-only"> voided</span>`
+              : r[3],
+            r[4],
+            r[5] === "none"
+              ? ""
+              : `<button class="h-8 w-8 rounded-md hover:bg-muted" aria-label="More actions for this entry">⋯</button>`,
+          ]);
+          if (expanded && i === 1) {
+            rows.push([
+              "",
+              `<ul class="text-muted-foreground space-y-1 pl-5">${[
+                ["2 Sep, 17:00", "Billed"],
+                ["4 Sep, 17:00", "Billed"],
+                ["9 Sep, 17:00", "Not billed: cancelled by the school"],
+                ["11 Sep, 17:00", "Billed"],
+                ["16 Sep, 17:00", "Not billed: cancelled before the cutoff"],
+                ["… 6 more", ""],
+              ]
+                .map(
+                  ([d, s]) =>
+                    `<li class="flex gap-4"><span class="tnum w-28">${d}</span>${s.startsWith("Billed") ? badge("Billed", "success") : s ? badge(s, "muted") : ""}</li>`,
+                )
+                .join("")}</ul>`,
+              "",
+              "",
+              "",
+              "",
+            ]);
+          }
+        });
+        return table(
+          [
+            { t: "Date" },
+            { t: "Description" },
+            { t: "Charge", r: 1 },
+            { t: "Paid", r: 1 },
+            { t: "Balance", r: 1 },
+            { t: "" },
+          ],
+          rows,
+          { caption: "Statement for Autumn 2026" },
+        );
+      }
+      function studentPage(st) {
+        const head = `<a href="#" class="text-primary">‹ Students</a>${pageHeader("Petr Hruby", "")}${tabs(["Profile", "Groups", "Payments"], "Payments")}`;
+        if (st === 3)
+          return desktop(
+            head +
+              `<div class="grid grid-cols-3 gap-6">${skel(1, "h-40 col-span-2")}${skel(1, "h-40")}</div>` +
+              card(skel(6)),
+            "Students",
+          );
+        const balanceCard = card(
+          `<h2 class="text-lg font-semibold">Balance</h2>
+          <div class="flex items-center gap-3 mt-2"><span class="text-2xl font-semibold tnum">Owes €80.00</span>${STATUS.PARTLY_PAID()}</div>
+          <p class="text-muted-foreground mt-1">Expected by end of term: €60.00 more</p>
+          <div class="flex gap-2 mt-4">${btn("Record payment…")}${btn("Add correction…", "outline")}</div>`,
+          "col-span-2",
+        );
+        const priceCard = card(
+          `<h2 class="text-lg font-semibold">Price</h2><p class="mt-2">B1 Evening: group price</p><p class="tnum text-muted-foreground">€15.00 per lesson</p><div class="mt-4">${btn("Set student price…", "outline")}</div>`,
+        );
+        let menu = "";
+        if (st === 2)
+          menu = `<div class="absolute right-10 top-[132px] w-48 rounded-md border border-border bg-white shadow-lg py-1 z-10" role="menu">${["Refund…", "Void payment…", "History"].map((t) => `<div role="menuitem" class="px-3 py-1.5 hover:bg-muted">${t}</div>`).join("")}</div>`;
+        const stmt = card(
+          `<div class="flex items-end justify-between mb-3"><h2 class="text-lg font-semibold">Statement</h2>${sel("Term", "Autumn 2026")}</div><div class="relative">${statementTable(st === 1)}${menu}</div><p class="pt-3 border-t border-border mt-2 font-medium">Owes €80.00 at 16 Oct 2026</p>`,
+          "p-4",
+        );
+        return desktop(
+          head +
+            `<div class="grid grid-cols-3 gap-6">${balanceCard}${priceCard}</div>` +
+            stmt,
+          "Students",
+        );
+      }
+
+      /* --------------------------------------------- refund / correction / void */
+      function fixDialogs(st) {
+        const bg = studentPage(0);
+        if (st === 0)
+          return overlay(
+            bg,
+            dialog(
+              "Refund to Petr Hruby",
+              `<p class="text-muted-foreground">Records money paid back to Petr Hruby. It doesn't move any money by itself.</p>
+            ${field("Amount (required)", "€ <span class='ml-2 tnum'>100.00</span>", "<p class='text-xs text-muted-foreground'>You can refund at most €100.00.</p>")}
+            <div class="grid grid-cols-2 gap-3">${field("Date (required)", "16 Oct 2026")}${field("Method (required)", "Bank transfer ▾")}</div>
+            <div class="space-y-1"><label class="font-medium block">Reason (required, admins only)</label><textarea class="w-full h-16 rounded-md border border-input p-2">Left the course after week 3</textarea></div>`,
+              btn("Cancel", "outline") + btn("Refund €100.00"),
+            ),
+          );
+        if (st === 1)
+          return overlay(
+            bg,
+            dialog(
+              "Add a correction",
+              `<fieldset class="space-y-2"><legend class="font-medium">Type</legend>
+              <label class="flex gap-2"><input type="radio" name="t" checked /> <span><strong>Add a charge</strong><br /><span class="text-muted-foreground">The student owes more, e.g. a course book.</span></span></label>
+              <label class="flex gap-2"><input type="radio" name="t" /> <span><strong>Give a credit</strong><br /><span class="text-muted-foreground">The student owes less, e.g. a goodwill discount.</span></span></label></fieldset>
+            ${field("Amount (required)", "€ <span class='ml-2 tnum'>15.00</span>")}
+            ${field("Description (required, shown to the student)", "Course book")}
+            <div class="grid grid-cols-2 gap-3">${field("Term", "Autumn 2026 ▾")}${field("Note (admins only)", "")}</div>`,
+              btn("Cancel", "outline") + btn("Add charge"),
+            ),
+          );
+        if (st === 2)
+          return overlay(
+            bg,
+            dialog(
+              "Void the payment of €50.00 from 5 Oct 2026?",
+              `<p class="text-muted-foreground">Use this when it was recorded by mistake. It stays in the statement, crossed out, and no longer counts. This can't be undone.</p>
+            <div class="space-y-1"><label class="font-medium block">Reason (required)</label><textarea class="w-full h-16 rounded-md border border-input p-2">Recorded twice, the bank shows one transfer</textarea></div>`,
+              btn("Keep it", "outline") + btn("Void payment", "destructive"),
+            ),
+          );
+        if (st === 3)
+          return overlay(
+            bg,
+            dialog(
+              "Void the payment of €100.00 from 3 Oct 2026?",
+              alert(
+                "This payment has a refund. Void the refund first.",
+                "warning",
+              ),
+              btn("Close", "outline"),
+            ),
+          );
+        // history sheet
+        return `<div class="relative">${bg}<div class="absolute inset-0 bg-black/50 rounded-lg flex justify-end"><aside role="dialog" aria-label="History" class="w-[420px] bg-white h-full p-6 space-y-4 shadow-lg"><div class="flex justify-between"><h2 class="text-lg font-semibold">History</h2><button aria-label="Close">✕</button></div>
+          <p class="text-muted-foreground">Payment · Bank transfer · €50.00</p>
+          <ol class="space-y-4 border-l-2 border-border pl-4">
+            <li><p class="font-medium">Voided by Anna Varga</p><p class="text-muted-foreground tnum">16 Oct 2026, 10:12</p><p>Reason: Recorded twice, the bank shows one transfer</p></li>
+            <li><p class="font-medium">Recorded by Martin Kral</p><p class="text-muted-foreground tnum">5 Oct 2026, 09:40</p><p>Amount: €50.00 · Method: Bank transfer · Date: 5 Oct 2026</p></li>
+          </ol>
+          <hr class="border-border" /><p class="text-muted-foreground">Charge · B1 Evening · September</p>
+          <ol class="space-y-4 border-l-2 border-border pl-4"><li><p class="font-medium">Recalculated: €135.00 → €120.00 (lesson cancelled by the school)</p><p class="text-muted-foreground tnum">9 Sep 2026, 08:02 · system</p></li></ol>
+        </aside></div></div>`;
+      }
+
+      /* ---------------------------------------------------------- journal */
+      function journal(st) {
+        const filters = `<div class="flex flex-wrap items-end gap-3">${sel("Dates", "1 – 31 Oct 2026")}${sel("Method", "Any")}${sel("Type", "All")}<label class="inline-flex items-center gap-2 h-9"><input type="checkbox" /> Show voided</label><span class="ml-auto">${a("Export in Revenue report ›")}</span></div>`;
+        const body =
+          st === 1
+            ? card(empty("👛", "No payments in this period.", ""))
+            : card(
+                table(
+                  [
+                    { t: "Date" },
+                    { t: "Student" },
+                    { t: "Type" },
+                    { t: "Method" },
+                    { t: "Reference" },
+                    { t: "Amount", r: 1 },
+                    { t: "Recorded by" },
+                    { t: "" },
+                  ],
+                  [
+                    [
+                      "16 Oct",
+                      a("Petr Hruby"),
+                      badge("Refund", "muted"),
+                      "Bank transfer",
+                      "—",
+                      "€100.00",
+                      "Anna Varga",
+                      "⋯",
+                    ],
+                    [
+                      "12 Oct",
+                      a("Marek Bielik"),
+                      badge("Payment", "success"),
+                      "Cash",
+                      "Receipt 0151",
+                      "€140.00",
+                      "Martin Kral",
+                      "⋯",
+                    ],
+                    [
+                      "8 Oct",
+                      a("Eva Lukac"),
+                      badge("Payment", "success"),
+                      "Card (at the office)",
+                      "—",
+                      "€300.00",
+                      "Anna Varga",
+                      "⋯",
+                    ],
+                    [
+                      "3 Oct",
+                      a("Petr Hruby"),
+                      badge("Payment", "success"),
+                      "Cash",
+                      "Receipt 0142",
+                      "€100.00",
+                      "Martin Kral",
+                      "⋯",
+                    ],
+                  ],
+                ) +
+                  `<p class="pt-3 border-t border-border font-medium tnum">Total received €540.00 · Refunded €100.00 · Net €440.00</p>`,
+                "p-4",
+              );
+        return desktop(payHead("Payments") + filters + body);
+      }
+
+      /* ------------------------------------------------------------ prices */
+      function prices(st) {
+        const top = `<div class="flex items-end justify-between">${sel("Term", "Autumn 2026")}${btn("Copy prices from another term…", "outline")}</div>`;
+        const rows = [
+          [
+            `<strong>▾ General English B1</strong>`,
+            "",
+            "B1",
+            "Per term",
+            "€240.00",
+          ],
+          [
+            `<span class="pl-6">${a("B1 Evening")}</span>`,
+            "👥 Group",
+            "B1",
+            `<span class="text-muted-foreground">(course)</span>`,
+            `<span class="text-muted-foreground">€240.00</span>`,
+          ],
+          [
+            `<span class="pl-6">${a("B1 Morning")}</span> ${badge("Group price")}`,
+            "👥 Group",
+            "B1",
+            "Per lesson",
+            "€15.00",
+          ],
+          [
+            `<strong>▾ Business English C1</strong>`,
+            "",
+            "C1",
+            "—",
+            `<span class="text-amber-700">⚠ No price</span>`,
+          ],
+          [
+            `<span class="pl-6">${a("C1 Business")}</span>`,
+            "👥 Group",
+            "C1",
+            "—",
+            `<span class="text-amber-700">⚠ No price</span>`,
+          ],
+          [`<strong>▾ No course</strong>`, "", "", "", ""],
+          [
+            `<span class="pl-6">${a("Marek Bielik 1-on-1")}</span>`,
+            "👤 1-on-1",
+            "A2",
+            "Per lesson",
+            "€30.00",
+          ],
+          [
+            `<span class="pl-6">${a("A1 Trial")}</span>`,
+            "👥 Group",
+            "A1",
+            "Per term",
+            "€0.00",
+          ],
+        ].map((r) => [
+          ...r,
+          r[0].includes("No course")
+            ? ""
+            : `<button class="h-8 w-8 rounded-md hover:bg-muted" aria-label="Price actions">⋯</button>`,
+        ]);
+        let body;
+        if (st === 2)
+          body = card(
+            empty(
+              "📅",
+              "Add a term first. Prices are set per term.",
+              "",
+              btn("Go to Terms & holidays", "outline"),
+            ),
+          );
+        else
+          body =
+            card(
+              table(
+                [
+                  { t: "Course / group" },
+                  { t: "Type" },
+                  { t: "Level" },
+                  { t: "Billing" },
+                  { t: "Price", r: 1 },
+                  { t: "" },
+                ],
+                rows,
+              ),
+              "p-4",
+            ) +
+            alert(
+              "⚠ 1 group with lessons this term has no price. Its students aren't charged. " +
+                a("Show them"),
+              "warning",
+            );
+        const page = desktop(payHead("Prices") + top + body);
+        if (st !== 1) return page;
+        return overlay(
+          page,
+          dialog(
+            "Price for B1 Morning · Autumn 2026",
+            `<fieldset class="space-y-2"><legend class="font-medium">Billing (required)</legend>
+              <label class="flex gap-2"><input type="radio" name="b" checked /> <span><strong>Per lesson</strong><br /><span class="text-muted-foreground">Students pay for each billable lesson.</span></span></label>
+              <label class="flex gap-2"><input type="radio" name="b" /> <span><strong>Per term</strong><br /><span class="text-muted-foreground">One fixed amount for the whole term.</span></span></label></fieldset>
+            ${field("Price (required)", "€ <span class='ml-2 tnum'>16.00</span>")}
+            <fieldset class="space-y-2"><legend class="font-medium">Change applies</legend>
+              <label class="flex gap-2"><input type="radio" name="c" checked /> To lessons from today</label>
+              <label class="flex gap-2"><input type="radio" name="c" /> To the whole term</label></fieldset>
+            ${alert("ⓘ Changes 0 charges for 0 students. Lessons from today will use €16.00.", "info")}`,
+            btn("Cancel", "outline") + btn("Save price"),
+          ),
+        );
+      }
+
+      /* --------------------------------------------------------- student */
+      function studentPayments(st) {
+        if (st === 3)
+          return phone(
+            `<h1 class="text-2xl font-semibold">Payments</h1>${skel(1, "h-48")}${skel(3, "h-16")}`,
+          );
+        if (st === 4)
+          return phone(
+            `<h1 class="text-2xl font-semibold">Payments</h1>${empty("👛", "No payments or charges yet", "When your school charges for lessons, you'll see it here.")}`,
+          );
+        if (st === 5)
+          return phone(
+            `<h1 class="text-2xl font-semibold">Payments</h1>${alert("Couldn't load your payments. " + btn("Try again", "outline", "ml-2 h-11"), "danger")}`,
+          );
+        const variants = [
+          [
+            "You owe",
+            "€80.00",
+            STATUS.PARTLY_PAID(),
+            "About €60.00 more by the end of term.",
+          ],
+          ["All paid", "€0.00", STATUS.PAID(), ""],
+          ["You're in credit", "€20.00", STATUS.IN_CREDIT(), ""],
+        ][st];
+        const items = [
+          [
+            "15 Oct · B1 Evening",
+            "October so far · 4 lessons",
+            "+ €60.00",
+            "charge €60.00",
+          ],
+          ["10 Oct · Correction", "Course book", "+ €15.00", "charge €15.00"],
+          [
+            "3 Oct · Payment, cash",
+            "Receipt 0142",
+            "− €100.00",
+            "payment €100.00",
+          ],
+          [
+            "30 Sep · B1 Evening",
+            "September · 8 lessons",
+            "+ €120.00",
+            "charge €120.00",
+          ],
+        ];
+        return phone(`<h1 class="text-2xl font-semibold">Payments</h1>
+          <section class="rounded-lg border border-border">
+            <div class="p-4"><p class="text-muted-foreground">${variants[0]}</p><p class="text-3xl font-semibold tnum ${st === 1 ? "text-green-700" : ""}">${st === 1 ? "✓ " : ""}${variants[1]}</p><p class="mt-1 flex items-center gap-2">${variants[2]} <span class="text-muted-foreground text-sm">Autumn 2026</span></p>${variants[3] ? `<p class="text-muted-foreground text-sm mt-2">${variants[3]}</p>` : ""}</div>
+            <div class="border-t border-border p-4 bg-muted/50"><h2 class="font-semibold">How to pay</h2><p class="text-sm mt-1">Pay at the office (Mon–Fri 9:00–18:00) or by bank transfer to SK12 1100 0000 0026 1234 5678. Reference: your full name.</p></div>
+          </section>
+          <div class="flex items-end justify-between"><h2 class="text-lg font-semibold">History</h2>${sel("Term", "Autumn 2026")}</div>
+          <ul class="rounded-lg border border-border divide-y divide-border">${items
+            .map(
+              ([t, s, amt, sr]) =>
+                `<li><a href="#" class="flex justify-between gap-3 p-3 min-h-[44px]"><span><span class="block font-medium">${t}</span><span class="block text-sm text-muted-foreground">${s}</span></span><span class="tnum font-medium self-center" aria-hidden="true">${amt}</span><span class="sr-only">${sr}</span></a></li>`,
+            )
+            .join("")}</ul>
+          <p class="text-sm text-muted-foreground">Questions about a payment? Contact the school office.</p>`);
+      }
+      function studentChargeSheet() {
+        return `<div class="relative">${studentPayments(0)}<div class="absolute inset-0 bg-black/50 rounded-[2rem] flex items-end"><div role="dialog" aria-label="Charge details" class="w-full bg-white rounded-t-xl p-4 space-y-3 text-base"><div class="flex justify-between"><h2 class="text-lg font-semibold">B1 Evening · September</h2><button class="h-11 w-11" aria-label="Close">✕</button></div><p class="text-muted-foreground">8 lessons × €15.00 = €120.00</p><ul class="divide-y divide-border">${[
+          ["Tue 2 Sep", "Billed"],
+          ["Thu 4 Sep", "Billed"],
+          ["Tue 9 Sep", "Not billed: cancelled by the school"],
+          ["Thu 11 Sep", "Billed"],
+          ["Tue 16 Sep", "Not billed: you cancelled before the cutoff"],
+          ["Thu 18 Sep", "Billed"],
+        ]
+          .map(
+            ([d, s]) =>
+              `<li class="flex justify-between py-2"><span class="tnum">${d}</span>${s === "Billed" ? badge("Billed", "success") : `<span class="text-sm text-muted-foreground text-right">${s}</span>`}</li>`,
+          )
+          .join("")}</ul></div></div></div>`;
+      }
+      function studentHome() {
+        return phone(`<h1 class="text-2xl font-semibold">Hi, Petr</h1>
+          <section class="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2"><h2 class="font-semibold">You owe €80.00</h2><p class="text-sm">Pay at the office or by bank transfer.</p>${btn("See details", "outline", "h-11 w-full")}</section>
+          <section class="rounded-lg border border-border p-4"><h2 class="font-semibold">Next lesson</h2><p class="text-muted-foreground">Thu 16 Oct, 17:00 · B1 Evening · Room 3</p></section>
+          <div class="rounded-lg border border-border p-3"><p class="text-xs text-muted-foreground mb-2">More sheet</p><ul class="divide-y divide-border">${["👛 Payments " + badge("Owes", "danger", "●"), "★ Rate your teachers", "🔗 Calendar subscription", "👤 My profile"].map((t) => `<li class="py-2 min-h-[44px] flex items-center">${t}</li>`).join("")}</ul></div>`);
+      }
+
+      /* ----------------------------------------------------------- reports */
+      const reportShell = (
+        title,
+        desc,
+        filters,
+        stats,
+        body,
+        foot,
+        exportBtn,
+      ) =>
+        desktop(
+          `<a href="#" class="text-primary">‹ Reports</a>` +
+            pageHeader(title, exportBtn, desc) +
+            `<div class="flex flex-wrap items-end gap-3">${filters}<span class="ml-auto">${a("Reset filters")}</span></div>` +
+            stats +
+            body +
+            `<p class="text-muted-foreground text-xs">${foot} Data as of 16 Oct 2026, 14:05.</p>`,
+          "Reports",
+        );
+      const exportBtn = (menu) =>
+        btn("⬇ Export CSV" + (menu ? " ▾" : ""), "outline");
+      function reportsIndex() {
+        const c = (t, d) =>
+          card(
+            `<h2 class="text-lg font-semibold">${t}</h2><p class="text-muted-foreground mt-1 mb-4">${d}</p>${btn("Open report", "outline")}`,
+          );
+        return desktop(
+          pageHeader("Reports") +
+            `<div class="grid grid-cols-3 gap-6">${c("Attendance", "Expected attendance per group or student, from cancellations and replacements.")}${c("Teacher hours", "Hours each teacher taught. Substitute hours count for the substitute.")}${c("Revenue & outstanding", "What was charged, what was collected and what is still owed.")}</div>`,
+          "Reports",
+        );
+      }
+      function attendance(st) {
+        const view = st === 1 ? "By student" : "By group";
+        const filters =
+          sel("Period", "Term: Autumn 2026") +
+          sel("Teacher", "Any") +
+          sel("Group", "Any") +
+          `<div class="inline-flex flex-col gap-1"><span class="text-xs font-medium text-muted-foreground">View</span>${tabs(["By group", "By student"], view)}</div>`;
+        const stats = `<dl class="grid grid-cols-4 gap-4">${stat("Lessons held", "412")}${stat("Expected attendance", "91.4 %")}${stat("Cancellations", "318", "241 with credit · 77 late")}${stat("Replacements", "163")}</dl>`;
+        let body;
+        if (st === 2) body = card(skel(6));
+        else if (st === 3)
+          body = card(
+            empty(
+              "📊",
+              "No data for this period.",
+              "Try another term or date range.",
+            ),
+          );
+        else if (st === 1)
+          body = card(
+            table(
+              [
+                { t: "Student" },
+                { t: "Group" },
+                { t: "Lessons", r: 1 },
+                { t: "Cancelled", r: 1 },
+                { t: "Late cancellations", r: 1 },
+                { t: "Replacements taken", r: 1 },
+                { t: "Attendance ↑", r: 1 },
+              ],
+              [
+                [a("Jana Kovac"), "B1 Evening", "14", "6", "3", "1", "57.1 %"],
+                [a("Petr Hruby"), "A2 Morning", "14", "3", "0", "3", "100.0 %"],
+                [a("Eva Lukac"), "C1 Business", "12", "1", "1", "0", "91.7 %"],
+              ],
+            ),
+            "p-4",
+          );
+        else
+          body = card(
+            table(
+              [
+                { t: "Group" },
+                { t: "Lessons", r: 1 },
+                { t: "Expected", r: 1 },
+                { t: "Cancelled", r: 1 },
+                { t: "Replacements in", r: 1 },
+                { t: "Attendance", r: 1 },
+              ],
+              [
+                [
+                  a("👥 B1 Evening") + " · B1",
+                  "14",
+                  "126",
+                  "11<br><span class='text-xs text-muted-foreground'>8 with credit · 3 late</span>",
+                  "6",
+                  "96.2 %",
+                ],
+                [
+                  a("👥 A2 Morning") + " · A2",
+                  "14",
+                  "112",
+                  "9<br><span class='text-xs text-muted-foreground'>9 with credit · 0 late</span>",
+                  "2",
+                  "92.2 %",
+                ],
+                [
+                  a("👤 Marek Bielik 1-on-1") + " · A2",
+                  "10",
+                  "10",
+                  "1<br><span class='text-xs text-muted-foreground'>1 with credit · 0 late</span>",
+                  "0",
+                  "90.0 %",
+                ],
+              ],
+              { foot: ["Total", "412", "3,610", "318", "163", "91.4 %"] },
+            ),
+            "p-4",
+          );
+        return reportShell(
+          "Attendance",
+          "Expected attendance based on cancellations students reported. Teachers don't take a register, so no-shows aren't counted.",
+          filters,
+          st === 2
+            ? `<div class="grid grid-cols-4 gap-4">${skel(4, "h-20")}</div>`
+            : stats,
+          body,
+          "3 lessons cancelled by the school aren't counted.",
+          exportBtn(false),
+        );
+      }
+      function hours(st) {
+        const filters =
+          sel("Period", st === 2 ? "Custom dates…" : "Term: Autumn 2026") +
+          (st === 2
+            ? `<label class="inline-flex flex-col gap-1"><span class="text-xs font-medium text-muted-foreground">Dates</span><span class="h-9 px-3 rounded-md border border-red-600 bg-white inline-flex items-center">1 Jan – 31 Dec 2026</span><span class="text-xs text-red-700">Choose at most 366 days.</span></label>`
+            : "") +
+          sel("Teacher", st === 1 ? "Ana Kral" : "Any") +
+          sel("Group", "Any") +
+          `<label class="inline-flex items-center gap-2 h-9"><input type="checkbox" /> Show teachers without lessons</label>`;
+        const stats = `<dl class="grid grid-cols-3 gap-4">${stat("Total hours", "412 h 30 min")}${stat("Lessons", "275")}${stat("Substitute hours", "18 h")}</dl>`;
+        let body;
+        if (st === 1)
+          body = card(
+            `<h2 class="text-lg font-semibold mb-3">Ana Kral — lessons</h2>` +
+              table(
+                [
+                  { t: "Date" },
+                  { t: "Time" },
+                  { t: "Group" },
+                  { t: "Role" },
+                  { t: "Duration", r: 1 },
+                ],
+                [
+                  [
+                    "Mon 13 Oct",
+                    "17:00–18:30",
+                    "B1 Evening",
+                    `<span class="text-cyan-900">⚙ Substitute for Tomas Horvat</span>`,
+                    "1 h 30 min",
+                  ],
+                  [
+                    "Tue 14 Oct",
+                    "09:00–10:30",
+                    "A2 Morning",
+                    "Own",
+                    "1 h 30 min",
+                  ],
+                  [
+                    "Wed 15 Oct",
+                    "18:00–19:00",
+                    "Jan Novak 1-on-1",
+                    "Own",
+                    "1 h",
+                  ],
+                ],
+              ),
+            "p-4",
+          );
+        else
+          body = card(
+            table(
+              [
+                { t: "Teacher ↑" },
+                { t: "Lessons", r: 1 },
+                { t: "Own lessons", r: 1 },
+                { t: "As substitute", r: 1 },
+                { t: "Total", r: 1 },
+                { t: "Covered by others", r: 1 },
+              ],
+              [
+                [
+                  a("Ana Kral"),
+                  "62",
+                  "84 h",
+                  "<span class='text-cyan-900'>⚙ 9 h</span>",
+                  "<strong>93 h</strong>",
+                  "<span class='text-muted-foreground'>0 h</span>",
+                ],
+                [
+                  a("Tomas Horvat"),
+                  "54",
+                  "76 h 30 min",
+                  "0 h",
+                  "<strong>76 h 30 min</strong>",
+                  "<span class='text-muted-foreground'>6 h</span>",
+                ],
+                [
+                  a("Eva Simon") + " " + badge("Archived"),
+                  "31",
+                  "40 h 30 min",
+                  "<span class='text-cyan-900'>⚙ 4 h 30 min</span>",
+                  "<strong>45 h</strong>",
+                  "<span class='text-muted-foreground'>0 h</span>",
+                ],
+              ],
+              {
+                foot: [
+                  "Total",
+                  "275",
+                  "394 h 30 min",
+                  "18 h",
+                  "412 h 30 min",
+                  "18 h",
+                ],
+              },
+            ),
+            "p-4",
+          );
+        const exportMenu =
+          st === 3
+            ? `<div class="relative">${exportBtn(true)}<div role="menu" class="absolute right-0 mt-1 w-44 rounded-md border border-border bg-white shadow-lg py-1 z-10">${["Summary", "All lessons"].map((t) => `<div role="menuitem" class="px-3 py-1.5 hover:bg-muted">${t}</div>`).join("")}</div></div>`
+            : exportBtn(true);
+        return reportShell(
+          "Teacher hours",
+          "Lessons taught per teacher. Substitute hours count for the substitute.",
+          filters,
+          stats,
+          body,
+          "Only lessons that have ended count. Cancelled lessons don't.",
+          exportMenu,
+        );
+      }
+      function revenue(st) {
+        const filters =
+          sel("Period", "Term: Autumn 2026") +
+          sel("Group", "Any") +
+          `<div class="inline-flex flex-col gap-1"><span class="text-xs font-medium text-muted-foreground">Breakdown</span>${tabs(["By month", "By group", "By course"], "By month")}</div>`;
+        const s = (l, v, h) =>
+          `<div class="rounded-lg border border-border bg-white p-4"><dt class="text-muted-foreground">${l}</dt><dd class="text-2xl font-semibold tnum mt-1">${v}</dd><dd class="text-xs text-muted-foreground mt-1">${h}</dd></div>`;
+        const stats = `<dl class="grid grid-cols-4 gap-4">${s("Charged", "€18,240.00", "What students were charged for lessons in this period.")}${s("Collected", "€14,960.00", "Payments received minus refunds, by payment date.")}${s("Outstanding", "€3,420.00", "What students owe at the end of the period.")}${s("In credit", "€140.00", "Paid in advance, at the end of the period.")}</dl>`;
+        let extra = "";
+        if (st === 1)
+          extra = alert(
+            "⚠ This export has 14,820 rows, more than the 10,000 allowed. Choose a shorter period or a filter.",
+            "warning",
+          );
+        if (st === 2)
+          extra = alert(
+            "ⓘ No prices are set for Autumn 2026, so nothing is charged. " +
+              a("Set prices"),
+            "info",
+          );
+        const body =
+          st === 2
+            ? ""
+            : card(
+                table(
+                  [
+                    { t: "Month" },
+                    { t: "Charged", r: 1 },
+                    { t: "Collected", r: 1 },
+                    { t: "Refunded", r: 1 },
+                    { t: "Corrections (net)", r: 1 },
+                    { t: "Outstanding at month end", r: 1 },
+                  ],
+                  [
+                    [
+                      "September 2026",
+                      "€9,120.00",
+                      "€8,040.00",
+                      "€0.00",
+                      "−€30.00",
+                      "€1,050.00",
+                    ],
+                    [
+                      "October 2026 (to 16 Oct)",
+                      "€9,120.00",
+                      "€7,020.00",
+                      "€100.00",
+                      "€15.00",
+                      "€3,420.00",
+                    ],
+                  ],
+                  {
+                    foot: [
+                      "Total",
+                      "€18,240.00",
+                      "€15,060.00",
+                      "€100.00",
+                      "−€15.00",
+                      "€3,420.00",
+                    ],
+                  },
+                ),
+                "p-4",
+              ) +
+              card(
+                `<div class="flex justify-between"><h2 class="text-lg font-semibold">Who owes</h2>${a("See all in Balances ›")}</div>` +
+                  table(
+                    [{ t: "Student" }, { t: "Balance", r: 1 }],
+                    [
+                      [a("Jana Kovac"), "Owes €240.00"],
+                      [a("Eva Lukac"), "Owes €90.00"],
+                      [a("Petr Hruby"), "Owes €80.00"],
+                    ],
+                  ),
+                "p-4",
+              );
+        return reportShell(
+          "Revenue & outstanding",
+          "What was charged, what was collected and what is still owed.",
+          filters,
+          st === 2 ? "" : stats,
+          extra + body,
+          "Voided entries aren't counted. Amounts in EUR.",
+          exportBtn(true),
+        );
+      }
+
+      /* --------------------------------------------------------- settings */
+      function settings() {
+        return desktop(
+          pageHeader("Payments", "", "Settings") +
+            card(`<div class="max-w-2xl space-y-4">
+              ${field("Currency", "EUR — Euro <span class='ml-auto'>🔒</span>", "<p class='text-xs text-muted-foreground'>The currency can't change once prices or payments exist.</p>")}
+              <div class="space-y-1"><label class="font-medium block">Payment instructions for students</label><textarea class="w-full h-24 rounded-md border border-input p-2">Pay at the office (Mon–Fri 9:00–18:00) or by bank transfer to SK12 1100 0000 0026 1234 5678. Reference: your full name.</textarea><p class="text-xs text-muted-foreground">Shown on the students' Payments page, e.g. your bank account and what to write as the reference.</p></div>
+              ${btn("Save changes")}</div>`),
+          "Settings",
+        );
+      }
+
+      /* ----------------------------------------------------------- screens */
+      const SCREENS = [
+        {
+          k: "bal",
+          label: "Balances",
+          states: [
+            "owing",
+            "loading",
+            "no prices",
+            "nobody owes",
+            "error",
+            "all students",
+          ],
+          fn: balances,
+        },
+        {
+          k: "rec",
+          label: "Record payment",
+          states: [
+            "full",
+            "partial",
+            "over → credit",
+            "possible duplicate",
+            "error",
+          ],
+          fn: recordDialog,
+        },
+        {
+          k: "stmt",
+          label: "Student › Payments",
+          states: ["statement", "charge expanded", "row menu", "loading"],
+          fn: studentPage,
+        },
+        {
+          k: "fix",
+          label: "Refund / correct / void",
+          states: [
+            "refund",
+            "correction",
+            "void",
+            "void blocked",
+            "history sheet",
+          ],
+          fn: fixDialogs,
+        },
+        {
+          k: "jr",
+          label: "Payments journal",
+          states: ["list", "empty"],
+          fn: journal,
+        },
+        {
+          k: "pr",
+          label: "Prices",
+          states: ["list", "set price dialog", "no term"],
+          fn: prices,
+        },
+        {
+          k: "set",
+          label: "Settings › Payments",
+          states: ["form"],
+          fn: settings,
+        },
+        {
+          k: "stu",
+          label: "Student payments (mobile)",
+          states: [
+            "owes",
+            "all paid",
+            "in credit",
+            "loading",
+            "empty",
+            "error",
+            "charge sheet",
+            "home card + More",
+          ],
+          fn: (s) =>
+            s === 6
+              ? studentChargeSheet()
+              : s === 7
+                ? studentHome()
+                : studentPayments(s),
+        },
+        { k: "ri", label: "Reports", states: ["index"], fn: reportsIndex },
+        {
+          k: "ra",
+          label: "Attendance",
+          states: ["by group", "by student", "loading", "no data"],
+          fn: attendance,
+        },
+        {
+          k: "rh",
+          label: "Teacher hours",
+          states: [
+            "summary",
+            "teacher detail",
+            "range too long",
+            "export menu",
+          ],
+          fn: hours,
+        },
+        {
+          k: "rr",
+          label: "Revenue",
+          states: ["by month", "too many rows", "no prices"],
+          fn: revenue,
+        },
+        {
+          k: "403",
+          label: "403 (teacher)",
+          states: ["forbidden"],
+          fn: forbidden,
+        },
+      ];
+      let cur = { screen: "bal", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>

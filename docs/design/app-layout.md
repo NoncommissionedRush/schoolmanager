@@ -116,7 +116,6 @@ Admin
 | Schedule                  | Auto-generate                                     | `nav.autoGenerate`  | `wand-sparkles`    | P4    |
 | People                    | Students                                          | `nav.students`      | `graduation-cap`   | P1    |
 | People                    | Teachers                                          | `nav.teachers`      | `presentation`     | P1    |
-| People                    | Parents                                           | `nav.parents`       | `users-round`      | P6    |
 | Academics                 | Courses & groups                                  | `nav.courses`       | `book-open`        | P1    |
 | Academics                 | Skill levels                                      | `nav.levels`        | `signal`           | P1    |
 | Academics                 | Ratings                                           | `nav.ratings`       | `star`             | P5    |
@@ -135,6 +134,8 @@ Teacher
 | Me       | My absences          | `nav.myAbsences`    | `calendar-x`       | P3    |
 | Me       | Substitutions        | `nav.substitutions` | `user-round-cog`   | P5    |
 
+No _Parents_ item: parent accounts are out of scope (owner decision 2026-10-16, `payments-reports.md`). Payments and Reports are admin-only; teachers see no money anywhere.
+
 Teachers have no _Ratings_ item: only admins see ratings (owner decision 2026-10-15, `notifications-substitutes.md` §2).
 
 Student (bottom tabs marked ★)
@@ -145,7 +146,7 @@ Student (bottom tabs marked ★)
 | ★ Timetable               | `nav.timetable`                  | `calendar-days`  | P1                              |
 | ★ Homework                | `nav.homework`                   | `clipboard-list` | P2                              |
 | ★ Absences & replacements | `nav.absencesShort` → "Absences" | `calendar-x`     | P3                              |
-| Payments                  | `nav.payments`                   | `wallet`         | P6                              |
+| Payments (in _More_)      | `nav.payments`                   | `wallet`         | P6                              |
 | ★/More                    | `nav.more`                       | `menu`           | P0 (shown once > 4 items exist) |
 
 Until P1 ships, the student bottom bar is hidden (only one destination).
