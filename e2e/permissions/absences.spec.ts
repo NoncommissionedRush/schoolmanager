@@ -250,7 +250,8 @@ function studentCases(target: {
       action: [STUDENT, "rescheduleLessonAction"],
       args: [{ creditId: target.credit, startsAt }],
     },
-    // CARM-66: no teacher or term by those ids; CARM-67 adds real cases.
+    // CARM-66: no teacher or term by those ids; phase5.spec.ts (CARM-67)
+    // has the real cases.
     {
       name: "rate a teacher",
       action: [RATINGS, "saveRatingAction"],

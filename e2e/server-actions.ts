@@ -185,11 +185,15 @@ export type ActionResponse = {
 /**
  * Calls `file#name` as the user signed in on `page` (its cookies), on a page
  * that serves it, and parses the reply. Takes at most one `FormFields`.
+ * Actions of shared components (`src/components/…`) are served by every
+ * role's pages: pass `path`, a page of the caller's own area, or the proxy
+ * answers 403 before the action runs.
  */
 export async function callAction(
   page: Page,
   [file, name]: readonly [string, string],
   args: unknown[],
+  path?: string,
 ): Promise<ActionResponse> {
   const action = compiledServerActions().get(`${file}#${name}`);
   if (!action) {
@@ -203,7 +207,7 @@ export async function callAction(
   }
   const response = await callServerAction(page.request, {
     id: action.id,
-    path: action.path,
+    path: path ?? action.path,
     args,
   });
   const body = await response.text();
