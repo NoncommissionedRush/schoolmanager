@@ -48,7 +48,8 @@ Also:
 | `src/server/billing/money.ts`                 | Pure: `parseMoney`, `formatMoneyParts`, `minorDigits`, `roundHalfUpDiv`, `toDecimalString` (§3.1). No floats                                                                |
 | `src/server/billing/rules.ts`                 | Pure: `isMakeupLesson`, `billableLessons`, `resolvePrice`, `desiredCharges`, `planChargeSync`, `allocate`, `studentStatus` (§2, §3). No Prisma, no Next.js                  |
 | `src/server/billing/provider.ts`              | The `PaymentProvider` interface and the provider registry (§4.6). v1 registers `MANUAL` only                                                                                |
-| `src/server/billing/admin.ts`                 | Every function that reads or writes **other people's** money: prices, sync, statements, overview, payments, adjustments. Admin only, and allow-listed for imports (§6.2)    |
+| `src/server/billing/sync.ts`                  | Internal, **ungated**: `syncCharges(tx, schoolId, studentIds \| "ALL", now)` and `lockBilling` (§2.5). No role check of its own; callers are allow-listed (§6.2)            |
+| `src/server/billing/admin.ts`                 | Every function that reads or writes **other people's** money: prices, statements, overview, payments, adjustments. Admin only, and allow-listed for imports (§6.2)          |
 | `src/server/billing/student.ts`               | The student's own balance, statement and payment history only (§6.3)                                                                                                        |
 | `src/server/reports/rules.ts`                 | Pure report builders: `attendanceReport`, `teacherHoursReport`, `teacherHoursLessons`, `revenueReport`, `outstandingReport` (§5). Built on `teachingMinutes` and `allocate` |
 | `src/server/reports/csv.ts`                   | Pure `toCsv(columns, rows, messages)` with RFC 4180 quoting and formula-injection guard (§5.6)                                                                              |
@@ -182,11 +183,11 @@ already posted. Charges change only through §2.5.
 
 There are three kinds of charge:
 
-| Kind         | One per                                                 | `sourceKey`                     | Amount                                                        | Posted at (`postedAt`)                                                                        | `serviceDate`      |
-| ------------ | ------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------ |
-| `LESSON`     | Billable lesson of a `PER_LESSON` (s, g, T)             | `lesson:<lessonId>`             | The price's `amountMinor`                                     | `L.endsAt` (the lesson has ended)                                                             | Local date of `L`  |
-| `TERM`       | (s, g, T) with a `PER_TERM` price and ≥ 1 member lesson | `term:<termId>:group:<groupId>` | `roundHalfUpDiv(amount × memberLessons, termLessons)` (below) | `startsAt` of the student's first member lesson of _g_ in _T_ (the term has started for them) | `T.startDate`      |
-| `ADJUSTMENT` | Admin action (§4.4)                                     | `adjustment:<uuid>`             | Signed, admin-entered, ≠ 0                                    | When the admin saves it                                                                       | Admin-entered date |
+| Kind         | One per                                                 | `sourceKey`                     | Amount                                                        | Posted at (`postedAt`)                                                                        | `serviceDate`                   |
+| ------------ | ------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------- |
+| `LESSON`     | Billable lesson of a `PER_LESSON` (s, g, T)             | `lesson:<lessonId>`             | The price's `amountMinor`                                     | `L.endsAt` (the lesson has ended)                                                             | Local date of `L`               |
+| `TERM`       | (s, g, T) with a `PER_TERM` price and ≥ 1 member lesson | `term:<termId>:group:<groupId>` | `roundHalfUpDiv(amount × memberLessons, termLessons)` (below) | `startsAt` of the student's first member lesson of _g_ in _T_ (the term has started for them) | Local date of that first lesson |
+| `ADJUSTMENT` | Admin action (§4.4)                                     | `adjustment:<uuid>`             | Signed, admin-entered, ≠ 0                                    | When the admin saves it                                                                       | Admin-entered date              |
 
 For a `PER_TERM` price:
 
@@ -232,10 +233,21 @@ For each `sourceKey` (system kinds only, never `ADJUSTMENT`):
 | posted, same amount and `priceId`     | row                 | Nothing. Snapshot text isn't compared, so a rename doesn't repost                                                                    |
 | posted, different amount or `priceId` | row                 | **Void** (`RECALCULATED`) and **insert** a new row with `replacesChargeId` = the old one, which keeps the old `postedAt` / `dueDate` |
 
-`syncCharges(scope, { studentIds? }, now)` runs the plan in **one
-transaction holding the school's billing lock** (`lockBilling`, a
-`pg_advisory_xact_lock` on `('billing', schoolId)`, like `lockTimetable`). It
-runs:
+`syncCharges(tx, schoolId, studentIds | "ALL", now)` lives in the internal
+module `src/server/billing/sync.ts`. It does **no** role check itself:
+it runs for a student's own read and from a script with no session, so
+gating is the caller's job. Only `billing/admin.ts` and `reports/admin.ts`
+(both after `requireRole("ADMIN")`), `billing/student.ts` (always passing exactly the
+viewer's own `StudentProfile` id) and `scripts/billing-sync.ts` may import
+it (§6.2).
+
+It runs the plan in **one transaction holding the school's billing lock**
+(`lockBilling`, a `pg_advisory_xact_lock` on `('billing', schoolId)`, like
+`lockTimetable`), but **only when there is something to write**: it plans
+first without the lock; an empty plan returns at once (no lock, no writes),
+otherwise it takes the lock, re-loads and re-plans, and writes that plan. So
+a read only waits on the lock when a line is actually due, and the 2 s
+budget below is the cost of a first sync, not of every page. It runs:
 
 - **Before every money read**, for the students the read covers: the
   student's own page, the admin's statement for a student (one student), the
@@ -328,20 +340,32 @@ Payments are not tied to particular charges (a balance-forward account), but
 the statement needs a per-line paid / unpaid state and the overview needs
 "overdue". `allocate(charges, payments)` is deterministic:
 
-1. **Funds** = Σ succeeded payments − Σ succeeded refunds + Σ |negative
-   adjustments|.
-2. Positive charges, sorted by (`dueDate`, `postedAt`, `id`), each take
-   `min(remaining funds, amount)`. The oldest debts are paid first.
-3. Per charge: `PAID` (fully covered), `PARTIALLY_PAID` or `UNPAID`, plus
-   `paidMinor`. An unpaid remainder whose `dueDate` < today (local) is
-   **overdue**.
-4. Funds left over = credit (`−balance`).
+1. **Linked waivers first.** Each active negative adjustment with
+   `adjustsChargeId` set is applied to **that** line: it covers
+   `min(|adjustment|, line's uncovered amount)` (`waivedMinor`). If the
+   target is voided or already covered, or the waiver is bigger than the
+   line, the rest goes into the general funds. Several waivers on one line
+   are applied in (`postedAt`, `id`) order.
+2. **Funds** = Σ succeeded payments − Σ succeeded refunds + Σ |unlinked
+   negative adjustments| + the waiver leftovers from step 1.
+3. Positive charges, sorted by (`dueDate`, `postedAt`, `id`), each take
+   `min(remaining funds, uncovered amount)`. The oldest debts are paid first.
+4. Per charge: `waivedMinor`, `paidMinor` and a state: `WAIVED` (fully
+   covered by linked waivers), `PAID` (fully covered, at least partly by
+   funds), `PARTIALLY_PAID` or `UNPAID`. An uncovered remainder whose
+   `dueDate` < today (local) is **overdue**.
+5. Funds left over = credit (`−balance`).
 
-The identity `Σ unpaid remainders − leftover funds = balance` holds for any
-input, and a property test checks it.
+So waiving a line clears **that** line: with an overdue September line and
+a current October line, waiving October makes October `WAIVED` and leaves
+September overdue. The identity `Σ uncovered remainders − leftover funds =
+balance` holds for any input, linked waivers included, and a property test
+checks it.
 
 **Student status** (`studentStatus`, shown on the overview and the student
-page):
+page). The table is evaluated top to bottom and the **first match wins**
+(so a student with no charges and no payments is `NOTHING_DUE`, not
+`SETTLED`):
 
 | Status        | When                                                   |
 | ------------- | ------------------------------------------------------ |
@@ -419,8 +443,12 @@ Nothing about money is ever edited in place or deleted.
 - **Adjustments** (`addAdjustment({ studentId, amountMinor (signed, ≠ 0),
 serviceDate, reason, chargeId? })`) are `ADJUSTMENT` charges: a fee
   (positive) or a discount, waiver or write-off (negative). The reason is
-  required (≤ 300). `chargeId` optionally links a waiver to the line it
-  waives (for display). An adjustment can be voided with a reason. System
+  required (≤ 300). `chargeId` (stored as `adjustsChargeId`) links a
+  **waiver** to the line it waives: it must be negative, target an active
+  positive charge of the same student, and is allocated to that line
+  first (§3.3), so the line shows as waived. The UI's _Waive…_ on a line
+  pre-fills it with the line's uncovered amount. An adjustment can be
+  voided with a reason (stored in `voidNote`, §9). System
   charges (`LESSON`, `TERM`) **can't** be voided by hand, because the next
   sync would recreate them. To waive one, the admin adds a negative
   adjustment, or fixes the cause (price, membership, cancellation).
@@ -429,14 +457,17 @@ serviceDate, reason, chargeId? })`) are `ADJUSTMENT` charges: a fee
 ### 4.5 Audit
 
 Every payment change is written to `AuditLog` in the same transaction
-(`entityType` `Payment` or `Charge`, `data` without free-text notes):
+(`entityType` `Payment` or `Charge`). The admin's **reasons** are part of
+the audit (`reason`, `voidNote`); the payment's `note` and `reference` are
+**not** copied into `data` (they stay on the row only):
 
 | Action                                                | `data`                                                                                 |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `payment.recorded` / `payment.refunded`               | `{ studentId, kind, amountMinor, currency, method, receivedOn, provider, refundOfId }` |
 | `payment.voided`                                      | `{ studentId, kind, amountMinor, currency, reason }`                                   |
 | `payment.corrected`                                   | `{ studentId, from: { id, amountMinor, receivedOn, method }, to: { id, … } }`          |
-| `charge.adjustment_added` / `_voided`                 | `{ studentId, amountMinor, currency, serviceDate, reason, chargeId }`                  |
+| `charge.adjustment_added`                             | `{ studentId, amountMinor, currency, serviceDate, reason, adjustsChargeId }`           |
+| `charge.adjustment_voided`                            | `{ studentId, amountMinor, currency, serviceDate, adjustsChargeId, voidNote }`         |
 | `price.created` / `.updated` / `.deleted` / `.copied` | §2.6                                                                                   |
 | `billing.recalculated`                                | §2.5                                                                                   |
 | `billing.currency_changed`                            | `{ from, to }`                                                                         |
@@ -498,7 +529,8 @@ overview and the student's home card instead.
   `termId` (which sets `from` / `to` to the term's dates), plus the filters
   of §5.2–§5.5. Lessons are selected by `startsAt ∈ [from 00:00, to + 1
 00:00)` in the school's time zone, published terms only.
-- **Limits.** `to − from ≤ REPORT_MAX_RANGE_DAYS` (366) (otherwise
+- **Limits.** The range covers at most `REPORT_MAX_RANGE_DAYS` (366)
+  days, counted inclusively (`to − from + 1 ≤ 366`; otherwise
   `RANGE_TOO_LONG`) and `from ≤ to` (otherwise `INVALID_RANGE`). A CSV with
   more than `REPORT_MAX_ROWS` (50,000) data rows is refused with
   `TOO_MANY_ROWS` and the row count, so the admin narrows the filters. A CSV
@@ -584,7 +616,10 @@ exist (§11).
 | `currency`      | School currency                                                        |
 
 The first and last month count only the days inside the range. A sync runs
-first (§2.5).
+first (§2.5). A `TERM` charge counts in the month of the student's first
+lesson of the term (its `serviceDate`), so a late joiner's fee lands in the
+month they joined; a later proration (§2.4) changes the amount, not the
+month.
 
 ### 5.5 Outstanding
 
@@ -659,6 +694,11 @@ attachment; filename="<report>_<from>_<to>.csv"`, `Cache-Control: no-store`.
   `src/server/reports/**` and `scripts/billing-sync.ts` may import those
   files. A unit test scans the rest of `src/` and fails if any other file
   does.
+- `src/server/billing/sync.ts` (§2.5) is **ungated** and has a stricter
+  allow-list: only `billing/admin.ts`, `billing/student.ts`,
+  `reports/admin.ts` and `scripts/billing-sync.ts`. `student.ts` passes
+  only the viewer's own `StudentProfile` id, never an id from input; a
+  unit test covers that call site. The same import-guard test enforces it.
 - Every action validates its input with zod, re-reads the `Membership` (as
   every request does), and writes `AuditLog` in the same transaction.
 
@@ -805,8 +845,10 @@ model Charge {
   replacesChargeId String?    @map("replaces_charge_id") @db.Uuid
   voidedAt         DateTime?  @map("voided_at")
   voidedById       String?    @map("voided_by_id") @db.Uuid
-  /// NO_LONGER_BILLABLE | NO_PRICE | RECALCULATED | ADMIN_VOID
+  /// NO_LONGER_BILLABLE | NO_PRICE | RECALCULATED | ADMIN_VOID (code)
   voidReason       String?    @map("void_reason")
+  /// The admin's free-text reason, ADMIN_VOID only (CHECK), ≤ 300.
+  voidNote         String?    @map("void_note")
   createdAt        DateTime   @default(now()) @map("created_at")
 
   school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -828,6 +870,9 @@ model Charge {
 // CHECK (abs(amount_minor) <= 100000000);
 // CHECK (kind <> 'ADJUSTMENT' OR reason IS NOT NULL);
 // CHECK ((voided_at IS NULL) = (void_reason IS NULL));
+// CHECK ((void_reason = 'ADMIN_VOID') = (void_note IS NOT NULL)); -- NULL-safe form in the migration
+// CHECK (char_length(void_note) <= 300);
+// CHECK (adjusts_charge_id IS NULL OR (kind = 'ADJUSTMENT' AND amount_minor < 0));
 
 /// Money received from (PAYMENT) or paid back to (REFUND) a student (§4).
 model Payment {
@@ -915,7 +960,7 @@ Unit (pure, no database):
   proration (join, leave, lessons cancelled by the school, zero lessons);
   posting times at the boundary (`endsAt = now` posts); due dates across
   DST; `planChargeSync`, each row of §2.5; reposting keeps
-  `postedAt`/`dueDate`; `allocate`, status and overdue boundaries
+  `postedAt`/`dueDate`; `allocate` (including linked waivers: the waived line goes `WAIVED` while an older line stays overdue, a waiver larger than its line, a waiver on a voided line), status in first-match order, and overdue boundaries
   (`dueDate = today` is not overdue); and output independent of input order.
 - `billing/rules.property.test.ts` on the realistic fixtures (20 teachers,
   60 groups, 15 rooms; seeded, with absences, replacements, reschedules,
@@ -925,7 +970,8 @@ Unit (pure, no database):
     by a sync gives the same charges as a sync from scratch
   - every billable lesson is charged at most once per student
   - no makeup is ever charged
-  - the allocation identity of §3.3 holds
+  - the allocation identity of §3.3 holds, with random linked and
+    unlinked waivers
   - `PER_TERM` charges for full-term members equal the price exactly
 - `reports/rules.test.ts`: every column definition, ended-only, the range
   boundaries in the school's time zone, filters, sort order, and the
@@ -948,6 +994,8 @@ Database (`*.db.test.ts`, cleanup scoped to the spec's own `suffix`):
   is refused
 - `CURRENCY_LOCKED`
 - refund checks against a concurrently recorded payment (billing lock)
+- a no-op sync takes no lock and makes no writes; a sync with work
+  re-plans under the lock
 - school A's admin can't read, void or export school B's rows
   (`NOT_FOUND`)
 - the whole-school sync budget of §2.5
@@ -961,7 +1009,7 @@ The e2e permission cases are CARM-74's scope.
 | B1  | Price setup       | Prices are set **per term**, per course or group, with optional per-student overrides. The unit is per lesson or per term. There is _Copy prices from {term}_, a _Needs pricing_ list, and a change preview with the count and delta before saving |
 | B2  | Statement lines   | Lesson, term and adjustment lines, each with a paid / partially paid / unpaid state and a due date. Voided lines are shown to admins only, struck through, with the reason. Plus an _Upcoming this term_ section                                   |
 | B3  | Recording         | Amount, method, date received, optional reference and note. Refunds can link to a payment. The refund-over-credit warning needs an acknowledgement. "Edit" is void + new                                                                           |
-| B4  | Corrections       | Payments, refunds and adjustments are voided with a required reason. System charges have no void action; the waive action is a negative adjustment linked to the line                                                                              |
+| B4  | Corrections       | Payments, refunds and adjustments are voided with a required reason. System charges have no void action; _Waive…_ is a negative adjustment linked to the line, allocated to it first (state `WAIVED` / partly waived, §3.3)                        |
 | B5  | Statuses          | `NOTHING_DUE`, `SETTLED`, `IN_CREDIT`, `DUE`, `OVERDUE`. "Paid online" is a future `provider` ≠ `MANUAL` with a `PENDING` / `FAILED` status; no UI flow in v1                                                                                      |
 | B6  | Student page      | Balance, status, next due date, active lines, payments and refunds. No notes, no void reasons, no admin names                                                                                                                                      |
 | B7  | Report filters    | Attendance: term/range, group, teacher, student. Teacher hours: term/range, teacher, group, plus a lesson-detail export. Revenue: term/range **only**. Outstanding: as of now, with group and status filters                                       |
