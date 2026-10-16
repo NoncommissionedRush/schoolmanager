@@ -41,7 +41,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import type { SubstituteBand } from "@/server/scheduling/substitutes";
+import type {
+  SubstituteBand,
+  SubstituteLessonReasonCode,
+} from "@/server/scheduling/substitutes";
 import type {
   NotifyPreview,
   SubstituteActionResult,
@@ -124,7 +127,7 @@ export function useNotifyPreviewText() {
 type Problem =
   | { kind: "stale"; name: string }
   | { kind: "changed" }
-  | { kind: "tooLate" }
+  | { kind: "lessonRefused"; codes: SubstituteLessonReasonCode[] }
   | { kind: "error" };
 
 /**
@@ -303,7 +306,7 @@ function SheetBody({
         setProblem({ kind: "changed" });
         return;
       case "lessonRefused":
-        setProblem({ kind: "tooLate" });
+        setProblem({ kind: "lessonRefused", codes: result.reasons });
         return;
       case "refused":
       case "unacknowledged":
@@ -388,11 +391,12 @@ function SheetBody({
               </span>
             </ToneAlert>
           )}
-          {problem?.kind === "tooLate" && (
-            <ToneAlert tone="warning" icon={AlertTriangle}>
-              {t("lessonReasons.TOO_LATE_TO_RECORD")}
-            </ToneAlert>
-          )}
+          {problem?.kind === "lessonRefused" &&
+            problem.codes.map((code) => (
+              <ToneAlert key={code} tone="warning" icon={AlertTriangle}>
+                {t(`lessonReasons.${code}`)}
+              </ToneAlert>
+            ))}
           {problem?.kind === "error" && (
             <ToneAlert tone="danger" icon={CircleAlert}>
               {t("error.assign")}

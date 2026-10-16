@@ -807,7 +807,10 @@ export async function listCovered(
       substituteTeacherId: { not: null },
       status: { not: "CANCELLED" },
       endsAt: { gt: now },
-      startsAt: { lt: zonedTimeToUtc(addDays(filters.to, 1), 0, timezone) },
+      startsAt: {
+        gte: zonedTimeToUtc(filters.from, 0, timezone),
+        lt: zonedTimeToUtc(addDays(filters.to, 1), 0, timezone),
+      },
       ...filterWhere(filters),
     },
     select: rowSelect,

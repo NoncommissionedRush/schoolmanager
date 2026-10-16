@@ -34,6 +34,8 @@ const local = (date: string, hhmm: string) => {
 const NOW = local("2026-10-19", "12:00");
 
 describe.skipIf(!url)("substitutes (database)", () => {
+  // Unique per file: the cleanup deletes only this file's users.
+  const suffix = randomUUID().slice(0, 8);
   let client: PrismaClient;
   let db: SchoolDb;
   let otherDb: SchoolDb;
@@ -85,7 +87,6 @@ describe.skipIf(!url)("substitutes (database)", () => {
     client = new PrismaClient({
       adapter: new PrismaPg({ connectionString: url }),
     });
-    const suffix = randomUUID().slice(0, 8);
     const school = await client.school.create({
       data: { name: `Sub ${suffix}`, slug: `sub-${suffix}`, timezone: TZ },
     });
@@ -248,7 +249,7 @@ describe.skipIf(!url)("substitutes (database)", () => {
     await client.school.deleteMany({ where: { id: { in: schools } } });
     await client.user.deleteMany({
       where: {
-        email: { endsWith: "@example.test" },
+        email: { endsWith: `-${suffix}@example.test` },
         memberships: { none: {} },
       },
     });
