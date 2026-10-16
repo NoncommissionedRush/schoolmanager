@@ -35,6 +35,11 @@ x(school_id, id)`. A `Lesson` of school A cannot point at a `Group` of
 - Sessions are stateless JWT cookies (Auth.js) holding user id, school id and
   role; every request re-reads the `Membership`, so role changes and removals
   apply immediately.
+- Each sign-in gets a `sessionId` in its token. Signing out records it in
+  `RevokedSession` (kept until the token could have expired), and the server
+  refuses that token from then on, even if a late response sets the cookie
+  again. Only document navigations refresh the cookie; prefetches, client-side
+  navigations and server actions leave it alone (`src/proxy.ts`).
 - `Account` and `VerificationToken` follow the `@auth/prisma-adapter` shape
   so OAuth / magic-link providers can be added later; unused for now.
 

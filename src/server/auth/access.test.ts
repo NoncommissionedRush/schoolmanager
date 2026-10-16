@@ -10,6 +10,7 @@ const record: MembershipRecord = {
     email: "jana@x.test",
     deletedAt: null,
   },
+  sessionRevoked: false,
   school: { id: "s1", name: "Demo", timezone: "Europe/Bratislava" },
 };
 
@@ -23,10 +24,15 @@ describe("loadViewer", () => {
   it("looks the membership up by the session's school and user", async () => {
     const find = vi.fn(async () => record);
     const viewer = await loadViewer(
-      { userId: "u1", schoolId: "s1", role: "TEACHER" },
+      { userId: "u1", schoolId: "s1", role: "TEACHER", sessionId: "sid" },
       find,
     );
-    expect(find).toHaveBeenCalledWith("s1", "u1");
+    expect(find).toHaveBeenCalledWith({
+      userId: "u1",
+      schoolId: "s1",
+      role: "TEACHER",
+      sessionId: "sid",
+    });
     expect(viewer).toEqual({
       userId: "u1",
       name: "Jana Nováková",
@@ -38,7 +44,7 @@ describe("loadViewer", () => {
 
   it("uses the role from the database, not the token", async () => {
     const viewer = await loadViewer(
-      { userId: "u1", schoolId: "s1", role: "ADMIN" },
+      { userId: "u1", schoolId: "s1", role: "ADMIN", sessionId: "sid" },
       async () => record,
     );
     expect(viewer?.role).toBe("TEACHER");
@@ -47,7 +53,7 @@ describe("loadViewer", () => {
   it("denies a session whose membership no longer exists (e.g. other school)", async () => {
     await expect(
       loadViewer(
-        { userId: "u1", schoolId: "s2", role: "ADMIN" },
+        { userId: "u1", schoolId: "s2", role: "ADMIN", sessionId: "sid" },
         async () => null,
       ),
     ).resolves.toBeNull();
@@ -56,11 +62,20 @@ describe("loadViewer", () => {
   it("denies deleted users", async () => {
     await expect(
       loadViewer(
-        { userId: "u1", schoolId: "s1", role: "TEACHER" },
+        { userId: "u1", schoolId: "s1", role: "TEACHER", sessionId: "sid" },
         async () => ({
           ...record,
           user: { ...record.user, deletedAt: new Date() },
         }),
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it("denies a signed-out session even if its cookie came back", async () => {
+    await expect(
+      loadViewer(
+        { userId: "u1", schoolId: "s1", role: "TEACHER", sessionId: "sid" },
+        async () => ({ ...record, sessionRevoked: true }),
       ),
     ).resolves.toBeNull();
   });

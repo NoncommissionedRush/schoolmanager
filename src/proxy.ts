@@ -2,6 +2,10 @@ import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authConfig } from "@/auth.config";
+import {
+  refreshesSessionCookie,
+  withoutSessionCookies,
+} from "@/server/auth/session-cookie";
 import { routeDecision } from "@/server/auth/roles";
 
 const { auth } = NextAuth(authConfig);
@@ -17,7 +21,7 @@ const { auth } = NextAuth(authConfig);
  * old one through to pages, which then deny it) until the user signs in
  * again. That is safe — the database decides — just stale until re-login.
  */
-export default auth((request) => {
+const protect = auth((request) => {
   const { pathname, search } = request.nextUrl;
   const role = request.auth?.identity?.role ?? null;
   const hasSessionCookie = request.cookies
@@ -41,6 +45,18 @@ export default auth((request) => {
       return NextResponse.next();
   }
 });
+
+/**
+ * Auth.js rolls the session cookie on every response; only document
+ * navigations keep that, so a background response landing after sign-out
+ * cannot set the cookie again (src/server/auth/session-cookie.ts).
+ */
+export default async function proxy(...args: Parameters<typeof protect>) {
+  const response = await protect(...args);
+  return response && !refreshesSessionCookie(args[0].headers)
+    ? withoutSessionCookies(response)
+    : response;
+}
 
 export const config = {
   // Everything except Auth.js/API routes, Next internals and static files.

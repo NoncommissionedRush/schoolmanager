@@ -37,12 +37,15 @@ const membership = (role: "ADMIN" | "TEACHER" | "STUDENT") => ({
     name: "Alexandra Admin",
     email: "a@x.test",
     deletedAt: null,
+    revokedSessions: [] as { id: string }[],
   },
   school: { id: "school-a", name: "Demo", timezone: "Europe/Bratislava" },
 });
 
 function signIn(role: "ADMIN" | "TEACHER" | "STUDENT", schoolId = "school-a") {
-  auth.mockResolvedValue({ identity: { userId: "u1", schoolId, role } });
+  auth.mockResolvedValue({
+    identity: { userId: "u1", schoolId, role, sessionId: "sid-1" },
+  });
 }
 
 beforeEach(() => {
@@ -82,6 +85,32 @@ describe("requireRole", () => {
     signIn("ADMIN"); // token still says admin…
     findUnique.mockResolvedValue(membership("TEACHER")); // …but was demoted
     await expect(requireRole("ADMIN")).rejects.toThrow("forbidden");
+  });
+
+  it("signs out a token whose session was revoked", async () => {
+    signIn("TEACHER");
+    const row = membership("TEACHER");
+    findUnique.mockResolvedValue({
+      ...row,
+      user: { ...row.user, revokedSessions: [{ id: "sid-1" }] },
+    });
+    await expect(requireRole("TEACHER")).rejects.toThrow(
+      "redirect:/logout?reason=expired",
+    );
+    expect(findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          user: {
+            select: expect.objectContaining({
+              revokedSessions: {
+                where: { id: "sid-1", schoolId: "school-a" },
+                select: { id: true },
+              },
+            }),
+          },
+        }),
+      }),
+    );
   });
 
   it("signs out a token whose school membership is gone", async () => {

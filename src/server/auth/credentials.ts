@@ -3,6 +3,9 @@ import type { Role } from "./roles";
 /** What a successful sign-in puts into the session. */
 export type SessionIdentity = { userId: string; schoolId: string; role: Role };
 
+/** The identity in a session token, plus the id minted at sign-in. */
+export type TokenIdentity = SessionIdentity & { sessionId: string };
+
 export type SignInFailure = "invalid" | "disabled";
 
 export type SignInResult =

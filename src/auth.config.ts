@@ -1,7 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 import type {} from "next-auth/jwt";
 
-import type { SessionIdentity } from "@/server/auth/credentials";
+import type { TokenIdentity } from "@/server/auth/credentials";
 import { LOGIN_PATH, type Role } from "@/server/auth/roles";
 
 declare module "next-auth" {
@@ -11,7 +11,7 @@ declare module "next-auth" {
   }
   interface Session {
     /** Who is signed in and in which school; verified against the DB per request. */
-    identity?: SessionIdentity;
+    identity?: TokenIdentity;
   }
 }
 
@@ -20,6 +20,8 @@ declare module "next-auth/jwt" {
     userId?: string;
     schoolId?: string;
     role?: Role;
+    /** Identifies this sign-in so sign-out can revoke it server-side. */
+    sessionId?: string;
   }
 }
 
@@ -42,15 +44,17 @@ export const authConfig = {
         token.userId = user.id;
         token.schoolId = user.schoolId;
         token.role = user.role;
+        token.sessionId = crypto.randomUUID();
       }
       return token;
     },
     session({ session, token }) {
-      if (token.userId && token.schoolId && token.role) {
+      if (token.userId && token.schoolId && token.role && token.sessionId) {
         session.identity = {
           userId: token.userId,
           schoolId: token.schoolId,
           role: token.role,
+          sessionId: token.sessionId,
         };
       }
       return session;
