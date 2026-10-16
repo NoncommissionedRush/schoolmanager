@@ -226,12 +226,12 @@ plan    = planChargeSync(desired, existingActiveCharges)                        
 
 For each `sourceKey` (system kinds only, never `ADJUSTMENT`):
 
-| Desired                               | Existing active row | Action                                                                                                                               |
-| ------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| posted, amount > 0                    | none                | **Insert**                                                                                                                           |
-| none (or amount 0)                    | row                 | **Void** it with reason `NO_LONGER_BILLABLE` (or `NO_PRICE` when only the price disappeared)                                         |
-| posted, same amount and `priceId`     | row                 | Nothing. Snapshot text isn't compared, so a rename doesn't repost                                                                    |
-| posted, different amount or `priceId` | row                 | **Void** (`RECALCULATED`) and **insert** a new row with `replacesChargeId` = the old one, which keeps the old `postedAt` / `dueDate` |
+| Desired                               | Existing active row | Action                                                                                                                                                                                   |
+| ------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| posted, amount > 0                    | none                | **Insert**                                                                                                                                                                               |
+| none (or amount 0)                    | row                 | **Void** it with reason `NO_LONGER_BILLABLE` (or `NO_PRICE` when only the price disappeared)                                                                                             |
+| posted, same amount and `priceId`     | row                 | Nothing. Snapshot text isn't compared, so a rename doesn't repost                                                                                                                        |
+| posted, different amount or `priceId` | row                 | **Void** (`RECALCULATED`) and **insert** a new row with `replacesChargeId` = the old one, which keeps the old `postedAt` / `dueDate` (and any waiver linked to the old row, §3.3 step 0) |
 
 `syncCharges(tx, schoolId, studentIds | "ALL", now)` lives in the internal
 module `src/server/billing/sync.ts`. It does **no** role check itself:
@@ -340,12 +340,24 @@ Payments are not tied to particular charges (a balance-forward account), but
 the statement needs a per-line paid / unpaid state and the overview needs
 "overdue". `allocate(charges, payments)` is deterministic:
 
+0. **Resolve waiver targets through reposts.** A recalculation (§2.5)
+   voids a line `RECALCULATED` and inserts a successor with
+   `replacesChargeId` = the old row. So a waiver's **effective target** is
+   found by following `adjustsChargeId` forward along `replacesChargeId`
+   to the **active** end of the chain (pure `resolveWaiverTarget`; the
+   unique `replacesChargeId` chain is linear, stops after 50 steps like
+   `isMakeupLesson`). The waiver row itself is never rewritten. The chain
+   has no active end only when the line was voided for good
+   (`NO_LONGER_BILLABLE`, `NO_PRICE`) — then the waiver has no target.
 1. **Linked waivers first.** Each active negative adjustment with
-   `adjustsChargeId` set is applied to **that** line: it covers
-   `min(|adjustment|, line's uncovered amount)` (`waivedMinor`). If the
-   target is voided or already covered, or the waiver is bigger than the
-   line, the rest goes into the general funds. Several waivers on one line
-   are applied in (`postedAt`, `id`) order.
+   `adjustsChargeId` set is applied to its **effective target** (step 0):
+   it covers `min(|adjustment|, line's uncovered amount)` (`waivedMinor`).
+   If there is no effective target, or the line is already covered, or the
+   waiver is bigger than the line, the rest goes into the general funds.
+   Several waivers on one line are applied in (`postedAt`, `id`) order.
+   So a waived line that is later repriced stays waived (up to the waiver
+   amount; a price increase leaves the difference to pay), and a waiver
+   only falls back to the funds when its line stopped being billable.
 2. **Funds** = Σ succeeded payments − Σ succeeded refunds + Σ |unlinked
    negative adjustments| + the waiver leftovers from step 1.
 3. Positive charges, sorted by (`dueDate`, `postedAt`, `id`), each take
@@ -862,6 +874,8 @@ model Charge {
   @@index([schoolId, studentId, dueDate])
   @@index([schoolId, serviceDate])
   @@index([schoolId, lessonId])
+  /// A line is reposted at most once: the repost chain is linear (§3.3 step 0).
+  @@unique([schoolId, replacesChargeId])
   @@map("charges")
 }
 // CREATE UNIQUE INDEX charges_one_active ON charges (school_id, student_id, source_key)
@@ -960,7 +974,7 @@ Unit (pure, no database):
   proration (join, leave, lessons cancelled by the school, zero lessons);
   posting times at the boundary (`endsAt = now` posts); due dates across
   DST; `planChargeSync`, each row of §2.5; reposting keeps
-  `postedAt`/`dueDate`; `allocate` (including linked waivers: the waived line goes `WAIVED` while an older line stays overdue, a waiver larger than its line, a waiver on a voided line), status in first-match order, and overdue boundaries
+  `postedAt`/`dueDate`; `allocate` (including linked waivers: the waived line goes `WAIVED` while an older line stays overdue, a waiver larger than its line, a waiver whose line was repriced (follows `replacesChargeId` to the successor, which stays `WAIVED`; a higher new amount is partly waived), a waiver whose line was voided for good (`NO_LONGER_BILLABLE` / `NO_PRICE` → funds)), status in first-match order, and overdue boundaries
   (`dueDate = today` is not overdue); and output independent of input order.
 - `billing/rules.property.test.ts` on the realistic fixtures (20 teachers,
   60 groups, 15 rooms; seeded, with absences, replacements, reschedules,
@@ -972,6 +986,9 @@ Unit (pure, no database):
   - no makeup is ever charged
   - the allocation identity of §3.3 holds, with random linked and
     unlinked waivers
+  - waive a line, then reprice it (price edit, membership change,
+    school-cancelled lesson in a `PER_TERM` term), then sync: the
+    successor line is still waived and no other line's paid state changes
   - `PER_TERM` charges for full-term members equal the price exactly
 - `reports/rules.test.ts`: every column definition, ended-only, the range
   boundaries in the school's time zone, filters, sort order, and the
@@ -1004,17 +1021,17 @@ The e2e permission cases are CARM-74's scope.
 
 ## 11. Points the design spec (CARM-70) must agree on
 
-| #   | Point             | Rule here                                                                                                                                                                                                                                          |
-| --- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B1  | Price setup       | Prices are set **per term**, per course or group, with optional per-student overrides. The unit is per lesson or per term. There is _Copy prices from {term}_, a _Needs pricing_ list, and a change preview with the count and delta before saving |
-| B2  | Statement lines   | Lesson, term and adjustment lines, each with a paid / partially paid / unpaid state and a due date. Voided lines are shown to admins only, struck through, with the reason. Plus an _Upcoming this term_ section                                   |
-| B3  | Recording         | Amount, method, date received, optional reference and note. Refunds can link to a payment. The refund-over-credit warning needs an acknowledgement. "Edit" is void + new                                                                           |
-| B4  | Corrections       | Payments, refunds and adjustments are voided with a required reason. System charges have no void action; _Waive…_ is a negative adjustment linked to the line, allocated to it first (state `WAIVED` / partly waived, §3.3)                        |
-| B5  | Statuses          | `NOTHING_DUE`, `SETTLED`, `IN_CREDIT`, `DUE`, `OVERDUE`. "Paid online" is a future `provider` ≠ `MANUAL` with a `PENDING` / `FAILED` status; no UI flow in v1                                                                                      |
-| B6  | Student page      | Balance, status, next due date, active lines, payments and refunds. No notes, no void reasons, no admin names                                                                                                                                      |
-| B7  | Report filters    | Attendance: term/range, group, teacher, student. Teacher hours: term/range, teacher, group, plus a lesson-detail export. Revenue: term/range **only**. Outstanding: as of now, with group and status filters                                       |
-| B8  | Limits and states | Range ≤ 366 days; CSV > 50,000 rows refused with the count; range in the future = "until today"; attendance caption about reported absences; "figures reflect later corrections"                                                                   |
-| B9  | Money formatting  | Through next-intl currency formatting from decimal strings. The CSV uses `125.50` + a currency column, not localised                                                                                                                               |
+| #   | Point             | Rule here                                                                                                                                                                                                                                                              |
+| --- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | Price setup       | Prices are set **per term**, per course or group, with optional per-student overrides. The unit is per lesson or per term. There is _Copy prices from {term}_, a _Needs pricing_ list, and a change preview with the count and delta before saving                     |
+| B2  | Statement lines   | Lesson, term and adjustment lines, each with a paid / partially paid / unpaid / waived state (partly waived lines show the waived amount) and a due date. Voided lines are shown to admins only, struck through, with the reason. Plus an _Upcoming this term_ section |
+| B3  | Recording         | Amount, method, date received, optional reference and note. Refunds can link to a payment. The refund-over-credit warning needs an acknowledgement. "Edit" is void + new                                                                                               |
+| B4  | Corrections       | Payments, refunds and adjustments are voided with a required reason. System charges have no void action; _Waive…_ is a negative adjustment linked to the line, allocated to it first (state `WAIVED` / partly waived, §3.3)                                            |
+| B5  | Statuses          | `NOTHING_DUE`, `SETTLED`, `IN_CREDIT`, `DUE`, `OVERDUE`. "Paid online" is a future `provider` ≠ `MANUAL` with a `PENDING` / `FAILED` status; no UI flow in v1                                                                                                          |
+| B6  | Student page      | Balance, status, next due date, active lines, payments and refunds. No notes, no void reasons, no admin names                                                                                                                                                          |
+| B7  | Report filters    | Attendance: term/range, group, teacher, student. Teacher hours: term/range, teacher, group, plus a lesson-detail export. Revenue: term/range **only**. Outstanding: as of now, with group and status filters                                                           |
+| B8  | Limits and states | Range ≤ 366 days; CSV > 50,000 rows refused with the count; range in the future = "until today"; attendance caption about reported absences; "figures reflect later corrections"                                                                                       |
+| B9  | Money formatting  | Through next-intl currency formatting from decimal strings. The CSV uses `125.50` + a currency column, not localised                                                                                                                                                   |
 
 ## 12. Defaults proposed for the owner to confirm
 
