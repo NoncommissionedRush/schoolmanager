@@ -99,7 +99,7 @@ the group name (an ICU `select`, no extra type).
 | `REPLACEMENT_REVIEW_PENDING` | A student books a replacement (it is `AUTO_APPROVED` and enters the admin review queue)                                                                                                                                                           | Every admin of the school (audience `admin`)                                                                    | `count` (bookings since the item was last read, §2.5)                                                                                 | admin review queue           |
 | `TIMETABLE_PUBLISHED`        | `publishTerm` the first time for a term (`timetablePublishedAt` was null)                                                                                                                                                                         | Every non-archived teacher with a slot in the term; every student enrolled in a group with a slot in the term   | `term`, `termStart`, `termEnd`, `firstStartsAt` (the recipient's first lesson, null if none)                                          | timetable at `firstStartsAt` |
 | `TIMETABLE_CHANGED`          | A **bulk** action changes recipients' not-ended lessons (§2.3): `saveSlot`, `endSlot`, `deleteSlot`, `saveHoliday`, `deleteHoliday`, `regenerateLessons`, re-publish, `applyDraft` (FILL / REPLAN_FROM / teacher-only change)                     | Per recipient: whoever is effective teacher, regular teacher or attendee of an affected lesson, before or after | `term`, `added`, `cancelled`, `moved`, `teacherChanged`, `firstDate`, `lastDate`                                                      | timetable at `firstDate`     |
-| `CALENDAR_FEED_REVOKED`      | An admin revokes a user's calendar link (§5.1; only if the owner says yes to admin reset)                                                                                                                                                         | The user                                                                                                        | —                                                                                                                                     | calendar subscription page   |
+| `CALENDAR_FEED_REVOKED`      | An admin revokes a user's calendar link (§5.1; owner decision 2026-10-16)                                                                                                                                                                         | The user                                                                                                        | —                                                                                                                                     | calendar subscription page   |
 
 Not notified in v1 (deliberately):
 
@@ -428,10 +428,12 @@ forever.
 That is how a teacher's sick day reaches the substitute flow: the admin
 records it as a `DATE_UNAVAILABLE` rule (teacher availability) and the
 affected lessons appear here, each with _Find substitute_. The _Cover a
-teacher_ dialog's "Also mark {teacher} as away" (if the owner agrees) writes
+teacher_ dialog's "Also mark {teacher} as away" (ticked by default; owner decision 2026-10-16) writes
 one `DATE_UNAVAILABLE` row per date through the existing availability
 service (same validation, same audit), in its own transaction before the
-list loads. Nothing is assigned automatically.
+list loads. Nothing is assigned automatically. One substitute for several
+lessons at once is not in v1 (owner decision 2026-10-16): each lesson is
+assigned on its own.
 
 ### 3.8 Audit
 
@@ -476,7 +478,7 @@ The student's list (_Rate your teachers_) shows every teacher for whom only
   1,000 characters, trimmed, empty = null.
 - **Editing:** the student can change their own rating while the window
   is open (§4.1); after it closes it is read-only for them. Every write
-  re-checks `canRate`. **No delete** in v1 (owner question, CARM-63 §11 Q4);
+  re-checks `canRate`. **No delete** in v1 (owner decision 2026-10-16, CARM-63 §11 Q4);
   allowing it later is one action, no schema change.
 - **Admins can't edit** a rating. They can **hide** one (`hiddenAt`,
   `hiddenById`, e.g. abusive comment): hidden ratings are excluded from
@@ -540,7 +542,7 @@ revokedAt, lastUsedAt }`.
   **Reset** = set `revokedAt` on the active row and create a new one, in one
   transaction; the old link stops working at once. Audit
   `calendar_feed.created`, `calendar_feed.reset` (no token in the audit).
-- **Admin revoke** (only if the owner agrees, CARM-63 §11 Q6): from the
+- **Admin revoke** (owner decision 2026-10-16, CARM-63 §11 Q6): from the
   user's admin page an admin sets `revokedAt` on the active row and creates
   **no** new one (the admin must never see a user's link); the user gets
   `CALENDAR_FEED_REVOKED` and creates a new link themselves. Audit
@@ -832,9 +834,10 @@ token; feed of school A's token never returns school B's lessons.
 
 The e2e permission cases are CARM-67's scope (its issue lists them).
 
-## 8. Open points for the owner
+## 8. Owner decisions (2026-10-16)
 
-Defaults chosen here; each is one constant or one rule to change:
+The owner accepted every default proposed here (CARM-64, 2026-10-16). Each
+is still one constant or one rule to change later:
 
 1. **Rating threshold and window**: 3 attended lessons with the teacher in
    the term; open from half-term until 14 days after the term ends; one
@@ -849,6 +852,11 @@ Defaults chosen here; each is one constant or one rule to change:
 5. **Pick anyway**: an admin may confirm a teacher who doesn't teach the
    level, is unavailable or over their maximum, after acknowledging each
    warning; a teacher who is busy then can never be picked.
+6. **Cover a teacher** also marks the teacher as away on the covered dates
+   (§3.7); the checkbox is ticked by default. One substitute for several
+   lessons at once is not in v1.
+7. **Calendar feeds**: no admin feed in v1; admins can revoke a user's link
+   (`CALENDAR_FEED_REVOKED`, §5.1). Students can't delete a rating (§4.2).
 
 ## 9. Agreed with the design spec (CARM-63)
 
