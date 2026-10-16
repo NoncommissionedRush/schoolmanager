@@ -25,6 +25,8 @@ import type { LessonInfo } from "./types";
 export const SUBSTITUTE_RECORD_DAYS = 7;
 /** The admin's _Needs cover_ tab looks this far ahead (8 weeks). */
 export const NEEDS_COVER_DAYS = 56;
+/** Longest date range the _Needs cover_ / _Covered_ tabs load (about a term). */
+export const SUBSTITUTION_RANGE_MAX_DAYS = 92;
 /** `sameDay`: another lesson ends or starts within this many minutes. */
 export const SAME_DAY_GAP_MINUTES = 90;
 
@@ -561,3 +563,16 @@ export function lessonsNeedingCover(
 /** Local date of an instant, for grouping lists by day. */
 export const localDateOf = (instant: Date, timeZone: string): IsoDate =>
   toZonedDateTime(instant, timeZone).date;
+
+/**
+ * The date filter of the substitutions page: swapped if reversed, and `to`
+ * capped so the range spans at most `SUBSTITUTION_RANGE_MAX_DAYS` days.
+ */
+export function clampSubstitutionRange(
+  from: IsoDate,
+  to: IsoDate,
+): { from: IsoDate; to: IsoDate } {
+  if (to < from) [from, to] = [to, from];
+  const last = addDays(from, SUBSTITUTION_RANGE_MAX_DAYS - 1);
+  return { from, to: to > last ? last : to };
+}

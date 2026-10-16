@@ -22,6 +22,7 @@ import {
   type Calendar,
   checkSubstitute,
   checkSubstituteRemoval,
+  clampSubstitutionRange,
   isoWeekOf,
   type IsoDate,
   type LessonInfo,
@@ -703,10 +704,46 @@ const filterWhere = (
 });
 
 /**
+ * The §3.7 rule over the dates `range` (capped, never before now): which
+ * lessons need cover, and the instants searched.
+ */
+async function needsCoverIn(
+  tx: Tx,
+  range: { from: IsoDate; to: IsoDate },
+  now: Date,
+): Promise<{ needs: NeedsCover[]; from: Date; to: Date }> {
+  const { timezone } = await tx.school.findFirstOrThrow({
+    select: { timezone: true },
+  });
+  const dates = clampSubstitutionRange(range.from, range.to);
+  const from = new Date(
+    Math.max(now.getTime(), zonedTimeToUtc(dates.from, 0, timezone).getTime()),
+  );
+  const to = zonedTimeToUtc(addDays(dates.to, 1), 0, timezone);
+  if (to <= from) return { needs: [], from, to };
+  const { context } = await loadSchedulingContext(
+    tx,
+    toZonedDateTime(from, timezone).date,
+    dates.to,
+  );
+  const teachers = await loadTeachers(tx);
+  const archived = new Set(teachers.filter((t) => t.archived).map((t) => t.id));
+  const needs = lessonsNeedingCover(
+    buildCalendar(context),
+    from,
+    to,
+    archived,
+    now,
+  );
+  return { needs, from, to };
+}
+
+/**
  * _Needs cover_ (§3.7): lessons in the next 8 weeks (or the filter's dates,
- * never before now) that haven't started and whose effective teacher can't
- * teach them. With `allOfTeacher` (Cover a teacher), every lesson of the
- * filtered teacher in the range is listed too.
+ * never before now, at most `SUBSTITUTION_RANGE_MAX_DAYS`) that haven't
+ * started and whose effective teacher can't teach them. With `allOfTeacher`
+ * (Cover a teacher), every lesson of the filtered teacher in the range is
+ * listed too.
  */
 export async function listNeedsCover(
   db: SchoolDb,
@@ -714,33 +751,8 @@ export async function listNeedsCover(
   now: Date,
 ): Promise<SubstitutionRow[]> {
   return db.$transaction(async (tx) => {
-    const { timezone } = await tx.school.findFirstOrThrow({
-      select: { timezone: true },
-    });
-    const from = new Date(
-      Math.max(
-        now.getTime(),
-        zonedTimeToUtc(filters.from, 0, timezone).getTime(),
-      ),
-    );
-    const to = zonedTimeToUtc(addDays(filters.to, 1), 0, timezone);
+    const { needs, from, to } = await needsCoverIn(tx, filters, now);
     if (to <= from) return [];
-    const { context } = await loadSchedulingContext(
-      tx,
-      toZonedDateTime(from, timezone).date,
-      filters.to,
-    );
-    const teachers = await loadTeachers(tx);
-    const archived = new Set(
-      teachers.filter((t) => t.archived).map((t) => t.id),
-    );
-    const needs = lessonsNeedingCover(
-      buildCalendar(context),
-      from,
-      to,
-      archived,
-      now,
-    );
     const byLesson = new Map(needs.map((n) => [n.lessonId, n]));
     const extra =
       filters.allOfTeacher && filters.teacherId && isUuid(filters.teacherId)
@@ -815,14 +827,15 @@ export async function listCovered(
   const { timezone } = await db.school.findFirstOrThrow({
     select: { timezone: true },
   });
+  const dates = clampSubstitutionRange(filters.from, filters.to);
   const rows = await db.lesson.findMany({
     where: {
       substituteTeacherId: { not: null },
       status: { not: "CANCELLED" },
       endsAt: { gt: now },
       startsAt: {
-        gte: zonedTimeToUtc(filters.from, 0, timezone),
-        lt: zonedTimeToUtc(addDays(filters.to, 1), 0, timezone),
+        gte: zonedTimeToUtc(dates.from, 0, timezone),
+        lt: zonedTimeToUtc(addDays(dates.to, 1), 0, timezone),
       },
       ...filterWhere(filters),
     },
@@ -872,27 +885,34 @@ export async function listPastSubstitutions(
   );
 }
 
-/** Tab counts: lessons needing cover in the next 8 weeks, and covered ones. */
-export async function substitutionCounts(
+/**
+ * How many lessons need cover in the next 8 weeks: the _Needs cover_ tab
+ * without filters. Only the rule runs, no rows are loaded. The dashboard
+ * and the tab label read it through `cachedNeedsCoverCount` (./cache.ts).
+ */
+export async function countNeedsCover(
   db: SchoolDb,
   now: Date,
-): Promise<{ needsCover: number; covered: number }> {
-  const { timezone } = await db.school.findFirstOrThrow({
-    select: { timezone: true },
+): Promise<number> {
+  return db.$transaction(async (tx) => {
+    const { timezone } = await tx.school.findFirstOrThrow({
+      select: { timezone: true },
+    });
+    const today = toZonedDateTime(now, timezone).date;
+    const range = { from: today, to: addDays(today, NEEDS_COVER_DAYS) };
+    return (await needsCoverIn(tx, range, now)).needs.length;
   });
-  const today = toZonedDateTime(now, timezone).date;
-  const range = { from: today, to: addDays(today, NEEDS_COVER_DAYS) };
-  const [needs, covered] = await Promise.all([
-    listNeedsCover(db, range, now),
-    db.lesson.count({
-      where: {
-        substituteTeacherId: { not: null },
-        status: { not: "CANCELLED" },
-        endsAt: { gt: now },
-      },
-    }),
-  ]);
-  return { needsCover: needs.length, covered };
+}
+
+/** _Covered_ tab count: lessons with a substitute that haven't ended. */
+export function countCovered(db: SchoolDb, now: Date): Promise<number> {
+  return db.lesson.count({
+    where: {
+      substituteTeacherId: { not: null },
+      status: { not: "CANCELLED" },
+      endsAt: { gt: now },
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

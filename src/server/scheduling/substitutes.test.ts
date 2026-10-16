@@ -4,6 +4,7 @@ import { buildCalendar } from "./conflicts";
 import {
   checkSubstitute,
   checkSubstituteRemoval,
+  clampSubstitutionRange,
   isoWeekOf,
   lessonPhase,
   lessonsNeedingCover,
@@ -632,5 +633,33 @@ describe("lessonsNeedingCover (§3.7)", () => {
         (n) => n.lessonId,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("clampSubstitutionRange", () => {
+  it("keeps a range up to the cap", () => {
+    expect(clampSubstitutionRange("2026-10-19", "2026-12-14")).toEqual({
+      from: "2026-10-19",
+      to: "2026-12-14",
+    });
+    // 92 days: 19 Oct … 18 Jan.
+    expect(clampSubstitutionRange("2026-10-19", "2027-01-18")).toEqual({
+      from: "2026-10-19",
+      to: "2027-01-18",
+    });
+  });
+
+  it("caps a longer range at SUBSTITUTION_RANGE_MAX_DAYS", () => {
+    expect(clampSubstitutionRange("2026-10-19", "2036-10-19")).toEqual({
+      from: "2026-10-19",
+      to: "2027-01-18",
+    });
+  });
+
+  it("swaps a reversed range first", () => {
+    expect(clampSubstitutionRange("2026-12-14", "2026-10-19")).toEqual({
+      from: "2026-10-19",
+      to: "2026-12-14",
+    });
   });
 });

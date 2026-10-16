@@ -16,6 +16,7 @@ import type { SchoolDb } from "@/server/timetable/service";
 
 import {
   assignSubstitute,
+  countNeedsCover,
   listCovered,
   listNeedsCover,
   listPastSubstitutions,
@@ -277,6 +278,18 @@ describe.skipIf(!url)("substitutes (database)", () => {
       NOW,
     );
     expect(all.map((r) => r.lessonId)).toEqual([lessons.tue, lessons.wed]);
+  });
+
+  it("counts needs cover without loading rows, and caps the date range", async () => {
+    expect(await countNeedsCover(db, NOW)).toBe(1);
+    // Ten years asked for: capped to SUBSTITUTION_RANGE_MAX_DAYS (the cap
+    // itself is unit-tested in scheduling/substitutes.test.ts).
+    const rows = await listNeedsCover(
+      db,
+      { from: "2026-10-19", to: "2036-10-19" },
+      NOW,
+    );
+    expect(rows.map((r) => r.lessonId)).toEqual([lessons.tue]);
   });
 
   it("the sheet ranks the candidates and previews who will be notified", async () => {

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
 import { runAdminAction } from "@/server/admin/context";
 import { setPasswordSchema } from "@/server/admin/people/schema";
@@ -12,6 +12,7 @@ import {
 import { type ActionResult, msg, ok } from "@/server/admin/result";
 import { assertIds, schoolToday } from "@/server/admin/shared";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
+import { needsCoverTag } from "@/server/substitutes/cache";
 
 /** Shared by teachers, students and admins (§5.3, §5.4). */
 
@@ -45,6 +46,8 @@ export async function archivePersonAction(userId: string) {
       userId,
       schoolToday(scope.viewer.school.timezone),
     );
+    // An archived teacher's lessons need cover (phase5-rules.md §3.7).
+    updateTag(needsCoverTag(scope.viewer.school.id));
     revalidatePath("/admin", "layout");
     return ok({ name: result.user.name });
   });
@@ -54,6 +57,7 @@ export async function restorePersonAction(userId: string) {
   return runAdminAction(async (scope) => {
     assertIds(userId);
     const user = await restorePerson(scope, userId);
+    updateTag(needsCoverTag(scope.viewer.school.id));
     revalidatePath("/admin", "layout");
     return ok(undefined, msg("common.toast.restored", { name: user.name }));
   });

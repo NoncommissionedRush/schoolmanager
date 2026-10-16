@@ -10,14 +10,16 @@ import { adminContext } from "@/server/admin/context";
 import { isUuid } from "@/server/lessons/access";
 import {
   addDays,
+  clampSubstitutionRange,
   NEEDS_COVER_DAYS,
   toZonedDateTime,
 } from "@/server/scheduling";
+import { cachedNeedsCoverCount } from "@/server/substitutes/cache";
 import {
+  countCovered,
   listCovered,
   listNeedsCover,
   listPastSubstitutions,
-  substitutionCounts,
 } from "@/server/substitutes/service";
 import { parseIsoDateParam } from "@/server/timetable/week";
 
@@ -47,12 +49,12 @@ async function Substitutions({
     ? (tabParam as Tab)
     : "needsCover";
   const today = toZonedDateTime(now, viewer.school.timezone).date;
-  let from = parseIsoDateParam(first(params.from), today);
-  let to = parseIsoDateParam(
-    first(params.to),
-    addDays(today, NEEDS_COVER_DAYS),
+  const defaultTo = addDays(today, NEEDS_COVER_DAYS);
+  // At most SUBSTITUTION_RANGE_MAX_DAYS; the date fields show the cap.
+  const { from, to } = clampSubstitutionRange(
+    parseIsoDateParam(first(params.from), today),
+    parseIsoDateParam(first(params.to), defaultTo),
   );
-  if (to < from) [from, to] = [to, from];
   const teacherId = isUuid(first(params.teacher))
     ? first(params.teacher)
     : undefined;
@@ -87,14 +89,23 @@ async function Substitutions({
     : (currentTerm?.id ?? null);
 
   const filters = { from, to, teacherId, levelId };
-  const [rows, counts] = await Promise.all([
+  // The unfiltered Needs cover list is the count: don't compute it twice.
+  const listIsCount =
+    tab === "needsCover" &&
+    from === today &&
+    to === defaultTo &&
+    !teacherId &&
+    !levelId;
+  const [rows, needsCover, covered] = await Promise.all([
     tab === "needsCover"
       ? listNeedsCover(db, { ...filters, allOfTeacher }, now)
       : tab === "covered"
         ? listCovered(db, filters, now)
         : listPastSubstitutions(db, { termId, teacherId, levelId }, now),
-    substitutionCounts(db, now),
+    listIsCount ? null : cachedNeedsCoverCount(viewer.school.id),
+    countCovered(db, now),
   ]);
+  const counts = { needsCover: needsCover ?? rows.length, covered };
 
   const tabHref = (key: Tab) => {
     const next = new URLSearchParams();
