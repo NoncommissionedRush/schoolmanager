@@ -53,6 +53,12 @@ const adminPages = (ids: SchoolIds) => [
   "/admin/absences?tab=replacements",
   `/admin/timetable?week=${WEEK}`,
   `/admin/timetable/edit?term=${ids.term}`,
+  // Phase 5 (CARM-65, CARM-66)
+  "/admin/notifications",
+  "/admin/substitutions",
+  `/admin/substitutions?teacher=${ids.teacher}`,
+  "/admin/ratings",
+  `/admin/ratings/${ids.teacher}`,
 ];
 
 const FORBIDDEN = "You don't have access to this page";
@@ -344,11 +350,24 @@ test.describe("role boundaries › admin area", () => {
     browser,
   }) => {
     const teacher = await signedIn(browser, LOGINS.A.teacher, "teacher");
-    for (const path of ["/student", `/student/timetable?week=${WEEK}`]) {
+    for (const path of [
+      "/student",
+      `/student/timetable?week=${WEEK}`,
+      "/student/notifications",
+      "/student/calendar",
+      "/student/ratings",
+      `/student/ratings/${a.teacher}`,
+    ]) {
       expectForbidden(await serverResponse(teacher, path), path);
     }
     const student = await signedIn(browser, LOGINS.A.student, "student");
-    for (const path of ["/teacher", `/teacher/timetable?week=${WEEK}`]) {
+    for (const path of [
+      "/teacher",
+      `/teacher/timetable?week=${WEEK}`,
+      "/teacher/notifications",
+      "/teacher/calendar",
+      "/teacher/substitutions",
+    ]) {
       expectForbidden(await serverResponse(student, path), path);
     }
   });

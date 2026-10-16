@@ -615,7 +615,8 @@ export function crossSchoolCases(
       ],
     },
     // Ratings and calendar links (CARM-66). The seed has no ratings, so the
-    // rating id is a guessed one; the Phase 5 suite (CARM-67) adds more.
+    // rating id is a guessed one; phase5.spec.ts (CARM-67) aims at real
+    // ratings and links.
     {
       name: "hide a rating",
       action: [RATINGS, "setRatingHiddenAction"],
