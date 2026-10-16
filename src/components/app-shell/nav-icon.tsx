@@ -1,6 +1,7 @@
 import {
   BookOpen,
   CalendarDays,
+  CalendarSync,
   CalendarX,
   ChartColumn,
   ClipboardList,
@@ -41,6 +42,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   settings: Settings,
   "notebook-pen": NotebookPen,
   "clipboard-list": ClipboardList,
+  "calendar-sync": CalendarSync,
 };
 
 export function NavIconGlyph({

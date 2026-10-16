@@ -1,0 +1,76 @@
+{
+  "title": "Calendar subscription",
+  "intro": "See your lessons in Google Calendar, Apple Calendar or Outlook. Your calendar updates by itself when lessons change.",
+  "create": "Create my calendar link",
+  "creating": "Creating…",
+  "link": "Your calendar link",
+  "copy": "Copy link",
+  "copied": "Copied",
+  "copiedStatus": "Link copied.",
+  "copyFallback": "Press Ctrl+C (⌘C on Mac) to copy.",
+  "subscribe": "Subscribe on this device",
+  "secret": "Anyone with this link can see your lessons. Don't share it. If it leaks, reset it.",
+  "createdOn": "Created {date}",
+  "contents": {
+    "title": "What's in it",
+    "range": "Your lessons from 30 days ago to 6 months ahead",
+    "notAttending": "Lessons you reported you'll miss, marked \"Not attending\"",
+    "cancelled": "Cancelled lessons, marked \"Cancelled\"",
+    "substitutes": "Substitutes: who teaches each lesson"
+  },
+  "howTo": {
+    "title": "How to add it",
+    "googleTitle": "Google Calendar",
+    "appleTitle": "Apple Calendar",
+    "outlookTitle": "Outlook",
+    "google": "Google Calendar: copy the link. On a computer, open Google Calendar, next to \"Other calendars\" click +, choose \"From URL\", paste the link and click \"Add calendar\".",
+    "apple": "Apple Calendar: on your iPhone or Mac, tap \"Subscribe on this device\" and confirm.",
+    "outlook": "Outlook: copy the link. In Outlook on the web, go to \"Add calendar\", choose \"Subscribe from web\", paste the link and save."
+  },
+  "refreshNote": "Calendar apps check for changes every few hours, so a change can take a while to show up.",
+  "resetLink": "Reset link…",
+  "reset": {
+    "title": "Reset your calendar link?",
+    "description": "Your current link stops working right away. Calendars that use it will stop updating, so you'll need to add the new link to them.",
+    "keep": "Keep current link",
+    "confirm": "Reset link",
+    "done": "Calendar link reset.",
+    "addNew": "New link created. Add it to your calendar apps."
+  },
+  "resetting": "Resetting…",
+  "error": {
+    "create": "Couldn't create your calendar link. Try again.",
+    "reset": "Couldn't reset your calendar link. Your current link still works."
+  },
+  "revokedByAdmin": "The school turned off your previous link. Create a new one to keep your calendar up to date.",
+  "admin": {
+    "title": "Calendar link",
+    "active": "{name} has an active calendar link.",
+    "revokeButton": "Turn off calendar link…",
+    "revoke": {
+      "title": "Turn off {name}'s calendar link?",
+      "description": "Their calendar apps stop updating. They can create a new link themselves.",
+      "confirm": "Turn off link",
+      "cancel": "Cancel"
+    },
+    "revoked": "Calendar link turned off."
+  },
+  "calendarName": "{school} — my lessons",
+  "event": {
+    "substituteFor": "{group} (substitute: {substitute})",
+    "substituting": "Substituting: {group}",
+    "coveredBy": "Covered by {substitute}: {group}",
+    "cancelled": "Cancelled: {group}",
+    "notAttending": "Not attending: {group}",
+    "teacher": "Teacher: {teacher}",
+    "insteadOf": "Teacher: {substitute}, instead of {teacher}",
+    "for": "For {teacher}",
+    "reason": "Reason: {reason}",
+    "level": "Level: {level}",
+    "stillRuns": "The group lesson still runs.",
+    "type": {
+      "GROUP": "Group lesson",
+      "ONE_ON_ONE": "1-on-1 lesson"
+    }
+  }
+}

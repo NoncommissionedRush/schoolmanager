@@ -12,7 +12,8 @@ describe("navigationFor", () => {
     // The admin data screens (CARM-24) and the timetables (CARM-25) ship
     // ahead of the rest of P1; the admin lesson list (CARM-36) ahead of P2,
     // absences (CARM-42) ahead of the rest of P3, Assign teachers (CARM-56)
-    // ahead of the rest of P4, Substitutions (CARM-65) ahead of P5.
+    // ahead of the rest of P4, Substitutions (CARM-65) and Ratings (CARM-66)
+    // ahead of P5.
     expect(navigationFor("ADMIN", 0).map((i) => i.href)).toEqual([
       "/admin",
       "/admin/timetable",
@@ -24,6 +25,7 @@ describe("navigationFor", () => {
       "/admin/teachers",
       "/admin/groups",
       "/admin/levels",
+      "/admin/ratings",
       "/admin/settings",
     ]);
     // The teacher lesson log (CARM-35) ships ahead of the rest of P2.
@@ -39,6 +41,8 @@ describe("navigationFor", () => {
       "/student/timetable",
       "/student/homework",
       "/student/absences",
+      "/student/ratings",
+      "/student/calendar",
     ]);
   });
 
@@ -54,6 +58,7 @@ describe("navigationFor", () => {
       "teachers",
       "courses",
       "levels",
+      "ratings",
       "settings",
     ]);
   });

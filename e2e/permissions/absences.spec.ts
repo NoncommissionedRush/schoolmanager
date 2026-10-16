@@ -40,6 +40,7 @@ import {
 // one in a response that shouldn't have it is the leak check.
 
 const STUDENT = "src/app/student/absences/actions.ts";
+const RATINGS = "src/app/student/ratings/actions.ts";
 const ADMIN = "src/app/admin/absences/actions.ts";
 const SETTINGS = "src/app/admin/settings/absences/actions.ts";
 const NOT_FOUND = "common.error.notFound";
@@ -248,6 +249,19 @@ function studentCases(target: {
       name: "reschedule with the credit",
       action: [STUDENT, "rescheduleLessonAction"],
       args: [{ creditId: target.credit, startsAt }],
+    },
+    // CARM-66: no teacher or term by those ids; CARM-67 adds real cases.
+    {
+      name: "rate a teacher",
+      action: [RATINGS, "saveRatingAction"],
+      args: [
+        {
+          teacherId: target.lesson,
+          termId: target.lesson,
+          score: 5,
+          comment: null,
+        },
+      ],
     },
   ] as const;
 }

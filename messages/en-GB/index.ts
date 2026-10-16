@@ -6,6 +6,7 @@ import admins from "./admins.json";
 import auth from "./auth.json";
 import availability from "./availability.json";
 import bookings from "./bookings.json";
+import calendarFeed from "./calendarFeed.json";
 import common from "./common.json";
 import courses from "./courses.json";
 import credits from "./credits.json";
@@ -24,6 +25,7 @@ import metadata from "./metadata.json";
 import nav from "./nav.json";
 import notifications from "./notifications.json";
 import people from "./people.json";
+import ratings from "./ratings.json";
 import replacements from "./replacements.json";
 import reschedule from "./reschedule.json";
 import rooms from "./rooms.json";
@@ -44,6 +46,7 @@ const messages = {
   auth,
   availability,
   bookings,
+  calendarFeed,
   common,
   courses,
   credits,
@@ -62,6 +65,7 @@ const messages = {
   nav,
   notifications,
   people,
+  ratings,
   replacements,
   reschedule,
   rooms,

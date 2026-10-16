@@ -264,9 +264,10 @@ test.describe("replacements › cancel, book, teacher sees, admin overrides", ()
         [{ lessonId: ids.missed, startsAt: new Date().toISOString() }],
       ],
     ];
-    // Every student action is listed here.
+    // Every absence action is listed here. The rating action (CARM-66)
+    // is covered by the Phase 5 permission suite (CARM-67).
     expect(calls.map(([name]) => `${FILE}#${name}`).sort()).toEqual(
-      serverActionsIn("src/app/student").sort(),
+      serverActionsIn("src/app/student/absences").sort(),
     );
     for (const [email, home] of [
       [DEMO_LOGINS.teacher, "/teacher"],

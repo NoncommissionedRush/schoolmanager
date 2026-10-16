@@ -10,18 +10,25 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { loadLatestHomework } from "@/server/lessons/student";
 import { studentContext } from "@/server/lessons/student-context";
+import { loadStudentRatings } from "@/server/ratings/student";
 import { loadStudentCreditSummary } from "@/server/replacements/views";
+import { RateTeacherCard } from "@/components/ratings/rate-teacher-card";
 
 export default async function StudentHomePage() {
   const { viewer, db, scope } = await studentContext();
   const t = await getTranslations("dashboard.student");
   const now = new Date();
-  const [latest, credits] = await Promise.all([
+  const [latest, credits, ratings] = await Promise.all([
     loadLatestHomework(db, scope, now, viewer.school.timezone),
     scope.studentId
       ? loadStudentCreditSummary(db, scope.studentId, now)
       : { count: 0, soonest: null },
+    loadStudentRatings(db, viewer.userId, now, viewer.school.timezone),
   ]);
+  // The first teacher the student can rate and hasn't (design §6.3).
+  const toRate = ratings.current
+    .flatMap((term) => term.cards.map((card) => ({ term: term.term.id, card })))
+    .find(({ card }) => card.state === "open");
   // Single column at every width (mobile-first, §7.4).
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 md:gap-6">
@@ -34,6 +41,12 @@ export default async function StudentHomePage() {
         />
       ) : (
         <>
+          {toRate && (
+            <RateTeacherCard
+              teacher={toRate.card.teacherName}
+              href={`/student/ratings/${toRate.card.teacherId}?term=${toRate.term}`}
+            />
+          )}
           {credits.count > 0 && <CreditsCard {...credits} />}
           <LatestHomeworkCard items={latest} />
         </>

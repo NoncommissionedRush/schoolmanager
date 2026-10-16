@@ -388,13 +388,16 @@ test("the cases cover every teacher server action; students have none", () => {
   // Students write no lesson records (lessons.md §2). Their only actions
   // are absences, bookings and reschedules (absences.md §5, CARM-42/43),
   // which take no log, homework or note; the Phase 3 suite (CARM-44)
-  // covers them.
+  // covers them. Their rating action (CARM-66) writes only their own
+  // rating; the Phase 5 suite (CARM-67) covers it.
   expect(serverActionsIn("src/app/student").sort()).toEqual([
     "src/app/student/absences/actions.ts#bookReplacementAction",
     "src/app/student/absences/actions.ts#cancelBookingAction",
     "src/app/student/absences/actions.ts#cancelLessonAction",
     "src/app/student/absences/actions.ts#loadRescheduleSheetAction",
     "src/app/student/absences/actions.ts#rescheduleLessonAction",
+    // A rating has no lesson record either (CARM-66).
+    "src/app/student/ratings/actions.ts#saveRatingAction",
   ]);
 });
 
