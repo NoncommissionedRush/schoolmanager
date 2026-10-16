@@ -137,6 +137,7 @@
     "description": "{teacher} teaches this lesson again.",
     "anyway": "Remove anyway",
     "regularBusy": "{teacher} is teaching {otherGroup} at this time, so the substitute can't be removed. Pick another substitute instead.",
+    "regularArchived": "{teacher} is archived and can't teach this lesson again, so the substitute can't be removed. Pick another substitute instead, or change the slot's teacher.",
     "findAnother": "Find another substitute",
     "close": "Close",
     "stillAway": "{teacher} has a warning at this time. The lesson may need cover again:",

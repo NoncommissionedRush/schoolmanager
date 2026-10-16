@@ -26,8 +26,9 @@ import { useLessonDay, useNotifyPreviewText } from "./substitute-sheet";
 
 /**
  * Remove a substitute (design §5.4). Refused while the regular teacher
- * teaches another lesson then (`REGULAR_TEACHER_BUSY`); their other
- * warnings need "Remove anyway". The server re-checks on confirm.
+ * teaches another lesson then (`REGULAR_TEACHER_BUSY`) or is archived
+ * (`REGULAR_TEACHER_ARCHIVED`, phase5-rules.md §3.5); their other warnings
+ * need "Remove anyway". The server re-checks on confirm.
  */
 export function RemoveSubstituteDialog({
   open,
@@ -51,7 +52,7 @@ export function RemoveSubstituteDialog({
   remove: NonNullable<SubstituteSheet["remove"]>;
   expected: SubstituteSheet["expected"];
   onRemoved?: () => void;
-  /** Offered when the regular teacher is busy. */
+  /** Offered when the regular teacher is busy or archived. */
   onFindAnother?: () => void;
 }) {
   const t = useTranslations("substitutes");
@@ -60,7 +61,9 @@ export function RemoveSubstituteDialog({
   const reasonText = useReasonText();
   const notifyText = useNotifyPreviewText();
   const [acknowledged, setAcknowledged] = useState(false);
-  const [error, setError] = useState<"changed" | "error" | "busy" | null>(null);
+  const [error, setError] = useState<
+    "changed" | "error" | "busy" | "archived" | null
+  >(null);
   const [pending, startTransition] = useTransition();
   const date = day(lesson.startsAt);
 
@@ -89,6 +92,8 @@ export function RemoveSubstituteDialog({
         router.refresh();
       } else if (status === "regularBusy") {
         setError("busy");
+      } else if (status === "regularArchived") {
+        setError("archived");
       } else if (status === "changed" || status === "lessonRefused") {
         setError("changed");
       } else {
@@ -96,7 +101,10 @@ export function RemoveSubstituteDialog({
       }
     });
 
-  const busy = remove.refused || error === "busy";
+  const archived =
+    remove.refusal === "REGULAR_TEACHER_ARCHIVED" || error === "archived";
+  // Either refusal: no confirm, only "Find another substitute".
+  const busy = remove.refused || error === "busy" || archived;
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -109,19 +117,21 @@ export function RemoveSubstituteDialog({
             })}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            {busy
-              ? t("remove.regularBusy", {
-                  teacher: lesson.regular,
-                  otherGroup: remove.otherGroup ?? "",
-                })
-              : [
-                  t("remove.description", { teacher: lesson.regular }),
-                  notifyText(
-                    remove.notify,
-                    lesson.groupName,
-                    lesson.phase === "ended",
-                  ),
-                ].join(" ")}
+            {archived
+              ? t("remove.regularArchived", { teacher: lesson.regular })
+              : busy
+                ? t("remove.regularBusy", {
+                    teacher: lesson.regular,
+                    otherGroup: remove.otherGroup ?? "",
+                  })
+                : [
+                    t("remove.description", { teacher: lesson.regular }),
+                    notifyText(
+                      remove.notify,
+                      lesson.groupName,
+                      lesson.phase === "ended",
+                    ),
+                  ].join(" ")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {!busy && remove.reasons.length > 0 && (

@@ -471,7 +471,26 @@ describe("checkSubstituteRemoval (§3.5)", () => {
     );
     expect(check).toMatchObject({
       refused: true,
+      refusal: "REGULAR_TEACHER_BUSY",
       otherGroup: "Group g2",
+      reasons: [],
+    });
+  });
+
+  it("refuses when the regular teacher is archived, before anything else", () => {
+    const covered = { ...L, substituteTeacherId: "t2" };
+    const other = lessonAt("O", "2026-10-13", "10:00", "11:00", {
+      groupId: "g2",
+      teacherId: "t1",
+      roomId: "r2",
+    });
+    const calendar = buildCalendar(ctx({ lessons: [covered, other] }));
+    expect(
+      checkSubstituteRemoval(calendar, covered, { regularArchived: true }),
+    ).toEqual({
+      refused: true,
+      refusal: "REGULAR_TEACHER_ARCHIVED",
+      otherGroup: null,
       reasons: [],
     });
   });
@@ -498,6 +517,7 @@ describe("checkSubstituteRemoval (§3.5)", () => {
       covered,
     );
     expect(check.refused).toBe(false);
+    expect(check.refusal).toBeNull();
     expect(check.reasons).toMatchObject([
       {
         code: "UNAVAILABLE_ON_DATE",

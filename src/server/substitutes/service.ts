@@ -29,6 +29,7 @@ import {
   lessonsNeedingCover,
   NEEDS_COVER_DAYS,
   type NeedsCover,
+  type RemoveCheck,
   SUBSTITUTE_RECORD_DAYS,
   substituteLessonReasons,
   type SubstituteLessonReasonCode,
@@ -263,6 +264,7 @@ export type SubstituteSheet = {
   /** Removing the current substitute, if there is one. */
   remove: {
     refused: boolean;
+    refusal: RemoveCheck["refusal"];
     otherGroup: string | null;
     reasons: SubstituteReason[];
     notify: NotifyPreview;
@@ -333,9 +335,12 @@ export async function loadSubstituteSheet(
     }));
     let remove: SubstituteSheet["remove"] = null;
     if (current && facts) {
-      const check = checkSubstituteRemoval(calendar, lesson);
+      const check = checkSubstituteRemoval(calendar, lesson, {
+        regularArchived: regular.archived,
+      });
       remove = {
         refused: check.refused,
+        refusal: check.refusal,
         otherGroup: check.otherGroup,
         reasons: check.reasons,
         notify: preview(
@@ -411,7 +416,9 @@ export type SubstituteActionResult =
   /** Overridable reasons that need ticking first. */
   | { status: "unacknowledged"; reasons: SubstituteReason[] }
   /** Remove only: the regular teacher teaches another lesson then. */
-  | { status: "regularBusy"; otherGroup: string | null };
+  | { status: "regularBusy"; otherGroup: string | null }
+  /** Remove only: the regular teacher is archived (§3.3 rule 3). */
+  | { status: "regularArchived" };
 
 async function inLock<T>(db: SchoolDb, fn: (tx: Tx) => Promise<T>) {
   return db.$transaction(async (tx) => {
@@ -527,8 +534,8 @@ export async function assignSubstitute(
 
 /**
  * Removes the lesson's substitute: the regular teacher teaches it again
- * (§3.5). Refused while they teach another lesson then; their other
- * teacher-typed conflicts need acknowledging.
+ * (§3.5). Refused when they are archived or teach another lesson then;
+ * their other teacher-typed conflicts need acknowledging.
  */
 export async function removeSubstitute(
   db: SchoolDb,
@@ -549,7 +556,13 @@ export async function removeSubstitute(
     if (lessonReasons.length > 0) {
       return { status: "lessonRefused", reasons: lessonReasons };
     }
-    const check = checkSubstituteRemoval(calendar, lesson);
+    const regular = teachers.find((t) => t.id === lesson.teacherId);
+    const check = checkSubstituteRemoval(calendar, lesson, {
+      regularArchived: regular?.archived ?? false,
+    });
+    if (check.refusal === "REGULAR_TEACHER_ARCHIVED") {
+      return { status: "regularArchived" };
+    }
     if (check.refused) {
       return { status: "regularBusy", otherGroup: check.otherGroup };
     }

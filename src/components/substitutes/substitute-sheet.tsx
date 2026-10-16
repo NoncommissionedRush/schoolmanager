@@ -311,6 +311,7 @@ function SheetBody({
       case "refused":
       case "unacknowledged":
       case "regularBusy":
+      case "regularArchived":
         setProblem({ kind: "stale", name });
         setSelected(null);
         setAcknowledged(false);

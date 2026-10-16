@@ -434,9 +434,14 @@ export function suggestSubstitutes(
 
 /** §3.5 Remove: the regular teacher checked as the one teaching again. */
 export type RemoveCheck = {
-  /** `REGULAR_TEACHER_BUSY`: they teach another lesson then. */
+  /** Removing is refused (`refusal` says why). */
   refused: boolean;
-  /** That lesson's group, for the dialog. */
+  /**
+   * `REGULAR_TEACHER_ARCHIVED`: they no longer teach (§3.3 rule 3);
+   * `REGULAR_TEACHER_BUSY`: they teach another lesson then.
+   */
+  refusal: "REGULAR_TEACHER_ARCHIVED" | "REGULAR_TEACHER_BUSY" | null;
+  /** The other lesson's group when busy, for the dialog. */
   otherGroup: string | null;
   /** Other teacher-typed conflicts of the regular teacher: overridable. */
   reasons: SubstituteReason[];
@@ -445,7 +450,16 @@ export type RemoveCheck = {
 export function checkSubstituteRemoval(
   calendar: Calendar,
   lesson: LessonInfo,
+  { regularArchived = false }: { regularArchived?: boolean } = {},
 ): RemoveCheck {
+  if (regularArchived) {
+    return {
+      refused: true,
+      refusal: "REGULAR_TEACHER_ARCHIVED",
+      otherGroup: null,
+      reasons: [],
+    };
+  }
   const { timeZone } = calendar.context.school;
   const weekday = isoWeekday(toZonedDateTime(lesson.startsAt, timeZone).date);
   const conflicts = teacherConflicts(calendar, lesson, null);
@@ -474,6 +488,7 @@ export function checkSubstituteRemoval(
   const busy = reasons.find((r) => r.code === "BUSY");
   return {
     refused: busy !== undefined,
+    refusal: busy ? "REGULAR_TEACHER_BUSY" : null,
     otherGroup: busy ? String(busy.params.otherGroup ?? "") : null,
     reasons: reasons.filter((r) => r.code !== "BUSY"),
   };
