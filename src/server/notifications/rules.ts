@@ -175,6 +175,12 @@ export type NotificationEvent =
       type: "TIMETABLE_CHANGED";
       term: TermFacts;
       recipients: readonly ChangeSummary[];
+    }
+  | {
+      /** An admin turned a user's calendar link off (§5.1). */
+      type: "CALENDAR_FEED_REVOKED";
+      userId: string;
+      audience: "teacher" | "student";
     };
 
 export type RulesContext = {
@@ -441,6 +447,16 @@ function draftsFor(
         },
         lessonLink(lesson.id),
         `replacement:${lesson.id}:${student.userId}`,
+      );
+      return out;
+    }
+    case "CALENDAR_FEED_REVOKED": {
+      add(
+        event.userId,
+        event.audience,
+        {},
+        { kind: "calendarFeed" },
+        `calendarFeed:${event.userId}`,
       );
       return out;
     }

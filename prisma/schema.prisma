@@ -179,6 +179,8 @@ model School {
   generatorRuns          GeneratorRun[]
   notifications          Notification[]
   notificationDeliveries NotificationDelivery[]
+  teacherRatings         TeacherRating[]
+  calendarFeeds          CalendarFeed[]
 
   @@map("schools")
 }
@@ -215,6 +217,8 @@ model User {
   generatorRuns        GeneratorRun[]
   notifications        Notification[]       @relation("NotificationRecipient")
   actedNotifications   Notification[]       @relation("NotificationActor")
+  hiddenRatings        TeacherRating[]
+  calendarFeeds        CalendarFeed[]
 
   @@map("users")
 }
@@ -302,6 +306,7 @@ model TeacherProfile {
   notes             TeacherNote[]
   levels            TeacherLevel[]
   draftAssignments  TimetableDraftAssignment[]
+  ratings           TeacherRating[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -328,6 +333,7 @@ model StudentProfile {
   absenceReports      AbsenceReport[]
   replacementRequests ReplacementRequest[]
   makeupCredits       MakeupCredit[]
+  teacherRatings      TeacherRating[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -526,6 +532,7 @@ model Term {
   groupSkips     GroupTermSkip[]
   drafts         TimetableDraft[]
   generatorRuns  GeneratorRun[]
+  ratings        TeacherRating[]
 
   @@unique([schoolId, name])
   @@unique([schoolId, id])
@@ -1038,4 +1045,57 @@ model NotificationDelivery {
   @@unique([notificationId, channel])
   @@index([schoolId, status, createdAt])
   @@map("notification_deliveries")
+}
+
+/// A student's rating of a teacher for a term. Admin-readable only
+/// (docs/architecture/phase5-rules.md §4): teachers never read this table,
+/// students only their own rows through src/server/ratings/student.ts.
+model TeacherRating {
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String    @map("school_id") @db.Uuid
+  studentId  String    @map("student_id") @db.Uuid
+  teacherId  String    @map("teacher_id") @db.Uuid
+  termId     String    @map("term_id") @db.Uuid
+  /// 1–5 stars (CHECK).
+  score      Int
+  /// ≤ 1,000 characters (CHECK), null when empty.
+  comment    String?
+  /// Set by an admin to leave the rating out of averages (e.g. abusive).
+  hiddenAt   DateTime? @map("hidden_at")
+  hiddenById String?   @map("hidden_by_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  school   School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student  StudentProfile @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+  teacher  TeacherProfile @relation(fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Restrict)
+  term     Term           @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Restrict)
+  hiddenBy User?          @relation(fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, id])
+  @@unique([schoolId, studentId, teacherId, termId])
+  @@index([schoolId, teacherId, termId])
+  @@map("teacher_ratings")
+}
+
+/// A user's private iCal subscription (phase5-rules.md §5). The token is
+/// HMAC(ICAL_TOKEN_SECRET, salt); only its sha256 is stored. A partial
+/// unique index allows one active (not revoked) feed per user.
+model CalendarFeed {
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String    @map("school_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  salt       Bytes
+  /// Globally unique: the public route looks it up before it knows the school.
+  tokenHash  String    @unique @map("token_hash")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, userId])
+  @@map("calendar_feeds")
 }

@@ -52,7 +52,7 @@ export type NotificationText = {
 const NS = "notifications";
 
 /** `Lesson.cancelReason` codes with a `scheduling.cancelReasons.*` message. */
-const CANCEL_REASON_CODES: ReadonlySet<string> = new Set([
+export const CANCEL_REASON_CODES: ReadonlySet<string> = new Set([
   "HOLIDAY",
   "TIMETABLE_CHANGED",
   "STUDENT_CANCELLED",

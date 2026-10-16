@@ -1,0 +1,95 @@
+{
+  "student": {
+    "title": "Rate your teachers",
+    "privacy": "Only the school's admins see ratings. Teachers don't.",
+    "notRated": "Not rated yet",
+    "rate": "Rate",
+    "rateTeacher": "Rate {teacher}",
+    "edit": "Edit",
+    "editTeacher": "Edit your rating of {teacher}",
+    "view": "View",
+    "ratedOn": "Rated {date}",
+    "editableUntil": "You can change it until {date}.",
+    "opensOn": "You can rate {teacher} from {date}.",
+    "earlierTerms": "Earlier terms",
+    "substitute": "{name} (substitute)",
+    "stars": "{score} out of 5 stars",
+    "empty": {
+      "title": "No teachers to rate yet",
+      "description": "After a few lessons with a teacher, you can rate them here."
+    }
+  },
+  "home": {
+    "title": "Rate your teacher",
+    "question": "How are your lessons with {teacher}?",
+    "rateNow": "Rate now",
+    "notNow": "Not now"
+  },
+  "form": {
+    "back": "Rate your teachers",
+    "title": "How are your lessons with {teacher}?",
+    "privacy": "Only the school's admins see this. {teacher} won't see it.",
+    "stars": "Your rating (required)",
+    "star": {
+      "1": "Poor",
+      "2": "Fair",
+      "3": "Good",
+      "4": "Very good",
+      "5": "Excellent"
+    },
+    "comment": "Comment (optional)",
+    "commentPlaceholder": "What's going well? What could be better?",
+    "counter": "{count}/{max}",
+    "submit": "Submit rating",
+    "saveChanges": "Save changes",
+    "saving": "Saving…",
+    "saved": "Thanks! Your rating is saved.",
+    "lastChanged": "Last changed {date}",
+    "required": "Choose a rating from 1 to 5 stars.",
+    "tooLong": "Keep the comment under {max} characters.",
+    "closed": "Rating for {term} has closed. Your rating can no longer be changed.",
+    "error": "Couldn't save your rating. Try again."
+  },
+  "admin": {
+    "title": "Ratings",
+    "adminsOnly": "Only admins can see ratings. Teachers and students can't.",
+    "term": "Term",
+    "noTerms": "There is no published term yet.",
+    "col": {
+      "teacher": "Teacher",
+      "average": "Average",
+      "count": "Ratings",
+      "distribution": "Distribution",
+      "lastRated": "Last rated"
+    },
+    "average": "{value} out of 5",
+    "tooFew": "Too few to average",
+    "none": "No ratings",
+    "archived": "Archived",
+    "distribution": "5 stars: {five}, 4 stars: {four}, 3 stars: {three}, 2 stars: {two}, 1 star: {one}",
+    "empty": {
+      "title": "No ratings for {term} yet.",
+      "description": "Students can rate their teachers from {date}."
+    },
+    "detail": {
+      "back": "Ratings",
+      "summary": "Summary",
+      "group": "Group",
+      "allGroups": "All groups",
+      "edited": "Edited",
+      "actions": "Rating actions",
+      "hide": "Hide rating",
+      "hidden": "Rating hidden.",
+      "undo": "Undo",
+      "unhide": "Unhide",
+      "unhidden": "Rating shown again.",
+      "hiddenSection": "Hidden ratings ({count})",
+      "hiddenBy": "Hidden by {name}, {date}",
+      "hiddenByUnknown": "Hidden {date}",
+      "by": "{student} · {group} · {date}",
+      "noGroup": "—",
+      "empty": "No ratings for this teacher in {term}.",
+      "loadMore": "Load more"
+    }
+  }
+}

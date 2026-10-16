@@ -53,6 +53,7 @@ export const USER_RELATION_FIELDS: ReadonlySet<string> = new Set([
   "createdBy",
   "startedBy",
   "recipient",
+  "hiddenBy",
 ]);
 
 const USER_SCALARS: ReadonlySet<string> = new Set(

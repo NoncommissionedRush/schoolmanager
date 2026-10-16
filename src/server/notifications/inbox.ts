@@ -260,8 +260,7 @@ export async function resolveHrefs(
       case "absences":
         return viewer.role === "STUDENT" ? "/student/absences" : null;
       case "calendarFeed":
-        // The calendar subscription page ships with CARM-66.
-        return null;
+        return viewer.role === "ADMIN" ? null : `${base}/calendar`;
     }
   });
 }
