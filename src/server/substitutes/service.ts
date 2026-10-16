@@ -352,9 +352,11 @@ export async function loadSubstituteSheet(
     );
     const [needsCover] = lessonsNeedingCover(
       calendar,
-      new Date(lesson.startsAt.getTime() - 1),
+      lesson.startsAt,
       new Date(lesson.startsAt.getTime() + 1),
       archived,
+      // Why this lesson needs cover, whether or not it has started.
+      new Date(lesson.startsAt.getTime() - 1),
     ).filter((n) => n.lessonId === lesson.id);
     return {
       lesson: {
@@ -724,6 +726,7 @@ export async function listNeedsCover(
       from,
       to,
       archived,
+      now,
     );
     const byLesson = new Map(needs.map((n) => [n.lessonId, n]));
     const extra =

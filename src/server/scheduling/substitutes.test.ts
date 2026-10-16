@@ -582,6 +582,20 @@ describe("lessonsNeedingCover (§3.7)", () => {
     ]);
   });
 
+  it("a range starting later includes a lesson at its very first instant", () => {
+    const midnight = lessonAt("M", "2026-10-14", "00:00", "01:00");
+    const calendar = buildCalendar(ctx({ lessons: [midnight] }));
+    expect(
+      lessonsNeedingCover(
+        calendar,
+        midnight.startsAt,
+        to,
+        new Set(["t1"]),
+        NOW,
+      ).map((n) => n.lessonId),
+    ).toEqual(["M"]);
+  });
+
   it("leaves out started and cancelled lessons", () => {
     const calendar = buildCalendar(
       ctx({
