@@ -181,6 +181,7 @@ model School {
   notificationDeliveries NotificationDelivery[]
   teacherRatings         TeacherRating[]
   calendarFeeds          CalendarFeed[]
+  revokedSessions        RevokedSession[]
 
   @@map("schools")
 }
@@ -219,6 +220,7 @@ model User {
   actedNotifications   Notification[]       @relation("NotificationActor")
   hiddenRatings        TeacherRating[]
   calendarFeeds        CalendarFeed[]
+  revokedSessions      RevokedSession[]
 
   @@map("users")
 }
@@ -1098,4 +1100,23 @@ model CalendarFeed {
   @@unique([schoolId, id])
   @@index([schoolId, userId])
   @@map("calendar_feeds")
+}
+
+/// A signed-out session (JWT `sessionId`). Sign-out deletes the cookie, but a
+/// response already in flight can set it again; this row makes the server
+/// refuse that token anyway. Kept until the token would have expired.
+model RevokedSession {
+  /// The token's `sessionId`, minted at sign-in.
+  id        String   @id @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  revokedAt DateTime @default(now()) @map("revoked_at")
+  /// The token's expiry; rows past it are pruned on the next sign-out.
+  expiresAt DateTime @map("expires_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("revoked_sessions")
 }

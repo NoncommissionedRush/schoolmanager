@@ -66,20 +66,34 @@ test.describe("sign in", () => {
   });
 
   test("sign out ends the session", async ({ page }) => {
-    // No link prefetches: the proxy rolls the session cookie on every
-    // response, so a prefetch still in flight when the user signs out lands
-    // afterwards and sets the cookie again. That race is a product
-    // follow-up (CARM-67), not what this test is about.
-    await page.route("**/*", (route) =>
-      route.request().headers()["next-router-prefetch"]
-        ? route.abort()
-        : route.fallback(),
-    );
     await signIn(page, DEMO_LOGINS.teacher);
     await expectDashboard(page, "/teacher");
     await page.getByRole("button", { name: /Account menu/ }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page).toHaveURL("/login");
+    await page.goto("/teacher");
+    await expect(page).toHaveURL("/login?callbackUrl=%2Fteacher");
+  });
+
+  test("a signed-out session cookie is refused if it comes back", async ({
+    page,
+    context,
+  }) => {
+    await signIn(page, DEMO_LOGINS.teacher);
+    await expectDashboard(page, "/teacher");
+    const session = (await context.cookies()).filter((cookie) =>
+      cookie.name.includes("authjs.session-token"),
+    );
+    expect(session).not.toHaveLength(0);
+
+    await page.getByRole("button", { name: /Account menu/ }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await expect(page).toHaveURL("/login");
+
+    // What a late response from before the sign-out would do.
+    await context.addCookies(session);
+    await page.goto("/teacher");
+    await expect(page).toHaveURL("/login?reason=expired");
     await page.goto("/teacher");
     await expect(page).toHaveURL("/login?callbackUrl=%2Fteacher");
   });

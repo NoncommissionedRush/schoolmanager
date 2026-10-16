@@ -9,6 +9,7 @@ import { scopeToSchool } from "@/server/db/school-scope";
 
 import { checkAccess, loadViewer, type Viewer } from "./access";
 import { LOGIN_PATH, type Role } from "./roles";
+import { findSessionMembership } from "./session-store";
 
 /**
  * Data access layer for the signed-in user. Every page, layout, route
@@ -19,17 +20,8 @@ import { LOGIN_PATH, type Role } from "./roles";
 /** The signed-in viewer (membership re-checked in the DB), or null. Per request. */
 export const getViewer = cache(async (): Promise<Viewer | null> => {
   const session = await auth();
-  return loadViewer(session?.identity ?? null, (schoolId, userId) =>
-    db.membership.findUnique({
-      where: { schoolId_userId: { schoolId, userId } },
-      select: {
-        role: true,
-        user: {
-          select: { id: true, name: true, email: true, deletedAt: true },
-        },
-        school: { select: { id: true, name: true, timezone: true } },
-      },
-    }),
+  return loadViewer(session?.identity ?? null, (identity) =>
+    findSessionMembership(db, identity),
   );
 });
 
