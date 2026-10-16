@@ -102,16 +102,20 @@ export function useNotifyPreviewText() {
   return useCallback(
     (notify: NotifyPreview, group: string, ended: boolean) => {
       if (ended) return t("notifyNobody");
-      const names = format.list(
-        notify.teachers.map((teacher) => teacher.name),
-        { type: "conjunction" },
-      );
-      if (notify.teachers.length === 0 && notify.studentCount === 0) {
+      const teachers = notify.teachers.map((teacher) => teacher.name);
+      if (teachers.length === 0 && notify.studentCount === 0) {
         return t("notifyNobody");
       }
+      // "Ana, Tomas and the 8 students…" / "Ana and Tomas will be notified."
       return notify.studentCount > 0
-        ? t("notifyPreview", { names, count: notify.studentCount, group })
-        : t("notifyPreviewNoStudents", { names });
+        ? t("notifyPreview", {
+            names: format.list(teachers, { type: "unit", style: "short" }),
+            count: notify.studentCount,
+            group,
+          })
+        : t("notifyPreviewNoStudents", {
+            names: format.list(teachers, { type: "conjunction" }),
+          });
     },
     [t, format],
   );

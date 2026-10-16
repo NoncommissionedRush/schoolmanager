@@ -352,7 +352,7 @@ export async function loadSubstituteSheet(
     );
     const [needsCover] = lessonsNeedingCover(
       calendar,
-      lesson.startsAt,
+      new Date(lesson.startsAt.getTime() - 1),
       new Date(lesson.startsAt.getTime() + 1),
       archived,
     ).filter((n) => n.lessonId === lesson.id);
@@ -442,6 +442,9 @@ export async function assignSubstitute(
   return inLock(db, async (tx) => {
     const loaded = await load(tx, input.lessonId);
     const { lesson, calendar, teachers } = loaded;
+    // Another school's teacher is "not found", whatever the lesson.
+    const teacher = teachers.find((t) => t.id === input.teacherId);
+    if (!teacher) throw notFound();
     if (!sameLesson(lesson, input)) return { status: "changed" };
     const lessonReasons = substituteLessonReasons(lesson, {
       published: loaded.published,
@@ -450,8 +453,6 @@ export async function assignSubstitute(
     if (lessonReasons.length > 0) {
       return { status: "lessonRefused", reasons: lessonReasons };
     }
-    const teacher = teachers.find((t) => t.id === input.teacherId);
-    if (!teacher) throw notFound();
     const reasons = checkSubstitute(calendar, lesson, teacher);
     if (reasons.some((r) => r.severity !== "overridable")) {
       return { status: "refused", reasons };

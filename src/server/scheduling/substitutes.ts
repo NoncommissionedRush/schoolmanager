@@ -491,7 +491,8 @@ export type NeedsCover = {
 };
 
 /**
- * §3.7 Needs cover: not-cancelled lessons starting in `[from, to)` whose
+ * §3.7 Needs cover: not-cancelled lessons starting in `(from, to)` (from =
+ * now: not started) whose
  * effective teacher is away that day (one-off), teaching another lesson
  * then, or archived. Weekly unavailability is left out on purpose (it was
  * acknowledged when the slot was planned). Soonest first.
@@ -506,7 +507,8 @@ export function lessonsNeedingCover(
   for (const lesson of calendar.context.lessons) {
     if (lesson.status === "CANCELLED") continue;
     const start = lesson.startsAt.getTime();
-    if (start < from.getTime() || start >= to.getTime()) continue;
+    // Not started: strictly after `from` (now).
+    if (start <= from.getTime() || start >= to.getTime()) continue;
     const effective = effectiveTeacherOf(lesson);
     const reasons: NeedsCoverReason[] = [];
     let otherGroup: string | null = null;

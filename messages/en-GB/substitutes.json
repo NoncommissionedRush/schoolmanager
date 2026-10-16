@@ -85,7 +85,7 @@
     "moveLesson": "Move the lesson",
     "assignAnyway": "Assign anyway",
     "warningsFor": "{name} has warnings for this lesson:",
-    "notifyPreview": "{names} and {count, plural, one {# student} other {# students}} of {group} will be notified.",
+    "notifyPreview": "{names} and {count, plural, one {# student} other {the # students}} of {group} will be notified.",
     "notifyPreviewNoStudents": "{names} will be notified.",
     "notifyNobody": "Nobody is notified, because the lesson has ended.",
     "assign": "Assign {name}",
