@@ -7,6 +7,14 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { scopeToSchool } from "@/server/db/school-scope";
 import {
+  captureBefore,
+  flushTimetableChanges,
+  markFirstPublish,
+  recordCreated,
+  recordSource,
+  trackTimetableChanges,
+} from "@/server/notifications/timetable-changes";
+import {
   type CarryOverResult,
   carryOverSlotSplit,
 } from "@/server/replacements/carry-over";
@@ -332,14 +340,24 @@ async function loadContext(tx: Tx, from: Date, to: Date) {
   };
 }
 
+/**
+ * Runs a timetable change in one transaction holding the school's timetable
+ * lock. The lessons it changes are tracked and, before commit, the people
+ * affected get one `TIMETABLE_CHANGED` (or `TIMETABLE_PUBLISHED`) each
+ * (phase5-rules.md §2.3); the action's audit row is their source.
+ */
 export async function inTransaction<T>(
   db: SchoolDb,
   fn: (tx: Tx, schoolId: string) => Promise<T>,
+  now: Date = new Date(),
 ): Promise<T> {
   return db.$transaction(async (tx) => {
     const school = await tx.school.findFirstOrThrow({ select: { id: true } });
     await lockTimetable(tx, school.id);
-    return fn(tx, school.id);
+    trackTimetableChanges(tx);
+    const result = await fn(tx, school.id);
+    await flushTimetableChanges(tx, now);
+    return result;
   });
 }
 
@@ -432,6 +450,7 @@ export async function applyPlan(
   timeZone: string,
   now: Date,
 ): Promise<LessonChanges> {
+  await captureBefore(tx, [...plan.remove, ...plan.cancel.map((c) => c.id)]);
   if (plan.remove.length > 0) {
     await tx.lesson.deleteMany({
       where: { id: { in: plan.remove }, status: "SCHEDULED" },
@@ -450,7 +469,7 @@ export async function applyPlan(
     await releaseCancelledLessons(tx, schoolId, ids, timeZone, now);
   }
   if (plan.create.length > 0) {
-    await tx.lesson.createMany({
+    const created = await tx.lesson.createManyAndReturn({
       data: plan.create.map((o) => ({
         schoolId,
         termId,
@@ -463,7 +482,12 @@ export async function applyPlan(
         endsAt: o.endsAt,
       })),
       skipDuplicates: true,
+      select: { id: true },
     });
+    recordCreated(
+      tx,
+      created.map((l) => l.id),
+    );
   }
   return {
     created: plan.create.length,
@@ -559,6 +583,10 @@ export async function writeGroupTeacherChange(
   plan: GroupTeacherChangePlan,
   newTeacherId: string,
 ): Promise<GroupTeacherChangeWrite> {
+  await captureBefore(tx, [
+    ...plan.repoint.map((r) => r.lessonId),
+    ...plan.adHoc.map((a) => a.lessonId),
+  ]);
   const out: GroupTeacherChangeWrite = {
     nextIds: new Map(),
     synced: [],
@@ -654,8 +682,8 @@ export async function audit(
   entityType: string,
   entityId: string,
   data: Record<string, unknown>,
-) {
-  await tx.auditLog.create({
+): Promise<string> {
+  const row = await tx.auditLog.create({
     data: {
       schoolId,
       actorId: actor.userId,
@@ -664,7 +692,11 @@ export async function audit(
       entityId,
       data: JSON.parse(JSON.stringify(data)),
     },
+    select: { id: true },
   });
+  // The last audit row of a timetable change is its notifications' source.
+  recordSource(tx, { sourceId: row.id, actorId: actor.userId });
+  return row.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -906,102 +938,269 @@ export async function saveSlot(
   },
   now = new Date(),
 ): Promise<SaveSlotResult> {
-  return inTransaction(db, async (tx, schoolId) => {
-    const loaded = await load(tx, request.slot.termId, now);
-    const { candidate, existing, effectiveFrom } = await resolveCandidate(
-      loaded,
-      request,
-    );
-    const teacherChange = await planEditorTeacherChange(
-      tx,
-      loaded,
-      existing,
-      candidate,
-      effectiveFrom,
-      now,
-    );
-    const conflicts = [
-      ...checkSlot(buildCalendar(loaded.context), candidate),
-      ...(teacherChange?.conflicts ?? []),
-    ];
-    const decision = decideSave(
-      conflicts,
-      request.acknowledgedConflictKeys ?? [],
-    );
-    if (!decision.ok) return { ok: false, reason: decision.reason, conflicts };
+  return inTransaction(
+    db,
+    async (tx, schoolId) => {
+      const loaded = await load(tx, request.slot.termId, now);
+      const { candidate, existing, effectiveFrom } = await resolveCandidate(
+        loaded,
+        request,
+      );
+      const teacherChange = await planEditorTeacherChange(
+        tx,
+        loaded,
+        existing,
+        candidate,
+        effectiveFrom,
+        now,
+      );
+      const conflicts = [
+        ...checkSlot(buildCalendar(loaded.context), candidate),
+        ...(teacherChange?.conflicts ?? []),
+      ];
+      const decision = decideSave(
+        conflicts,
+        request.acknowledgedConflictKeys ?? [],
+      );
+      if (!decision.ok)
+        return { ok: false, reason: decision.reason, conflicts };
 
-    const published = loaded.term.publishedAt !== null;
-    const data = {
-      ...request.slot,
-      validFrom: candidate.validFrom ? fromIsoDate(candidate.validFrom) : null,
-      validUntil: candidate.validUntil
-        ? fromIsoDate(candidate.validUntil)
-        : null,
-    };
-    const auditData = {
-      slot: request.slot,
-      effectiveFrom,
-      overridden: auditConflicts(decision.overridden),
-      // A reason only means something next to an actual override.
-      ...(request.reason &&
-        decision.overridden.length > 0 && { reason: request.reason }),
-    };
+      const published = loaded.term.publishedAt !== null;
+      const data = {
+        ...request.slot,
+        validFrom: candidate.validFrom
+          ? fromIsoDate(candidate.validFrom)
+          : null,
+        validUntil: candidate.validUntil
+          ? fromIsoDate(candidate.validUntil)
+          : null,
+      };
+      const auditData = {
+        slot: request.slot,
+        effectiveFrom,
+        overridden: auditConflicts(decision.overridden),
+        // A reason only means something next to an actual override.
+        ...(request.reason &&
+          decision.overridden.length > 0 && { reason: request.reason }),
+      };
 
-    if (!existing) {
-      const created = await tx.timetableSlot.create({
-        data: { ...data, schoolId },
-        select: { id: true },
-      });
-      const lessons = published
-        ? await syncSlots(
+      if (!existing) {
+        const created = await tx.timetableSlot.create({
+          data: { ...data, schoolId },
+          select: { id: true },
+        });
+        const lessons = published
+          ? await syncSlots(
+              tx,
+              loaded,
+              [{ ...candidate, id: created.id }],
+              loaded.today,
+              now,
+              "slots",
+            )
+          : { created: 0, removed: 0, cancelled: 0 };
+        await audit(
+          tx,
+          schoolId,
+          actor,
+          "timetable_slot.created",
+          "TimetableSlot",
+          created.id,
+          { ...auditData, lessons },
+        );
+        return {
+          ok: true,
+          slotId: created.id,
+          overridden: decision.overridden,
+          lessons,
+        };
+      }
+
+      // A teacher-only change re-points the lessons instead of replacing them.
+      if (teacherChange) {
+        const write = await writeGroupTeacherChange(
+          tx,
+          schoolId,
+          teacherChange.plan,
+          request.slot.teacherId,
+        );
+        const lessons: LessonChanges = {
+          ...(await syncSlots(
             tx,
             loaded,
-            [{ ...candidate, id: created.id }],
-            loaded.today,
+            write.synced,
+            maxDate(effectiveFrom!, loaded.today),
             now,
             "slots",
-          )
-        : { created: 0, removed: 0, cancelled: 0 };
-      await audit(
-        tx,
-        schoolId,
-        actor,
-        "timetable_slot.created",
-        "TimetableSlot",
-        created.id,
-        { ...auditData, lessons },
-      );
-      return {
-        ok: true,
-        slotId: created.id,
-        overridden: decision.overridden,
-        lessons,
-      };
-    }
-
-    // A teacher-only change re-points the lessons instead of replacing them.
-    if (teacherChange) {
-      const write = await writeGroupTeacherChange(
-        tx,
-        schoolId,
-        teacherChange.plan,
-        request.slot.teacherId,
-      );
-      const lessons: LessonChanges = {
-        ...(await syncSlots(
+          )),
+          moved:
+            teacherChange.plan.repoint.filter((r) => r.setTeacher).length +
+            teacherChange.plan.adHoc.length,
+        };
+        const [change] = teacherChange.plan.slots;
+        const slotId = write.nextIds.get(existing.id) ?? existing.id;
+        await audit(
           tx,
-          loaded,
-          write.synced,
-          maxDate(effectiveFrom!, loaded.today),
-          now,
-          "slots",
-        )),
-        moved:
-          teacherChange.plan.repoint.filter((r) => r.setTeacher).length +
-          teacherChange.plan.adHoc.length,
+          schoolId,
+          actor,
+          "timetable_slot.updated",
+          "TimetableSlot",
+          existing.id,
+          {
+            ...auditData,
+            mode: "teacherChange",
+            previousTeacherId: existing.teacherId,
+            newSlotId: change?.kind === "split" ? slotId : undefined,
+            lessons,
+            repointed: teacherChange.plan.repoint.map((r) => r.lessonId),
+            adHoc: teacherChange.plan.adHoc.map((a) => a.lessonId),
+          },
+        );
+        return {
+          ok: true,
+          slotId,
+          endedSlotId: change?.kind === "split" ? existing.id : undefined,
+          overridden: decision.overridden,
+          lessons,
+        };
+      }
+
+      // 1. Untouched lessons of the old template from the effective date on
+      //    are deleted. Those with history are cancelled only in step 4, once
+      //    what follows the slot has moved to their successors.
+      let lessons: LessonChanges = { created: 0, removed: 0, cancelled: 0 };
+      const from = effectiveFrom ?? loaded.term.startDate;
+      const syncFrom = maxDate(from, loaded.today);
+      const ending = {
+        ...existing,
+        validUntil: addDays(candidate.validFrom ?? from, -1),
       };
-      const [change] = teacherChange.plan.slots;
-      const slotId = write.nextIds.get(existing.id) ?? existing.id;
+      let endingLessons: ExistingLesson[] = [];
+      let endingPlan: LessonSyncPlan | null = null;
+      if (effectiveFrom) {
+        endingLessons = await loadSyncLessons(tx, loaded.term.id, syncFrom, [
+          existing.id,
+        ]);
+        // Before absences and bookings follow the lessons to their successors.
+        await captureBefore(
+          tx,
+          endingLessons.map((l) => l.id),
+        );
+        endingPlan = planLessonSync({
+          term: loaded.term,
+          slots: [ending],
+          holidays: holidaysOfTerm(loaded.context.holidays, loaded.term.id),
+          lessons: endingLessons,
+          timeZone: loaded.context.school.timeZone,
+          from: syncFrom,
+          now,
+        });
+        lessons = await applyPlan(
+          tx,
+          schoolId,
+          loaded.term.id,
+          { create: [], remove: endingPlan.remove, cancel: [] },
+          loaded.context.school.timeZone,
+          now,
+        );
+      }
+      // 2. Rewrite the slot if no lesson refers to it any more, else split it.
+      const remaining = await tx.lesson.count({
+        where: { timetableSlotId: existing.id },
+      });
+      const change: SlotChange = {
+        groupId: request.slot.groupId,
+        teacherId: request.slot.teacherId,
+        roomId: request.slot.roomId,
+        weekday: request.slot.weekday,
+        startMinute: request.slot.startMinute,
+        endMinute: request.slot.endMinute,
+      };
+      const edit = planSlotEdit(existing, change, effectiveFrom, remaining);
+      let result: SlotInfo;
+      let endedSlotId: string | undefined;
+      if (edit.kind === "update") {
+        result = edit.slot;
+        await tx.timetableSlot.update({
+          where: { id: existing.id },
+          data: {
+            ...change,
+            validFrom: result.validFrom ? fromIsoDate(result.validFrom) : null,
+          },
+        });
+      } else {
+        endedSlotId = existing.id;
+        await tx.timetableSlot.update({
+          where: { id: existing.id },
+          data: { validUntil: fromIsoDate(edit.ended.validUntil!) },
+        });
+        const next = await tx.timetableSlot.create({
+          data: {
+            ...edit.next,
+            schoolId,
+            validFrom: edit.next.validFrom
+              ? fromIsoDate(edit.next.validFrom)
+              : null,
+            validUntil: edit.next.validUntil
+              ? fromIsoDate(edit.next.validUntil)
+              : null,
+          },
+          select: { id: true },
+        });
+        result = { ...edit.next, id: next.id };
+      }
+      // 3. Lessons of the new template.
+      if (published) {
+        lessons = addChanges(
+          lessons,
+          await syncSlots(tx, loaded, [result], syncFrom, now, "slots"),
+        );
+      }
+      // 4. Absences, cancelled 1-on-1s and bookings follow the slot to the
+      //    successor in the same week (replacements.md §5 _Slot splits_);
+      //    then the old lessons left are cancelled (or deleted when nothing
+      //    refers to them any more) and their bookings released.
+      let carryOver: CarryOverResult | undefined;
+      if (edit.kind === "split" && endingPlan) {
+        if (published) {
+          const pairs = planSlotCarryOver({
+            ended: ending,
+            next: result,
+            term: loaded.term,
+            holidays: holidaysOfTerm(loaded.context.holidays, loaded.term.id),
+            lessons: endingLessons,
+            cancelling: endingPlan.cancel.map((c) => c.id),
+            timeZone: loaded.context.school.timeZone,
+            from: syncFrom,
+            now,
+          });
+          if (pairs.length > 0) {
+            const successors = await tx.lesson.findMany({
+              where: {
+                timetableSlotId: result.id,
+                occurrenceDate: { in: pairs.map((p) => fromIsoDate(p.toDate)) },
+              },
+              select: { id: true, occurrenceDate: true },
+            });
+            const byDate = new Map(
+              successors.map((l) => [isoOrNull(l.occurrenceDate), l.id]),
+            );
+            carryOver = await carryOverSlotSplit(
+              tx,
+              schoolId,
+              pairs.flatMap((p) => {
+                const toLessonId = byDate.get(p.toDate);
+                return toLessonId ? [{ ...p, toLessonId }] : [];
+              }),
+              now,
+            );
+          }
+        }
+        lessons = addChanges(
+          lessons,
+          await syncSlots(tx, loaded, [ending], syncFrom, now, "slots"),
+        );
+      }
       await audit(
         tx,
         schoolId,
@@ -1011,177 +1210,22 @@ export async function saveSlot(
         existing.id,
         {
           ...auditData,
-          mode: "teacherChange",
-          previousTeacherId: existing.teacherId,
-          newSlotId: change?.kind === "split" ? slotId : undefined,
+          mode: edit.kind,
+          newSlotId: edit.kind === "split" ? result.id : undefined,
           lessons,
-          repointed: teacherChange.plan.repoint.map((r) => r.lessonId),
-          adHoc: teacherChange.plan.adHoc.map((a) => a.lessonId),
+          carryOver,
         },
       );
       return {
         ok: true,
-        slotId,
-        endedSlotId: change?.kind === "split" ? existing.id : undefined,
+        slotId: result.id,
+        endedSlotId,
         overridden: decision.overridden,
         lessons,
       };
-    }
-
-    // 1. Untouched lessons of the old template from the effective date on
-    //    are deleted. Those with history are cancelled only in step 4, once
-    //    what follows the slot has moved to their successors.
-    let lessons: LessonChanges = { created: 0, removed: 0, cancelled: 0 };
-    const from = effectiveFrom ?? loaded.term.startDate;
-    const syncFrom = maxDate(from, loaded.today);
-    const ending = {
-      ...existing,
-      validUntil: addDays(candidate.validFrom ?? from, -1),
-    };
-    let endingLessons: ExistingLesson[] = [];
-    let endingPlan: LessonSyncPlan | null = null;
-    if (effectiveFrom) {
-      endingLessons = await loadSyncLessons(tx, loaded.term.id, syncFrom, [
-        existing.id,
-      ]);
-      endingPlan = planLessonSync({
-        term: loaded.term,
-        slots: [ending],
-        holidays: holidaysOfTerm(loaded.context.holidays, loaded.term.id),
-        lessons: endingLessons,
-        timeZone: loaded.context.school.timeZone,
-        from: syncFrom,
-        now,
-      });
-      lessons = await applyPlan(
-        tx,
-        schoolId,
-        loaded.term.id,
-        { create: [], remove: endingPlan.remove, cancel: [] },
-        loaded.context.school.timeZone,
-        now,
-      );
-    }
-    // 2. Rewrite the slot if no lesson refers to it any more, else split it.
-    const remaining = await tx.lesson.count({
-      where: { timetableSlotId: existing.id },
-    });
-    const change: SlotChange = {
-      groupId: request.slot.groupId,
-      teacherId: request.slot.teacherId,
-      roomId: request.slot.roomId,
-      weekday: request.slot.weekday,
-      startMinute: request.slot.startMinute,
-      endMinute: request.slot.endMinute,
-    };
-    const edit = planSlotEdit(existing, change, effectiveFrom, remaining);
-    let result: SlotInfo;
-    let endedSlotId: string | undefined;
-    if (edit.kind === "update") {
-      result = edit.slot;
-      await tx.timetableSlot.update({
-        where: { id: existing.id },
-        data: {
-          ...change,
-          validFrom: result.validFrom ? fromIsoDate(result.validFrom) : null,
-        },
-      });
-    } else {
-      endedSlotId = existing.id;
-      await tx.timetableSlot.update({
-        where: { id: existing.id },
-        data: { validUntil: fromIsoDate(edit.ended.validUntil!) },
-      });
-      const next = await tx.timetableSlot.create({
-        data: {
-          ...edit.next,
-          schoolId,
-          validFrom: edit.next.validFrom
-            ? fromIsoDate(edit.next.validFrom)
-            : null,
-          validUntil: edit.next.validUntil
-            ? fromIsoDate(edit.next.validUntil)
-            : null,
-        },
-        select: { id: true },
-      });
-      result = { ...edit.next, id: next.id };
-    }
-    // 3. Lessons of the new template.
-    if (published) {
-      lessons = addChanges(
-        lessons,
-        await syncSlots(tx, loaded, [result], syncFrom, now, "slots"),
-      );
-    }
-    // 4. Absences, cancelled 1-on-1s and bookings follow the slot to the
-    //    successor in the same week (replacements.md §5 _Slot splits_);
-    //    then the old lessons left are cancelled (or deleted when nothing
-    //    refers to them any more) and their bookings released.
-    let carryOver: CarryOverResult | undefined;
-    if (edit.kind === "split" && endingPlan) {
-      if (published) {
-        const pairs = planSlotCarryOver({
-          ended: ending,
-          next: result,
-          term: loaded.term,
-          holidays: holidaysOfTerm(loaded.context.holidays, loaded.term.id),
-          lessons: endingLessons,
-          cancelling: endingPlan.cancel.map((c) => c.id),
-          timeZone: loaded.context.school.timeZone,
-          from: syncFrom,
-          now,
-        });
-        if (pairs.length > 0) {
-          const successors = await tx.lesson.findMany({
-            where: {
-              timetableSlotId: result.id,
-              occurrenceDate: { in: pairs.map((p) => fromIsoDate(p.toDate)) },
-            },
-            select: { id: true, occurrenceDate: true },
-          });
-          const byDate = new Map(
-            successors.map((l) => [isoOrNull(l.occurrenceDate), l.id]),
-          );
-          carryOver = await carryOverSlotSplit(
-            tx,
-            schoolId,
-            pairs.flatMap((p) => {
-              const toLessonId = byDate.get(p.toDate);
-              return toLessonId ? [{ ...p, toLessonId }] : [];
-            }),
-            now,
-          );
-        }
-      }
-      lessons = addChanges(
-        lessons,
-        await syncSlots(tx, loaded, [ending], syncFrom, now, "slots"),
-      );
-    }
-    await audit(
-      tx,
-      schoolId,
-      actor,
-      "timetable_slot.updated",
-      "TimetableSlot",
-      existing.id,
-      {
-        ...auditData,
-        mode: edit.kind,
-        newSlotId: edit.kind === "split" ? result.id : undefined,
-        lessons,
-        carryOver,
-      },
-    );
-    return {
-      ok: true,
-      slotId: result.id,
-      endedSlotId,
-      overridden: decision.overridden,
-      lessons,
-    };
-  });
+    },
+    now,
+  );
 }
 
 export type EndSlotResult = {
@@ -1203,57 +1247,62 @@ export async function endSlot(
   { slotId, lastDate }: { slotId: string; lastDate?: IsoDate },
   now = new Date(),
 ): Promise<EndSlotResult> {
-  return inTransaction(db, async (tx, schoolId) => {
-    const row = await tx.timetableSlot.findUnique({ where: { id: slotId } });
-    if (!row)
-      throw new SchedulingError("NOT_FOUND", `Slot ${slotId} not found`);
-    const loaded = await load(tx, row.termId, now);
-    const slot = toSlotInfo(row);
-    const last = lastDate ?? loaded.today;
-    if (loaded.term.publishedAt && last < addDays(loaded.today, -1)) {
-      throw new SchedulingError(
-        "EFFECTIVE_DATE_IN_PAST",
-        "A slot of a published timetable cannot end before yesterday",
+  return inTransaction(
+    db,
+    async (tx, schoolId) => {
+      const row = await tx.timetableSlot.findUnique({ where: { id: slotId } });
+      if (!row)
+        throw new SchedulingError("NOT_FOUND", `Slot ${slotId} not found`);
+      const loaded = await load(tx, row.termId, now);
+      const slot = toSlotInfo(row);
+      const last = lastDate ?? loaded.today;
+      if (loaded.term.publishedAt && last < addDays(loaded.today, -1)) {
+        throw new SchedulingError(
+          "EFFECTIVE_DATE_IN_PAST",
+          "A slot of a published timetable cannot end before yesterday",
+        );
+      }
+      const validUntil =
+        slot.validUntil && slot.validUntil < last ? slot.validUntil : last;
+      const ended = { ...slot, validUntil };
+      const lessons = await syncSlots(
+        tx,
+        loaded,
+        [ended],
+        maxDate(addDays(validUntil, 1), loaded.today),
+        now,
+        "slots",
       );
-    }
-    const validUntil =
-      slot.validUntil && slot.validUntil < last ? slot.validUntil : last;
-    const ended = { ...slot, validUntil };
-    const lessons = await syncSlots(
-      tx,
-      loaded,
-      [ended],
-      maxDate(addDays(validUntil, 1), loaded.today),
-      now,
-      "slots",
-    );
-    const start = slot.validFrom ?? loaded.term.startDate;
-    const remaining = await tx.lesson.count({
-      where: { timetableSlotId: slotId },
-    });
-    const outcome = validUntil < start && remaining === 0 ? "deleted" : "ended";
-    if (outcome === "deleted") {
-      await tx.timetableSlot.delete({ where: { id: slotId } });
-    } else {
-      await tx.timetableSlot.update({
-        where: { id: slotId },
-        data: { validUntil: fromIsoDate(validUntil) },
+      const start = slot.validFrom ?? loaded.term.startDate;
+      const remaining = await tx.lesson.count({
+        where: { timetableSlotId: slotId },
       });
-    }
-    await audit(
-      tx,
-      schoolId,
-      actor,
-      `timetable_slot.${outcome}`,
-      "TimetableSlot",
-      slotId,
-      {
-        lastDate: validUntil,
-        lessons,
-      },
-    );
-    return { outcome, lastDate: validUntil, lessons };
-  });
+      const outcome =
+        validUntil < start && remaining === 0 ? "deleted" : "ended";
+      if (outcome === "deleted") {
+        await tx.timetableSlot.delete({ where: { id: slotId } });
+      } else {
+        await tx.timetableSlot.update({
+          where: { id: slotId },
+          data: { validUntil: fromIsoDate(validUntil) },
+        });
+      }
+      await audit(
+        tx,
+        schoolId,
+        actor,
+        `timetable_slot.${outcome}`,
+        "TimetableSlot",
+        slotId,
+        {
+          lastDate: validUntil,
+          lessons,
+        },
+      );
+      return { outcome, lastDate: validUntil, lessons };
+    },
+    now,
+  );
 }
 
 /**
@@ -1266,45 +1315,49 @@ export async function deleteSlot(
   slotId: string,
   now = new Date(),
 ): Promise<LessonChanges> {
-  return inTransaction(db, async (tx, schoolId) => {
-    const row = await tx.timetableSlot.findUnique({ where: { id: slotId } });
-    if (!row)
-      throw new SchedulingError("NOT_FOUND", `Slot ${slotId} not found`);
-    const loaded = await load(tx, row.termId, now);
-    const slot = toSlotInfo(row);
-    const gone = { ...slot, validUntil: addDays(loaded.term.startDate, -1) };
-    const lessons = await syncSlots(
-      tx,
-      loaded,
-      [gone],
-      loaded.term.startDate,
-      now,
-      "slots",
-    );
-    const remaining = await tx.lesson.count({
-      where: { timetableSlotId: slotId },
-    });
-    if (remaining > 0) {
-      throw new SchedulingError(
-        "SLOT_HAS_LESSONS",
-        `Slot ${slotId} has ${remaining} lessons that must be kept; end it instead`,
+  return inTransaction(
+    db,
+    async (tx, schoolId) => {
+      const row = await tx.timetableSlot.findUnique({ where: { id: slotId } });
+      if (!row)
+        throw new SchedulingError("NOT_FOUND", `Slot ${slotId} not found`);
+      const loaded = await load(tx, row.termId, now);
+      const slot = toSlotInfo(row);
+      const gone = { ...slot, validUntil: addDays(loaded.term.startDate, -1) };
+      const lessons = await syncSlots(
+        tx,
+        loaded,
+        [gone],
+        loaded.term.startDate,
+        now,
+        "slots",
       );
-    }
-    await tx.timetableSlot.delete({ where: { id: slotId } });
-    await audit(
-      tx,
-      schoolId,
-      actor,
-      "timetable_slot.deleted",
-      "TimetableSlot",
-      slotId,
-      {
-        slot,
-        lessons,
-      },
-    );
-    return lessons;
-  });
+      const remaining = await tx.lesson.count({
+        where: { timetableSlotId: slotId },
+      });
+      if (remaining > 0) {
+        throw new SchedulingError(
+          "SLOT_HAS_LESSONS",
+          `Slot ${slotId} has ${remaining} lessons that must be kept; end it instead`,
+        );
+      }
+      await tx.timetableSlot.delete({ where: { id: slotId } });
+      await audit(
+        tx,
+        schoolId,
+        actor,
+        "timetable_slot.deleted",
+        "TimetableSlot",
+        slotId,
+        {
+          slot,
+          lessons,
+        },
+      );
+      return lessons;
+    },
+    now,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1382,8 +1435,10 @@ export async function publishTerm(
   termId: string,
   now = new Date(),
 ): Promise<PublishResult> {
-  return inTransaction(db, (tx, schoolId) =>
-    publishTermIn(tx, schoolId, actor, termId, now),
+  return inTransaction(
+    db,
+    (tx, schoolId) => publishTermIn(tx, schoolId, actor, termId, now),
+    now,
   );
 }
 
@@ -1414,6 +1469,7 @@ export async function publishTermIn(
       where: { id: termId },
       data: { timetablePublishedAt: now },
     });
+    markFirstPublish(tx, termId);
   }
   const slots = loaded.context.slots.filter((s) => s.termId === termId);
   const lessons = await syncSlots(
@@ -1473,8 +1529,10 @@ export async function regenerateLessons(
   termId: string,
   now = new Date(),
 ): Promise<LessonChanges> {
-  return inTransaction(db, (tx, schoolId) =>
-    regenerateIn(tx, schoolId, actor, termId, now, "manual"),
+  return inTransaction(
+    db,
+    (tx, schoolId) => regenerateIn(tx, schoolId, actor, termId, now, "manual"),
+    now,
   );
 }
 
@@ -1577,54 +1635,61 @@ export async function saveHoliday(
   ) {
     throw new SchedulingError("INVALID_INPUT", "Holiday dates are invalid");
   }
-  return inTransaction(db, async (tx, schoolId) => {
-    if (
-      holiday.termId &&
-      !(await tx.term.findUnique({ where: { id: holiday.termId } }))
-    ) {
-      throw new SchedulingError(
-        "NOT_FOUND",
-        `Term ${holiday.termId} not found`,
+  return inTransaction(
+    db,
+    async (tx, schoolId) => {
+      if (
+        holiday.termId &&
+        !(await tx.term.findUnique({ where: { id: holiday.termId } }))
+      ) {
+        throw new SchedulingError(
+          "NOT_FOUND",
+          `Term ${holiday.termId} not found`,
+        );
+      }
+      const data = {
+        termId: holiday.termId,
+        name: holiday.name,
+        startDate: fromIsoDate(holiday.startDate),
+        endDate: fromIsoDate(holiday.endDate),
+      };
+      const before = holidayId
+        ? await tx.holiday.findUnique({ where: { id: holidayId } })
+        : null;
+      if (holidayId && !before) {
+        throw new SchedulingError(
+          "NOT_FOUND",
+          `Holiday ${holidayId} not found`,
+        );
+      }
+      const saved = holidayId
+        ? await tx.holiday.update({ where: { id: holidayId }, data })
+        : await tx.holiday.create({ data: { ...data, schoolId } });
+      const terms = await affectedTerms(tx, before ? [before, saved] : [saved]);
+      const lessons = await resync(
+        tx,
+        schoolId,
+        actor,
+        terms,
+        now,
+        `holiday:${saved.id}`,
       );
-    }
-    const data = {
-      termId: holiday.termId,
-      name: holiday.name,
-      startDate: fromIsoDate(holiday.startDate),
-      endDate: fromIsoDate(holiday.endDate),
-    };
-    const before = holidayId
-      ? await tx.holiday.findUnique({ where: { id: holidayId } })
-      : null;
-    if (holidayId && !before) {
-      throw new SchedulingError("NOT_FOUND", `Holiday ${holidayId} not found`);
-    }
-    const saved = holidayId
-      ? await tx.holiday.update({ where: { id: holidayId }, data })
-      : await tx.holiday.create({ data: { ...data, schoolId } });
-    const terms = await affectedTerms(tx, before ? [before, saved] : [saved]);
-    const lessons = await resync(
-      tx,
-      schoolId,
-      actor,
-      terms,
-      now,
-      `holiday:${saved.id}`,
-    );
-    await audit(
-      tx,
-      schoolId,
-      actor,
-      holidayId ? "holiday.updated" : "holiday.created",
-      "Holiday",
-      saved.id,
-      {
-        holiday,
-        lessons,
-      },
-    );
-    return { holidayId: saved.id, lessons };
-  });
+      await audit(
+        tx,
+        schoolId,
+        actor,
+        holidayId ? "holiday.updated" : "holiday.created",
+        "Holiday",
+        saved.id,
+        {
+          holiday,
+          lessons,
+        },
+      );
+      return { holidayId: saved.id, lessons };
+    },
+    now,
+  );
 }
 
 /** Deletes a holiday; affected published terms get their lessons back from today on. */
@@ -1634,24 +1699,39 @@ export async function deleteHoliday(
   holidayId: string,
   now = new Date(),
 ): Promise<LessonChanges> {
-  return inTransaction(db, async (tx, schoolId) => {
-    const holiday = await tx.holiday.findUnique({ where: { id: holidayId } });
-    if (!holiday)
-      throw new SchedulingError("NOT_FOUND", `Holiday ${holidayId} not found`);
-    await tx.holiday.delete({ where: { id: holidayId } });
-    const terms = await affectedTerms(tx, [holiday]);
-    const lessons = await resync(
-      tx,
-      schoolId,
-      actor,
-      terms,
-      now,
-      `holiday:${holidayId}`,
-    );
-    await audit(tx, schoolId, actor, "holiday.deleted", "Holiday", holidayId, {
-      name: holiday.name,
-      lessons,
-    });
-    return lessons;
-  });
+  return inTransaction(
+    db,
+    async (tx, schoolId) => {
+      const holiday = await tx.holiday.findUnique({ where: { id: holidayId } });
+      if (!holiday)
+        throw new SchedulingError(
+          "NOT_FOUND",
+          `Holiday ${holidayId} not found`,
+        );
+      await tx.holiday.delete({ where: { id: holidayId } });
+      const terms = await affectedTerms(tx, [holiday]);
+      const lessons = await resync(
+        tx,
+        schoolId,
+        actor,
+        terms,
+        now,
+        `holiday:${holidayId}`,
+      );
+      await audit(
+        tx,
+        schoolId,
+        actor,
+        "holiday.deleted",
+        "Holiday",
+        holidayId,
+        {
+          name: holiday.name,
+          lessons,
+        },
+      );
+      return lessons;
+    },
+    now,
+  );
 }

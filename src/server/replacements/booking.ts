@@ -24,6 +24,11 @@ import {
   toZonedDateTime,
   validUntilOf,
 } from "@/server/scheduling";
+import {
+  notifyReplacementBooked,
+  notifyReplacementEnded,
+  notifyReplacementMoved,
+} from "@/server/notifications/emit";
 import { lockTimetable } from "@/server/timetable/lock";
 import type { SchoolDb, Tx } from "@/server/timetable/service";
 import { isMemberAt, membersAt } from "@/server/timetable/week";
@@ -457,7 +462,7 @@ export async function bookReplacement(
       if (isUniqueViolation(error)) throw refusal("ALREADY_ATTENDING");
       throw error;
     }
-    await tx.auditLog.create({
+    const audit = await tx.auditLog.create({
       data: {
         schoolId: school.id,
         actorId: actor.userId,
@@ -473,7 +478,19 @@ export async function bookReplacement(
           capacity: target.room?.capacity ?? null,
         },
       },
+      select: { id: true },
     });
+    await notifyReplacementBooked(
+      tx,
+      { sourceId: audit.id, actorId: actor.userId },
+      {
+        lessonId: target.id,
+        studentId: student.id,
+        originalLessonId: credit.sourceLessonId,
+        byAdmin: false,
+      },
+      now,
+    );
     return {
       status: "booked",
       bookingId,
@@ -550,7 +567,7 @@ export async function cancelBooking(
         now,
       );
     }
-    await tx.auditLog.create({
+    const audit = await tx.auditLog.create({
       data: {
         schoolId: school.id,
         actorId: actor.userId,
@@ -566,7 +583,20 @@ export async function cancelBooking(
           creditStatus: credit.status,
         },
       },
+      select: { id: true },
     });
+    await notifyReplacementEnded(
+      tx,
+      { sourceId: audit.id, actorId: actor.userId },
+      {
+        lessonId: booking.targetLesson.id,
+        studentId: booking.studentId,
+        outcome: "cancelled",
+        creditBack: credit.status === "AVAILABLE",
+        byStudent: true,
+      },
+      now,
+    );
     return {
       creditBack: credit.status === "AVAILABLE",
       creditExpired: credit.status === "EXPIRED",
@@ -717,6 +747,7 @@ const bookingSelect = {
   id: true,
   status: true,
   studentId: true,
+  originalLessonId: true,
   targetLessonId: true,
   makeupCreditId: true,
   student: { select: studentSelect },
@@ -854,8 +885,8 @@ async function auditReview(
   action: "approved" | "rejected" | "overridden",
   booking: BookingRow,
   data: Record<string, unknown>,
-) {
-  await tx.auditLog.create({
+): Promise<string> {
+  const row = await tx.auditLog.create({
     data: {
       schoolId,
       actorId: actor.userId,
@@ -871,7 +902,9 @@ async function auditReview(
         }),
       ),
     },
+    select: { id: true },
   });
+  return row.id;
 }
 
 /**
@@ -956,11 +989,30 @@ export async function rejectReplacement(
       school.timezone,
       now,
     );
-    await auditReview(tx, school.id, actor, "rejected", booking, {
-      note: input.note,
-      creditId: booking.makeupCredit.id,
-      creditExpiresAt: credit.expiresAt.toISOString(),
-    });
+    const auditId = await auditReview(
+      tx,
+      school.id,
+      actor,
+      "rejected",
+      booking,
+      {
+        note: input.note,
+        creditId: booking.makeupCredit.id,
+        creditExpiresAt: credit.expiresAt.toISOString(),
+      },
+    );
+    await notifyReplacementEnded(
+      tx,
+      { sourceId: auditId, actorId: actor.userId },
+      {
+        lessonId: booking.targetLessonId,
+        studentId: booking.studentId,
+        outcome: "rejected",
+        creditBack: credit.status === "AVAILABLE",
+        note: input.note,
+      },
+      now,
+    );
     return {
       status: "done",
       validUntil: validUntilOf(credit.expiresAt, school.timezone),
@@ -1037,15 +1089,37 @@ export async function overrideReplacement(
       if (isUniqueViolation(error)) throw refusal("ALREADY_ATTENDING");
       throw error;
     }
-    await auditReview(tx, school.id, actor, "overridden", booking, {
-      targetLessonId: target.id,
-      note: input.note,
-      acknowledged: decision.overridden.map((r) => ({
-        code: r.code,
-        key: r.key,
-        params: r.params,
-      })),
-    });
+    const auditId = await auditReview(
+      tx,
+      school.id,
+      actor,
+      "overridden",
+      booking,
+      {
+        targetLessonId: target.id,
+        note: input.note,
+        acknowledged: decision.overridden.map((r) => ({
+          code: r.code,
+          key: r.key,
+          params: r.params,
+        })),
+      },
+    );
+    // An Override that keeps the target changes nothing for anyone (§2.2).
+    if (target.id !== booking.targetLessonId) {
+      await notifyReplacementMoved(
+        tx,
+        { sourceId: auditId, actorId: actor.userId },
+        {
+          fromLessonId: booking.targetLessonId,
+          toLessonId: target.id,
+          studentId: booking.studentId,
+          originalLessonId: booking.originalLessonId,
+          note: input.note || null,
+        },
+        now,
+      );
+    }
     return { status: "done", startsAt: target.startsAt.toISOString() };
   });
 }
@@ -1140,7 +1214,7 @@ export async function bookReplacementForStudent(
       if (isUniqueViolation(error)) throw refusal("ALREADY_ATTENDING");
       throw error;
     }
-    await tx.auditLog.create({
+    const audit = await tx.auditLog.create({
       data: {
         schoolId: school.id,
         actorId: actor.userId,
@@ -1165,7 +1239,19 @@ export async function bookReplacementForStudent(
           }),
         ),
       },
+      select: { id: true },
     });
+    await notifyReplacementBooked(
+      tx,
+      { sourceId: audit.id, actorId: actor.userId },
+      {
+        lessonId: target.id,
+        studentId: student.id,
+        originalLessonId: credit.sourceLessonId,
+        byAdmin: true,
+      },
+      now,
+    );
     return {
       status: "booked",
       bookingId,

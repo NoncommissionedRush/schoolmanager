@@ -97,6 +97,36 @@ enum MakeupCreditStatus {
   EXPIRED
 }
 
+/// Phase 5 in-app notifications (docs/architecture/phase5-rules.md §2.2).
+enum NotificationType {
+  LESSON_CANCELLED
+  LESSON_MOVED
+  SUBSTITUTE_ASSIGNED
+  SUBSTITUTE_REMOVED
+  ABSENCE_REPORTED
+  REPLACEMENT_BOOKED
+  REPLACEMENT_ENDED
+  REPLACEMENT_MOVED
+  REPLACEMENT_REVIEW_PENDING
+  TIMETABLE_PUBLISHED
+  TIMETABLE_CHANGED
+  CALENDAR_FEED_REVOKED
+}
+
+/// Out-of-app channels; IN_APP is the Notification row itself and never
+/// gets a delivery row (docs/architecture/phase5-rules.md §2.6).
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 // ---------------------------------------------------------------------------
 // Tenancy & people
 // ---------------------------------------------------------------------------
@@ -122,31 +152,33 @@ model School {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
-  memberships         Membership[]
-  teacherProfiles     TeacherProfile[]
-  studentProfiles     StudentProfile[]
-  levels              Level[]
-  courses             Course[]
-  groups              Group[]
-  groupMemberships    GroupMembership[]
-  rooms               Room[]
-  terms               Term[]
-  holidays            Holiday[]
-  teacherAvailability TeacherAvailability[]
-  timetableSlots      TimetableSlot[]
-  lessons             Lesson[]
-  lessonLogs          LessonLog[]
-  teacherNotes        TeacherNote[]
-  absenceReports      AbsenceReport[]
-  replacementRequests ReplacementRequest[]
-  makeupCredits       MakeupCredit[]
-  auditLogs           AuditLog[]
-  groupLessonTimes    GroupLessonTime[]
-  teacherLevels       TeacherLevel[]
-  groupTermSkips      GroupTermSkip[]
-  timetableDrafts     TimetableDraft[]
-  draftAssignments    TimetableDraftAssignment[]
-  generatorRuns       GeneratorRun[]
+  memberships            Membership[]
+  teacherProfiles        TeacherProfile[]
+  studentProfiles        StudentProfile[]
+  levels                 Level[]
+  courses                Course[]
+  groups                 Group[]
+  groupMemberships       GroupMembership[]
+  rooms                  Room[]
+  terms                  Term[]
+  holidays               Holiday[]
+  teacherAvailability    TeacherAvailability[]
+  timetableSlots         TimetableSlot[]
+  lessons                Lesson[]
+  lessonLogs             LessonLog[]
+  teacherNotes           TeacherNote[]
+  absenceReports         AbsenceReport[]
+  replacementRequests    ReplacementRequest[]
+  makeupCredits          MakeupCredit[]
+  auditLogs              AuditLog[]
+  groupLessonTimes       GroupLessonTime[]
+  teacherLevels          TeacherLevel[]
+  groupTermSkips         GroupTermSkip[]
+  timetableDrafts        TimetableDraft[]
+  draftAssignments       TimetableDraftAssignment[]
+  generatorRuns          GeneratorRun[]
+  notifications          Notification[]
+  notificationDeliveries NotificationDelivery[]
 
   @@map("schools")
 }
@@ -181,6 +213,8 @@ model User {
   groupTermSkips       GroupTermSkip[]
   timetableDrafts      TimetableDraft[]
   generatorRuns        GeneratorRun[]
+  notifications        Notification[]       @relation("NotificationRecipient")
+  actedNotifications   Notification[]       @relation("NotificationActor")
 
   @@map("users")
 }
@@ -656,6 +690,8 @@ model Lesson {
   @@index([schoolId, startsAt])
   @@index([schoolId, groupId, startsAt])
   @@index([schoolId, teacherId, startsAt])
+  /// Substitute timetables, teaching minutes and "needs cover" (phase5-rules.md §6).
+  @@index([schoolId, substituteTeacherId, startsAt])
   @@map("lessons")
 }
 
@@ -942,4 +978,64 @@ model AuditLog {
   @@index([schoolId, entityType, entityId])
   @@index([schoolId, createdAt])
   @@map("audit_logs")
+}
+
+/// One in-app notification for one user. Rendered at read time from
+/// `type` + `params` (no stored text). No FK to the subject, so it never
+/// blocks deleting a lesson. See docs/architecture/phase5-rules.md §2.
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  schoolId    String           @map("school_id") @db.Uuid
+  recipientId String           @map("recipient_id") @db.Uuid
+  type        NotificationType
+  /// teacher | regular | substitute | student | admin — selects the message variant (CHECK).
+  audience    String
+  /// ICU params, display names snapshotted at creation.
+  params      Json             @default("{}")
+  /// { kind: "lesson", lessonId } | { kind: "timetable", date } | { kind: "replacementReview" } | { kind: "calendarFeed" }.
+  link        Json?
+  /// `<audit log id>:<type>:<subject>`; de-duplicates within one action
+  /// only (§2.5). Cross-request safety is the action's conditional write.
+  sourceKey   String           @map("source_key")
+  /// Merges unread notifications about the same subject (§2.5). A partial
+  /// unique index allows one unread row per key and recipient.
+  coalesceKey String?          @map("coalesce_key")
+  actorId     String?          @map("actor_id") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at")
+  readAt      DateTime?        @map("read_at")
+
+  school     School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  recipient  User                   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor      User?                  @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  deliveries NotificationDelivery[]
+
+  @@unique([schoolId, id])
+  @@unique([schoolId, recipientId, sourceKey])
+  /// Inbox page and unread count.
+  @@index([schoolId, recipientId, createdAt(sort: Desc), id])
+  @@index([schoolId, recipientId, readAt])
+  @@map("notifications")
+}
+
+/// A notification sent on an out-of-app channel (outbox). Unused in v1: no
+/// channel is registered (phase5-rules.md §2.6).
+model NotificationDelivery {
+  id             String              @id @default(uuid()) @db.Uuid
+  schoolId       String              @map("school_id") @db.Uuid
+  notificationId String              @map("notification_id") @db.Uuid
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(PENDING)
+  attempts       Int                 @default(0)
+  lastError      String?             @map("last_error")
+  sentAt         DateTime?           @map("sent_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  notification Notification @relation(fields: [schoolId, notificationId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, id])
+  @@unique([notificationId, channel])
+  @@index([schoolId, status, createdAt])
+  @@map("notification_deliveries")
 }

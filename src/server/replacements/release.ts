@@ -4,6 +4,7 @@
 // the caller's `now`. Imports only types from the timetable service, so
 // that service can call it without an import cycle.
 
+import { notifyReplacementEnded } from "@/server/notifications/emit";
 import { type ReleaseCause, releaseCredit } from "@/server/scheduling";
 import type { Tx } from "@/server/timetable/service";
 
@@ -89,7 +90,7 @@ export async function releaseCancelledLessons(
       timeZone,
       now,
     );
-    await tx.auditLog.create({
+    const audit = await tx.auditLog.create({
       data: {
         schoolId,
         actorId,
@@ -105,7 +106,22 @@ export async function releaseCancelledLessons(
           creditExpiresAt: credit.expiresAt.toISOString(),
         },
       },
+      select: { id: true },
     });
+    // The student hears it from the booking, not as a cancelled lesson
+    // (phase5-rules.md §2.2); the teacher is told about the lesson itself.
+    await notifyReplacementEnded(
+      tx,
+      { sourceId: audit.id, actorId },
+      {
+        lessonId: booking.targetLessonId,
+        studentId: booking.studentId,
+        outcome: "cancelled",
+        creditBack: credit.status === "AVAILABLE",
+        only: "student",
+      },
+      now,
+    );
   }
   for (const credit of rescheduled) {
     const next = await releaseSpentCredit(tx, credit, "SCHOOL", timeZone, now);

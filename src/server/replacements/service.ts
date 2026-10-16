@@ -9,6 +9,7 @@ import type { Role } from "@/generated/prisma/enums";
 import { AdminError, msg } from "@/server/admin/result";
 import { isUniqueViolation } from "@/server/admin/shared";
 import { isUuid } from "@/server/lessons/access";
+import { notifyAbsenceReported } from "@/server/notifications/emit";
 import {
   checkAbsence,
   checkAbsenceDelete,
@@ -173,6 +174,8 @@ export async function reportAbsenceInTx(
   actor: AbsenceActor,
   input: ReportAbsenceInput,
   now: Date,
+  /** `notify: false` when the caller tells the teacher itself (reschedule). */
+  options: { notify?: boolean } = {},
 ): Promise<
   | (Extract<ReportAbsenceResult, { status: "reported" }> & {
       lesson: {
@@ -351,7 +354,7 @@ export async function reportAbsenceInTx(
       data: { status: "CANCELLED", cancelReason: STUDENT_CANCELLED },
     });
   }
-  await tx.auditLog.create({
+  const audit = await tx.auditLog.create({
     data: {
       schoolId: school.id,
       actorId: actor.userId,
@@ -369,7 +372,21 @@ export async function reportAbsenceInTx(
         cutoffMinutes: school.absenceCutoffMinutes,
       },
     },
+    select: { id: true },
   });
+  if (options.notify !== false) {
+    await notifyAbsenceReported(
+      tx,
+      { sourceId: audit.id, actorId: actor.userId },
+      {
+        lessonId: lesson.id,
+        studentId: student.id,
+        withCredit: credit !== null,
+        byAdmin: actor.role === "ADMIN",
+      },
+      now,
+    );
+  }
   return {
     status: "reported",
     absenceId,
