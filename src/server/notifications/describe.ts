@@ -51,6 +51,15 @@ export type NotificationText = {
 
 const NS = "notifications";
 
+/** `Lesson.cancelReason` codes with a `scheduling.cancelReasons.*` message. */
+const CANCEL_REASON_CODES: ReadonlySet<string> = new Set([
+  "HOLIDAY",
+  "TIMETABLE_CHANGED",
+  "STUDENT_CANCELLED",
+  "RESCHEDULED",
+  "SCHOOL_CANCELLED",
+]);
+
 const s = (value: unknown): string =>
   typeof value === "string" ? value : value == null ? "" : String(value);
 const n = (value: unknown): number => (typeof value === "number" ? value : 0);
@@ -154,9 +163,13 @@ export function describeNotification(
   switch (type) {
     case "LESSON_CANCELLED":
       if (params.reason) {
+        // Codes are translated; older free-text reasons are shown as typed.
+        const reason = s(params.reason);
         details.push(
           msg("detail.reason", {
-            reason: { key: `scheduling.cancelReasons.${s(params.reason)}` },
+            reason: CANCEL_REASON_CODES.has(reason)
+              ? { key: `scheduling.cancelReasons.${reason}` }
+              : reason,
           }),
         );
       }

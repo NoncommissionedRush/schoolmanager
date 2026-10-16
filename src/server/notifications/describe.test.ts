@@ -118,6 +118,14 @@ describe("describeNotification", () => {
     });
   });
 
+  it("a free-text cancel reason is shown as typed", () => {
+    expect(
+      text(
+        n("LESSON_CANCELLED", "student", { reason: "Teacher on sick leave" }),
+      ).details,
+    ).toEqual(["Reason: Teacher on sick leave"]);
+  });
+
   it("a 1-on-1 reads 'your lesson' for the student", () => {
     expect(
       text(
