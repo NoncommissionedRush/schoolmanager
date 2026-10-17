@@ -13,7 +13,7 @@ describe("navigationFor", () => {
     // ahead of the rest of P1; the admin lesson list (CARM-36) ahead of P2,
     // absences (CARM-42) ahead of the rest of P3, Assign teachers (CARM-56)
     // ahead of the rest of P4, Substitutions (CARM-65) and Ratings (CARM-66)
-    // ahead of P5.
+    // ahead of P5, Reports (CARM-73) ahead of P6.
     expect(navigationFor("ADMIN", 0).map((i) => i.href)).toEqual([
       "/admin",
       "/admin/timetable",
@@ -26,6 +26,7 @@ describe("navigationFor", () => {
       "/admin/groups",
       "/admin/levels",
       "/admin/ratings",
+      "/admin/reports",
       "/admin/settings",
     ]);
     // The teacher lesson log (CARM-35) ships ahead of the rest of P2.
@@ -59,8 +60,16 @@ describe("navigationFor", () => {
       "courses",
       "levels",
       "ratings",
+      "reports",
       "settings",
     ]);
+  });
+
+  it("has no payments or parents items for any role (reports.md)", () => {
+    for (const role of ["ADMIN", "TEACHER", "STUDENT"] as const) {
+      const hrefs = navigationFor(role, 99).map((i) => i.href);
+      expect(hrefs.filter((h) => /payments|parents/.test(h))).toEqual([]);
+    }
   });
 
   it("keeps every link inside the role's own area", () => {
@@ -84,6 +93,7 @@ describe("groupNavigation", () => {
       "schedule",
       "people",
       "academics",
+      "reports",
     ]);
     expect(pinned.map((i) => i.label)).toEqual(["settings"]);
   });

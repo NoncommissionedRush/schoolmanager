@@ -17,12 +17,10 @@ export type NavIcon =
   | "wand-sparkles"
   | "graduation-cap"
   | "presentation"
-  | "users-round"
   | "users"
   | "book-open"
   | "signal"
   | "star"
-  | "wallet"
   | "chart-column"
   | "settings"
   | "notebook-pen"
@@ -109,13 +107,6 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       section: "people",
     },
     {
-      label: "parents",
-      href: "/admin/parents",
-      icon: "users-round",
-      phase: 6,
-      section: "people",
-    },
-    {
       label: "courses",
       href: "/admin/groups",
       icon: "book-open",
@@ -139,19 +130,14 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       enabled: true,
       section: "academics",
     },
-    {
-      label: "payments",
-      href: "/admin/payments",
-      icon: "wallet",
-      phase: 6,
-      section: "finance",
-    },
+    // No _Payments_ or _Parents_ (owner decisions 2026-10-16/17, reports.md).
     {
       label: "reports",
       href: "/admin/reports",
       icon: "chart-column",
       phase: 6,
-      section: "finance",
+      enabled: true,
+      section: "reports",
     },
     {
       label: "settings",
@@ -253,7 +239,6 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       phase: 5,
       enabled: true,
     },
-    { label: "payments", href: "/student/payments", icon: "wallet", phase: 6 },
   ],
 };
 

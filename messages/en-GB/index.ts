@@ -27,6 +27,7 @@ import notifications from "./notifications.json";
 import people from "./people.json";
 import ratings from "./ratings.json";
 import replacements from "./replacements.json";
+import reports from "./reports.json";
 import reschedule from "./reschedule.json";
 import rooms from "./rooms.json";
 import scheduling from "./scheduling.json";
@@ -67,6 +68,7 @@ const messages = {
   people,
   ratings,
   replacements,
+  reports,
   reschedule,
   rooms,
   scheduling,
