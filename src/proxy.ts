@@ -38,6 +38,22 @@ const protect = auth((request) => {
     case "redirect":
       return NextResponse.redirect(new URL(decision.to, request.nextUrl));
     case "forbidden":
+      // A server action call (`Next-Action` header) can't be answered by
+      // the forbidden page: Next would look the action up there, log
+      // "Failed to find Server Action" and reply 409. Refuse it with a 403
+      // instead. The `x-nextjs-action-not-found` marker matters when Next
+      // forwarded the call from a page of the caller's own area to the
+      // owning page: without it Next turns the refusal into a 200 `{}`;
+      // with it, the caller gets Next's 409 "Server Action unavailable".
+      if (request.headers.has("next-action")) {
+        return new NextResponse("Forbidden", {
+          status: 403,
+          headers: {
+            "content-type": "text/plain",
+            "x-nextjs-action-not-found": "1",
+          },
+        });
+      }
       return NextResponse.rewrite(new URL("/forbidden", request.nextUrl), {
         status: 403,
       });
