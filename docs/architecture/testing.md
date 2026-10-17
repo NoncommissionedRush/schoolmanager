@@ -111,7 +111,10 @@ encodes arguments like React does; wrap a form argument (at most one per
 call) in `new FormFields({...})`. It posts to a page of the action's own
 area (`src/app/student/…` → a `/student/…` page): a page elsewhere may
 list the action in the manifest without serving it, and Next's 409 "failed
-to find Server Action" would look like a refusal. The CARM-28 admin-action spec uses the same
+to find Server Action" would look like a refusal. A role the proxy refuses for
+the area (a teacher posting to `/admin/…`) gets a plain 403 from the proxy
+itself, never the forbidden page, so these calls leave no "Failed to find
+Server Action" lines in the server log. The CARM-28 admin-action spec uses the same
 helper. It returns the HTTP status and the action's
 `ActionResult`, or `null` when the action didn't run.
 
