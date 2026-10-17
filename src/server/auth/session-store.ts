@@ -50,6 +50,10 @@ export async function revokeSession(
   expiresAt: Date,
   now: Date = new Date(),
 ): Promise<void> {
+  // Deliberately not scoped to `identity.schoolId`: an expired row refuses
+  // nothing (its token has expired too) and holds no school data beyond the
+  // ids, so any sign-out may clean up every school's. Scoping it would leave
+  // the rows of a school nobody signs out of growing forever.
   await db.revokedSession.deleteMany({ where: { expiresAt: { lt: now } } });
   await db.revokedSession.createMany({
     data: [

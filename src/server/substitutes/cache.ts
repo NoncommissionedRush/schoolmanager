@@ -13,9 +13,10 @@ export const needsCoverTag = (schoolId: string) => `needs-cover:${schoolId}`;
 /**
  * The needs-cover count (`countNeedsCover`) for the admin dashboard and the
  * tab label, cached per school for a minute: it loads 8 weeks of the
- * timetable. Substitute and availability actions expire it right away
- * (`updateTag(needsCoverTag(…))`); other changes (timetable, archiving)
- * show within a minute. The _Needs cover_ list itself is never cached.
+ * timetable. Substitute and availability actions, and archiving or
+ * restoring a person, expire it right away (`updateTag(needsCoverTag(…))`);
+ * other changes (timetable edits, absences) show within a minute. The
+ * _Needs cover_ list itself is never cached.
  *
  * Callers pass the viewer's school id from `requireRole`/`adminContext`.
  */

@@ -149,7 +149,15 @@ export function isoWeekOf(
  * that starts in `[from, to)`, except `excludeLessonId`.
  */
 export function teachingMinutes(
-  lessons: readonly LessonInfo[],
+  lessons: readonly Pick<
+    LessonInfo,
+    | "id"
+    | "status"
+    | "teacherId"
+    | "substituteTeacherId"
+    | "startsAt"
+    | "endsAt"
+  >[],
   teacherId: string,
   range: { from: Date; to: Date },
   excludeLessonId?: string,

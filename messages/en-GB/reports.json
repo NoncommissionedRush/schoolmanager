@@ -1,0 +1,147 @@
+{
+  "title": "Reports",
+  "description": "Attendance and teacher hours, with CSV export.",
+  "open": "Open report",
+  "openLabel": "Open report: {report}",
+  "back": "Reports",
+  "filter": {
+    "label": "Report filters",
+    "period": "Period",
+    "term": "Term: {term}",
+    "termDraft": "Term: {term} (not published)",
+    "custom": "Custom dates…",
+    "from": "From",
+    "to": "To",
+    "apply": "Apply",
+    "teacher": "Teacher",
+    "group": "Group",
+    "student": "Student",
+    "any": "Any",
+    "archived": "{name} (archived)",
+    "reset": "Reset filters"
+  },
+  "error": {
+    "rangeTooLong": "Choose a period of at most {days} days.",
+    "invalidRange": "The start date must be on or before the end date.",
+    "load": "Couldn't load the report."
+  },
+  "untilToday": "The period goes past today, so it shows lessons until today.",
+  "laterCorrections": "Figures reflect corrections made later, e.g. a deleted absence or a recorded substitute.",
+  "asOf": "Data as of {dateTime}.",
+  "archived": "Archived",
+  "duration": "{hours, plural, =0 {} other {# h}} {minutes, plural, =0 {} other {# min}}",
+  "durationZero": "0 h",
+  "noValue": "—",
+  "sortBy": "Sort by {column}",
+  "export": {
+    "label": "Export CSV",
+    "preparing": "Preparing…",
+    "done": "Export downloaded.",
+    "tooManyRows": "This export would have {count, number} rows. The limit is {max, number}. Choose a shorter period or add a filter.",
+    "error": "Couldn't create the export. Try again."
+  },
+  "empty": {
+    "title": "No data for this period.",
+    "description": "Try another term or dates.",
+    "noTerm": "Add a term first. Reports are based on terms and lessons.",
+    "termsLink": "Terms & holidays"
+  },
+  "totals": "Total",
+  "attendance": {
+    "title": "Attendance",
+    "description": "Expected and attended lessons per student and group.",
+    "caption": "Based on reported absences. Attendance is not taken in class.",
+    "col": {
+      "student": "Student",
+      "group": "Group",
+      "expected": "Expected",
+      "absent": "Absent",
+      "absentDetail": "{withCredit} with credit · {late} late",
+      "attended": "Attended",
+      "rate": "Attendance",
+      "makeups": "Makeups attended"
+    },
+    "rate": "{rate} %",
+    "stat": {
+      "expected": "Expected",
+      "attended": "Attended",
+      "absent": "Absent",
+      "makeups": "Makeups attended"
+    },
+    "groupType": {
+      "GROUP": "Group",
+      "ONE_ON_ONE": "1-on-1"
+    }
+  },
+  "hours": {
+    "title": "Teacher hours",
+    "description": "Hours each teacher taught. Substitute hours count for the substitute.",
+    "col": {
+      "teacher": "Teacher",
+      "lessons": "Lessons",
+      "regular": "Regular",
+      "substitute": "As substitute",
+      "total": "Total",
+      "coveredByOthers": "Covered by others",
+      "date": "Date",
+      "time": "Time",
+      "group": "Group",
+      "level": "Level",
+      "room": "Room",
+      "role": "Role",
+      "duration": "Duration"
+    },
+    "time": "{start}–{end}",
+    "role": {
+      "REGULAR": "Regular",
+      "SUBSTITUTE": "Substitute for {teacher}"
+    },
+    "stat": {
+      "total": "Total hours",
+      "lessons": "Lessons",
+      "substitute": "Substitute hours"
+    },
+    "footnote": "Only lessons that have ended count. Cancelled lessons don't. Covered by others isn't in the total.",
+    "lessonsCaption": "Lessons {teacher} taught in the period.",
+    "export": {
+      "summary": "Summary",
+      "lessons": "Lesson details"
+    }
+  },
+  "csv": {
+    "attendance": {
+      "student": "Student",
+      "group": "Group",
+      "level": "Level",
+      "expected": "Expected",
+      "absent": "Absent",
+      "absentWithCredit": "Absent with credit",
+      "absentLate": "Absent late",
+      "attended": "Attended",
+      "attendanceRate": "Attendance %",
+      "makeupsAttended": "Makeups attended"
+    },
+    "teacher-hours": {
+      "teacher": "Teacher",
+      "lessons": "Lessons",
+      "regularMinutes": "Regular minutes",
+      "substituteMinutes": "Substitute minutes",
+      "totalMinutes": "Total minutes",
+      "hours": "Hours",
+      "coveredByOthersMinutes": "Covered by others minutes"
+    },
+    "teacher-hours-lessons": {
+      "date": "Date",
+      "start": "Start",
+      "end": "End",
+      "minutes": "Minutes",
+      "teacher": "Teacher",
+      "role": "Role",
+      "regularTeacher": "Regular teacher",
+      "group": "Group",
+      "level": "Level",
+      "room": "Room",
+      "lessonId": "Lesson ID"
+    }
+  }
+}

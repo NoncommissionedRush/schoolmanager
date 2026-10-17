@@ -6,9 +6,9 @@
     "schedule": "Schedule",
     "people": "People",
     "academics": "Academics",
-    "finance": "Finance",
     "teaching": "Teaching",
-    "me": "Me"
+    "me": "Me",
+    "reports": "Reports"
   },
   "dashboard": "Dashboard",
   "home": "Home",
@@ -20,11 +20,9 @@
   "autoGenerate": "Assign teachers",
   "students": "Students",
   "teachers": "Teachers",
-  "parents": "Parents",
   "courses": "Courses & groups",
   "levels": "Skill levels",
   "ratings": "Ratings",
-  "payments": "Payments",
   "reports": "Reports",
   "settings": "Settings",
   "myGroups": "My groups & students",
