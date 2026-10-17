@@ -64,6 +64,10 @@ const ADMIN_PAGES = [
   "/admin/absences?tab=replacements",
   `/admin/timetable?week=${WEEK}`,
   `/admin/timetable/edit`,
+  // Phase 6 (CARM-73)
+  "/admin/reports",
+  "/admin/reports/attendance",
+  "/admin/reports/teacher-hours",
 ];
 
 async function expectPagesClean(page: Page, paths: string[], leaks: string[]) {
@@ -120,6 +124,7 @@ test.describe("cross-school › pages", () => {
         `/admin/students/${b.studentUser}`,
         `/admin/groups/${b.group}`,
         `/admin/lessons/${b.lesson}`,
+        `/admin/reports/teacher-hours/${b.teacher}`,
       ],
       Object.values(SECOND_NAMES),
     );
@@ -153,6 +158,7 @@ test.describe("cross-school › pages", () => {
         `/admin/students/${a.studentUser}`,
         `/admin/groups/${a.group}`,
         `/admin/lessons/${a.lesson}`,
+        `/admin/reports/teacher-hours/${a.teacher}`,
       ],
       SCHOOL_A_NAMES,
     );

@@ -59,6 +59,12 @@ const adminPages = (ids: SchoolIds) => [
   `/admin/substitutions?teacher=${ids.teacher}`,
   "/admin/ratings",
   `/admin/ratings/${ids.teacher}`,
+  // Phase 6 (CARM-73)
+  "/admin/reports",
+  "/admin/reports/attendance",
+  `/admin/reports/attendance?group=${ids.group}`,
+  "/admin/reports/teacher-hours",
+  `/admin/reports/teacher-hours/${ids.teacher}`,
 ];
 
 const FORBIDDEN = "You don't have access to this page";
