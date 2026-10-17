@@ -313,5 +313,11 @@ test.describe("reports", () => {
     await teacher.waitForURL("/teacher");
     expect((await teacher.request.get(path)).status()).toBe(403);
     await teacher.close();
+
+    const student = await browser.newPage();
+    await signIn(student, emails.sara);
+    await student.waitForURL("/student");
+    expect((await student.request.get(path)).status()).toBe(403);
+    await student.close();
   });
 });
