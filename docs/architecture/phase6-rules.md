@@ -40,13 +40,13 @@ Terms are used as in [phase5-rules.md](phase5-rules.md) and
 
 ## 1. Where things live
 
-| Path                                   | What                                                                                                                                                                             |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Path                                   | What                                                                                                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/server/reports/rules.ts`          | Pure: `isMakeupLesson`, `expectedFor`, `attendanceReport`, `teacherHoursReport`, `teacherHoursLessons`, `roundHalfUpDiv`, `minutesToHours` (§3, §4). Built on `teachingMinutes` |
-| `src/server/reports/csv.ts`            | Pure `toCsv(columns, rows, messages)` with RFC 4180 quoting and the formula-injection guard (§5)                                                                                 |
-| `src/server/reports/admin.ts`          | `loadReport(report, input)`: loads the rows and calls the pure builders. Admin only (§6). The page and the CSV route call this same function                                     |
-| `src/app/api/admin/reports/[report]/…` | `GET …/<report>.csv`, admin only, same zod input and same loader as the page (§5)                                                                                                |
-| `messages/en-GB/reports.json`          | `reports.*` (copy from the design spec §5), including `reports.csv.<report>.<column>` and the error codes                                                                        |
+| `src/server/reports/csv.ts`            | Pure `toCsv(columns, rows, messages)` with RFC 4180 quoting and the formula-injection guard (§5)                                                                                |
+| `src/server/reports/admin.ts`          | `loadReport(report, input)`: loads the rows and calls the pure builders. Admin only (§6). The page and the CSV route call this same function                                    |
+| `src/app/api/admin/reports/[report]/…` | `GET …/<report>.csv`, admin only, same zod input and same loader as the page (§5)                                                                                               |
+| `messages/en-GB/reports.json`          | `reports.*` (copy from the design spec §5), including `reports.csv.<report>.<column>` and the error codes                                                                       |
 
 The pure files follow the scheduling module's contract. Inputs are plain
 data and output is deterministic and sorted. There is no `Date.now()`, no
@@ -101,12 +101,12 @@ taken in class.").
 For student _s_ and lesson _L_ of group _g_, `expectedFor(s, L)` holds when
 **all** of the following are true:
 
-| #   | Condition                                                                                                  |
-| --- | ---------------------------------------------------------------------------------------------------------- |
-| 1   | _L_ is in a published term (`Term.timetablePublishedAt` set)                                               |
-| 2   | _s_ is a **member** of _g_ at `L.startsAt` (`isMemberAt`)                                                  |
+| #   | Condition                                                                                                 |
+| --- | --------------------------------------------------------------------------------------------------------- |
+| 1   | _L_ is in a published term (`Term.timetablePublishedAt` set)                                              |
+| 2   | _s_ is a **member** of _g_ at `L.startsAt` (`isMemberAt`)                                                 |
 | 3   | `L.status ≠ CANCELLED`, **or** `L.cancelReason = STUDENT_CANCELLED` and _s_ has an `AbsenceReport` on _L_ |
-| 4   | _L_ is not a makeup: `isMakeupLesson(L) = false`                                                           |
+| 4   | _L_ is not a makeup: `isMakeupLesson(L) = false`                                                          |
 
 Rule 3 keeps a 1-on-1 the student cancelled themselves (the lesson is
 cancelled so the teacher is free, replacements.md §3) as expected-and-absent,
@@ -166,7 +166,7 @@ the filters:
 | `absentLate`       | `absent − absentWithCredit`                                                                                                                               |
 | `attended`         | `expected − absent`                                                                                                                                       |
 | `attendanceRate`   | `roundHalfUpDiv(attended × 1000, expected)` tenths of a percent, i.e. a percentage with one decimal (`87.5`). Empty (`—` on the page) when `expected = 0` |
-| `makeupsAttended`  | Ended, non-cancelled makeups _M_ that _s_ attended, **whose credit came from a lesson of this group** (below)                                              |
+| `makeupsAttended`  | Ended, non-cancelled makeups _M_ that _s_ attended, **whose credit came from a lesson of this group** (below)                                             |
 
 `makeupsAttended` counts, for student _s_:
 
@@ -326,16 +326,16 @@ a slow query, an index is added in CARM-73 with a note here.
 
 ## 8. Agreed with the design spec (CARM-70, `docs/design/reports.md` at `10ba8d4`)
 
-| #   | Spec                                                                                       | Verdict                                                                                                                                                                         |
-| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | Two reports, attendance and teacher hours; no money reports, no _Payments_ / _Parents_ nav | Confirmed                                                                                                                                                                       |
-| R2  | Period = term or custom dates, inclusive, school time zone, default current term           | Confirmed (§2)                                                                                                                                                                  |
-| R3  | 366 days, 50,000 rows, "until today", "as of", "figures reflect later corrections"         | Confirmed (§2). The 366 days are counted inclusively                                                                                                                            |
-| R4  | Attendance columns, "attended = expected − absent", makeups with this group's credits      | Confirmed (§3). Credit-earning 1-on-1 cancellations are expected-and-absent; the teacher filter applies to a makeup's own teacher                                               |
-| R5  | Teacher hours columns, covered by others not in the total, only teachers who taught listed | Confirmed (§4.1)                                                                                                                                                                |
-| R6  | Per-teacher page and _Lesson details_ export                                               | Confirmed (§4.2): rows are the lessons whose effective teacher is that teacher                                                                                                  |
+| #   | Spec                                                                                       | Verdict                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Two reports, attendance and teacher hours; no money reports, no _Payments_ / _Parents_ nav | Confirmed                                                                                                                                                                     |
+| R2  | Period = term or custom dates, inclusive, school time zone, default current term           | Confirmed (§2)                                                                                                                                                                |
+| R3  | 366 days, 50,000 rows, "until today", "as of", "figures reflect later corrections"         | Confirmed (§2). The 366 days are counted inclusively                                                                                                                          |
+| R4  | Attendance columns, "attended = expected − absent", makeups with this group's credits      | Confirmed (§3). Credit-earning 1-on-1 cancellations are expected-and-absent; the teacher filter applies to a makeup's own teacher                                             |
+| R5  | Teacher hours columns, covered by others not in the total, only teachers who taught listed | Confirmed (§4.1)                                                                                                                                                              |
+| R6  | Per-teacher page and _Lesson details_ export                                               | Confirmed (§4.2): rows are the lessons whose effective teacher is that teacher                                                                                                |
 | R7  | CSV format and file name                                                                   | Confirmed (§5). The guard also covers TAB and CR; the attendance and summary column lists above are the `reports.csv.<report>.<column>` keys. Range and row errors answer 422 |
-| R8  | 403 for teacher / student, 401 signed out, 404 for another school's ids                    | Confirmed (§5, §6)                                                                                                                                                              |
+| R8  | 403 for teacher / student, 401 signed out, 404 for another school's ids                    | Confirmed (§5, §6)                                                                                                                                                            |
 
 Open in the spec (owner): Q1 keep the attendance report (default: keep; if
 dropped, §3 and the `attendance` export are removed, nothing else changes);
