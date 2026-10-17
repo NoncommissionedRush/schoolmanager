@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe — Reports (CARM-70)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              background: "#ffffff",
+              foreground: "#0f172a",
+              muted: { DEFAULT: "#f1f5f9", foreground: "#475569" },
+              primary: { DEFAULT: "#2563eb", foreground: "#ffffff" },
+              accent: { DEFAULT: "#eff6ff", foreground: "#1e40af" },
+              destructive: { DEFAULT: "#dc2626", foreground: "#ffffff" },
+              border: "#e2e8f0",
+              input: "#64748b",
+              ring: "#2563eb",
+            },
+            borderRadius: { lg: "0.5rem", md: "6px", sm: "4px" },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+      .skeleton {
+        background: #e2e8f0;
+        border-radius: 4px;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-200 font-sans text-sm text-foreground">
+    <div
+      class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-4 py-2 text-xs text-slate-100"
+    >
+      <strong class="text-sm">Wireframe · Phase 6</strong>
+      <div class="flex flex-wrap gap-1" id="wf-screens"></div>
+      <div class="flex items-center gap-1">
+        <span class="text-slate-400">State:</span>
+        <div class="flex flex-wrap gap-1" id="wf-states"></div>
+      </div>
+    </div>
+    <div id="stage" class="flex justify-center p-6"></div>
+
+    <script>
+      /* --------------------------------------------------------------- helpers */
+      const btn = (label, v = "primary", extra = "") => {
+        const c = {
+          primary: "bg-primary text-white hover:bg-blue-700",
+          outline: "border border-input bg-white hover:bg-muted",
+          ghost: "hover:bg-muted",
+          link: "text-primary hover:underline px-0",
+          destructive: "bg-destructive text-white",
+        }[v];
+        return `<button class="h-9 px-3 rounded-md font-medium inline-flex items-center justify-center gap-2 ${c} ${extra}">${label}</button>`;
+      };
+      const badge = (t, tone = "muted", icon = "") => {
+        const c = {
+          muted: "bg-slate-100 text-slate-700 border-slate-300",
+          success: "bg-green-50 text-green-700 border-green-300",
+          warning: "bg-amber-50 text-amber-700 border-amber-300",
+          danger: "bg-red-50 text-red-700 border-red-300",
+          info: "bg-blue-50 text-blue-700 border-blue-300",
+          cyan: "bg-cyan-50 text-cyan-900 border-cyan-600",
+        }[tone];
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-sm border whitespace-nowrap ${c}">${icon ? `<span aria-hidden="true">${icon}</span>` : ""}${t}</span>`;
+      };
+      const alert = (t, tone = "info") => {
+        const c = {
+          info: "bg-blue-50 text-blue-800 border-blue-300",
+          warning: "bg-amber-50 text-amber-800 border-amber-300",
+          danger: "bg-red-50 text-red-800 border-red-300",
+          success: "bg-green-50 text-green-800 border-green-300",
+        }[tone];
+        return `<div role="${tone === "danger" ? "alert" : "status"}" class="rounded-md border px-3 py-2 ${c}">${t}</div>`;
+      };
+      const card = (inner, extra = "") =>
+        `<section class="rounded-lg border border-border bg-white p-6 ${extra}">${inner}</section>`;
+      const empty = (icon, title, desc, action = "") =>
+        `<div class="flex flex-col items-center text-center gap-2 py-10"><div class="text-4xl text-slate-400" aria-hidden="true">${icon}</div><h2 class="text-lg font-semibold">${title}</h2><p class="text-muted-foreground max-w-sm">${desc}</p>${action}</div>`;
+      const skel = (n, h = "h-10") =>
+        Array.from(
+          { length: n },
+          () => `<div class="skeleton ${h}"></div>`,
+        ).join("");
+      const sel = (label, value, w = "") =>
+        `<label class="inline-flex flex-col gap-1 ${w}"><span class="text-xs font-medium text-muted-foreground">${label}</span><span class="h-9 px-3 rounded-md border border-input bg-white inline-flex items-center justify-between gap-6">${value}<span aria-hidden="true">▾</span></span></label>`;
+      const field = (label, value, hint = "") =>
+        `<div class="space-y-1"><label class="font-medium block">${label}</label><div class="h-9 px-3 rounded-md border border-input bg-white flex items-center">${value}</div>${hint}</div>`;
+      const stat = (label, value, sub = "") =>
+        `<a href="#" class="rounded-lg border border-border bg-white p-4 block hover:bg-accent"><dt class="text-muted-foreground">${label}</dt><dd class="text-2xl font-semibold tnum mt-1">${value}</dd>${sub ? `<dd class="text-xs text-muted-foreground mt-1">${sub}</dd>` : ""}</a>`;
+      const overlay = (bg, dialog) =>
+        `<div class="relative">${bg}<div class="absolute inset-0 bg-black/50 rounded-lg flex items-start justify-center pt-24">${dialog}</div></div>`;
+      const dialog = (title, inner, footer, w = "w-[480px]") =>
+        `<div role="dialog" aria-modal="true" class="${w} rounded-lg bg-white shadow-lg p-6 space-y-4"><div class="flex justify-between"><h2 class="text-lg font-semibold">${title}</h2><button aria-label="Close">✕</button></div>${inner}<div class="flex justify-end gap-2 pt-2">${footer}</div></div>`;
+
+      /* App shells */
+      const NAV = [
+        ["OVERVIEW", ["▣ Dashboard"]],
+        [
+          "SCHEDULE",
+          ["📅 Timetable", "🗓 Absences & replacements", "⚙ Substitutions"],
+        ],
+        ["PEOPLE", ["🎓 Students", "🧑‍🏫 Teachers"]],
+        ["ACADEMICS", ["📖 Courses & groups", "★ Ratings"]],
+        ["REPORTS", ["📊 Reports"]],
+      ];
+      const sidebar = (active) =>
+        `<nav aria-label="Main" class="w-56 shrink-0 border-r border-border bg-white p-3 space-y-3 text-sm">${NAV.map(
+          ([s, items]) =>
+            `<div><div class="px-2 text-xs font-semibold text-slate-500">${s}</div>${items
+              .map(
+                (i) =>
+                  `<a href="#" ${i.includes(active) ? 'aria-current="page"' : ""} class="block px-2 py-1.5 rounded-md ${i.includes(active) ? "bg-accent text-accent-foreground font-medium" : "hover:bg-muted"}">${i}</a>`,
+              )
+              .join("")}</div>`,
+        ).join("")}</nav>`;
+      const appHeader = () =>
+        `<header class="h-14 flex items-center gap-3 border-b border-border bg-white px-4"><span class="h-8 w-8 rounded bg-primary text-white grid place-items-center text-xs font-semibold">LL</span><strong>Lingua Language School</strong><div class="ml-auto flex items-center gap-3"><span aria-hidden="true">🔔</span><span class="inline-flex items-center gap-2"><span class="h-8 w-8 rounded-full bg-slate-200 grid place-items-center text-xs">AV</span>Anna ▾</span></div></header>`;
+      const desktop = (inner, active = "Reports") =>
+        `<div class="w-[1240px] rounded-lg overflow-hidden border border-slate-300 bg-muted">${appHeader()}<div class="flex">${sidebar(active)}<main class="flex-1 p-6 space-y-6 min-w-0">${inner}</main></div></div>`;
+      const phone = (inner) =>
+        `<div class="w-[390px] min-h-[780px] rounded-[2rem] border-8 border-slate-800 bg-white overflow-hidden text-base flex flex-col">
+          <header class="h-14 flex items-center gap-2 border-b border-border px-3"><button class="h-11 w-11 text-lg" aria-label="Menu">☰</button><strong class="text-sm">Lingua Language School</strong><div class="ml-auto" aria-hidden="true">🔔</div></header>
+          <main class="flex-1 p-4 space-y-4">${inner}</main>
+          <nav class="h-16 border-t border-border grid grid-cols-5 text-xs text-center">${["🏠 Home", "📅 Timetable", "📋 Homework", "🗓 Absences", "☰ More"].map((t) => `<a class="grid place-items-center ${t.includes("More") ? "text-primary font-medium" : ""}" href="#">${t}</a>`).join("")}</nav>
+        </div>`;
+      const pageHeader = (title, action = "", desc = "") =>
+        `<div class="flex items-start justify-between gap-4"><div><h1 class="text-2xl font-semibold">${title}</h1>${desc ? `<p class="text-muted-foreground mt-1">${desc}</p>` : ""}</div>${action}</div>`;
+      const tabs = (items, active) =>
+        `<div role="tablist" class="inline-flex rounded-md bg-slate-200 p-1">${items.map((t) => `<button role="tab" aria-selected="${t === active}" class="px-3 h-8 rounded ${t === active ? "bg-white shadow-sm font-medium" : "text-slate-600"}">${t}</button>`).join("")}</div>`;
+      const table = (cols, rows, opts = {}) =>
+        `<div class="overflow-x-auto"><table class="w-full text-left">${opts.caption ? `<caption class="sr-only">${opts.caption}</caption>` : ""}<thead class="bg-muted text-slate-600"><tr>${cols.map((c) => `<th scope="col" class="px-3 py-2 font-medium ${c.r ? "text-right" : ""}">${c.t}</th>`).join("")}</tr></thead><tbody class="divide-y divide-border">${rows.map((r) => `<tr class="hover:bg-accent/50">${r.map((v, i) => `<td class="px-3 py-2 align-top ${cols[i] && cols[i].r ? "text-right tnum" : ""}">${v}</td>`).join("")}</tr>`).join("")}</tbody>${opts.foot ? `<tfoot class="font-semibold border-t-2 border-border"><tr>${opts.foot.map((v, i) => `<td class="px-3 py-2 ${cols[i] && cols[i].r ? "text-right tnum" : ""}">${v}</td>`).join("")}</tr></tfoot>` : ""}</table></div>`;
+      const a = (t) =>
+        `<a href="#" class="text-primary hover:underline">${t}</a>`;
+      const forbidden = () =>
+        `<div class="w-[900px] rounded-lg border border-slate-300 bg-white">${appHeader()}<div class="p-16">${empty("🔒", "You don't have access to this page", "Reports are for school admins only.", btn("Go to my dashboard"))}</div></div>`;
+
+      /* ----------------------------------------------------------- reports */
+      const reportShell = (
+        title,
+        desc,
+        filters,
+        stats,
+        body,
+        foot,
+        exportBtn,
+        extra = "",
+      ) =>
+        desktop(
+          `<a href="#" class="text-primary">‹ Reports</a>` +
+            pageHeader(title, exportBtn, desc) +
+            `<div class="flex flex-wrap items-end gap-3">${filters}<span class="ml-auto">${a("Reset filters")}</span></div>` +
+            extra +
+            stats +
+            body +
+            `<p class="text-muted-foreground text-xs">${foot ? foot + " " : ""}Figures reflect corrections made later, e.g. a deleted absence or a recorded substitute. Data as of 16 Oct 2026, 14:05.</p>`,
+          "Reports",
+        );
+      const exportBtn = (menu) =>
+        btn("⬇ Export CSV" + (menu ? " ▾" : ""), "outline");
+      const untilToday = alert(
+        "ⓘ The period goes past today, so it shows lessons until today.",
+        "info",
+      );
+      function reportsIndex() {
+        const c = (t, d) =>
+          card(
+            `<h2 class="text-lg font-semibold">${t}</h2><p class="text-muted-foreground mt-1 mb-4">${d}</p>${btn("Open report", "outline")}`,
+          );
+        return desktop(
+          pageHeader("Reports") +
+            `<div class="grid grid-cols-2 gap-6">${c("Attendance", "Expected and attended lessons per student and group.")}${c("Teacher hours", "Hours each teacher taught. Substitute hours count for the substitute.")}</div>`,
+          "Reports",
+        );
+      }
+      function attendance(st) {
+        const filters =
+          sel("Period", "Term: Autumn 2026") +
+          sel("Group", "Any") +
+          sel("Teacher", "Any") +
+          sel("Student", "Any");
+        const stats = `<dl class="grid grid-cols-4 gap-4">${stat("Expected", "3,610")}${stat("Attended", "3,292", "91.2 %")}${stat("Absent", "318", "241 with credit · 77 late")}${stat("Makeups attended", "163")}</dl>`;
+        let body;
+        if (st === 1) body = card(skel(6));
+        else if (st === 2)
+          body = card(
+            empty(
+              "📊",
+              "No data for this period.",
+              "Try another term or dates.",
+            ),
+          );
+        else
+          body = card(
+            table(
+              [
+                { t: "Student" },
+                { t: "Group" },
+                { t: "Expected", r: 1 },
+                { t: "Absent", r: 1 },
+                { t: "Attended", r: 1 },
+                { t: "Attendance", r: 1 },
+                { t: "Makeups attended", r: 1 },
+              ],
+              [
+                [
+                  a("Jana Kovac"),
+                  "👥 B1 Evening · B1",
+                  "14",
+                  "6<br><span class='text-xs text-muted-foreground'>3 with credit · 3 late</span>",
+                  "8",
+                  "57.1 %",
+                  "2",
+                ],
+                [
+                  a("Petr Hruby"),
+                  "👥 B1 Evening · B1",
+                  "14",
+                  "1<br><span class='text-xs text-muted-foreground'>1 with credit · 0 late</span>",
+                  "13",
+                  "92.9 %",
+                  "1",
+                ],
+                [
+                  a("Marek Bielik"),
+                  "👤 Marek Bielik 1-on-1 · A2",
+                  "10",
+                  "1<br><span class='text-xs text-muted-foreground'>1 with credit · 0 late</span>",
+                  "9",
+                  "90.0 %",
+                  "1",
+                ],
+              ],
+              { foot: ["Total", "", "3,610", "318", "3,292", "91.2 %", "163"] },
+            ),
+            "p-4",
+          );
+        return reportShell(
+          "Attendance",
+          "Based on reported absences. Attendance is not taken in class.",
+          filters,
+          st === 1
+            ? `<div class="grid grid-cols-4 gap-4">${skel(4, "h-20")}</div>`
+            : stats,
+          body,
+          "",
+          exportBtn(false),
+          st === 0 ? untilToday : "",
+        );
+      }
+      function hours(st) {
+        const filters =
+          sel("Period", st === 2 ? "Custom dates…" : "Term: Autumn 2026") +
+          (st === 2
+            ? `<label class="inline-flex flex-col gap-1"><span class="text-xs font-medium text-muted-foreground">Dates</span><span class="h-9 px-3 rounded-md border border-red-600 bg-white inline-flex items-center">1 Jan 2026 – 31 Mar 2027</span><span class="text-xs text-red-700">Choose a period of at most 366 days.</span></label>`
+            : "") +
+          sel("Teacher", st === 1 ? "Ana Kral" : "Any") +
+          sel("Group", "Any");
+        const stats = `<dl class="grid grid-cols-3 gap-4">${stat("Total hours", "412 h 30 min")}${stat("Lessons", "275")}${stat("Substitute hours", "18 h")}</dl>`;
+        let body;
+        if (st === 1)
+          body = card(
+            `<h2 class="text-lg font-semibold mb-3">Ana Kral — lessons</h2>` +
+              table(
+                [
+                  { t: "Date" },
+                  { t: "Time" },
+                  { t: "Group" },
+                  { t: "Level" },
+                  { t: "Room" },
+                  { t: "Role" },
+                  { t: "Duration", r: 1 },
+                ],
+                [
+                  [
+                    "Mon 13 Oct",
+                    "17:00–18:30",
+                    "B1 Evening",
+                    "B1",
+                    "Room 3",
+                    `<span class="text-cyan-900">⚙ Substitute for Tomas Horvat</span>`,
+                    "1 h 30 min",
+                  ],
+                  [
+                    "Tue 14 Oct",
+                    "09:00–10:30",
+                    "A2 Morning",
+                    "A2",
+                    "Room 1",
+                    "Regular",
+                    "1 h 30 min",
+                  ],
+                  [
+                    "Wed 15 Oct",
+                    "18:00–19:00",
+                    "Jan Novak 1-on-1",
+                    "A2",
+                    "Room 5",
+                    "Regular",
+                    "1 h",
+                  ],
+                ],
+              ),
+            "p-4",
+          );
+        else
+          body = card(
+            table(
+              [
+                { t: "Teacher" },
+                { t: "Lessons", r: 1 },
+                { t: "Regular", r: 1 },
+                { t: "As substitute", r: 1 },
+                { t: "Total", r: 1 },
+                { t: "Covered by others", r: 1 },
+              ],
+              [
+                [
+                  a("Ana Kral"),
+                  "62",
+                  "84 h",
+                  "<span class='text-cyan-900'>⚙ 9 h</span>",
+                  "<strong>93 h</strong>",
+                  "<span class='text-muted-foreground'>0 h</span>",
+                ],
+                [
+                  a("Tomas Horvat"),
+                  "54",
+                  "76 h 30 min",
+                  "0 h",
+                  "<strong>76 h 30 min</strong>",
+                  "<span class='text-muted-foreground'>6 h</span>",
+                ],
+                [
+                  a("Eva Simon") + " " + badge("Archived"),
+                  "31",
+                  "40 h 30 min",
+                  "<span class='text-cyan-900'>⚙ 4 h 30 min</span>",
+                  "<strong>45 h</strong>",
+                  "<span class='text-muted-foreground'>0 h</span>",
+                ],
+              ],
+              {
+                foot: [
+                  "Total",
+                  "275",
+                  "394 h 30 min",
+                  "18 h",
+                  "412 h 30 min",
+                  "18 h",
+                ],
+              },
+            ),
+            "p-4",
+          );
+        const exportMenu =
+          st === 3
+            ? `<div class="relative">${exportBtn(true)}<div role="menu" class="absolute right-0 mt-1 w-44 rounded-md border border-border bg-white shadow-lg py-1 z-10">${["Summary", "Lesson details"].map((t) => `<div role="menuitem" class="px-3 py-1.5 hover:bg-muted">${t}</div>`).join("")}</div></div>`
+            : exportBtn(true);
+        const tooMany =
+          st === 4
+            ? alert(
+                "⚠ This export would have 61,240 rows. The limit is 50,000. Choose a shorter period or add a filter.",
+                "warning",
+              )
+            : "";
+        return reportShell(
+          "Teacher hours",
+          "Hours each teacher taught. Substitute hours count for the substitute.",
+          filters,
+          stats,
+          tooMany + body,
+          "Only lessons that have ended count. Cancelled lessons don't. Covered by others isn't in the total.",
+          exportMenu,
+        );
+      }
+      /* ----------------------------------------------------------- screens */
+      const SCREENS = [
+        { k: "ri", label: "Reports", states: ["index"], fn: reportsIndex },
+        {
+          k: "ra",
+          label: "Attendance",
+          states: ["table (until today)", "loading", "no data"],
+          fn: attendance,
+        },
+        {
+          k: "rh",
+          label: "Teacher hours",
+          states: [
+            "summary",
+            "teacher detail",
+            "range too long",
+            "export menu",
+            "too many rows",
+          ],
+          fn: hours,
+        },
+        {
+          k: "403",
+          label: "403 (teacher)",
+          states: ["forbidden"],
+          fn: forbidden,
+        },
+      ];
+      let cur = { screen: "ri", state: 0 };
+      function render() {
+        const s = SCREENS.find((x) => x.k === cur.screen);
+        document.getElementById("wf-screens").innerHTML = SCREENS.map(
+          (x) =>
+            `<button data-go="${x.k}" class="px-2 py-1 rounded ${x.k === cur.screen ? "bg-white text-slate-900 font-medium" : "bg-slate-700 hover:bg-slate-600"}">${x.label}</button>`,
+        ).join("");
+        document.getElementById("wf-states").innerHTML = s.states
+          .map(
+            (st, i) =>
+              `<button data-state="${i}" class="px-2 py-1 rounded ${i === cur.state ? "bg-blue-500 text-white" : "bg-slate-700 hover:bg-slate-600"}">${st}</button>`,
+          )
+          .join("");
+        document.getElementById("stage").innerHTML = s.fn(cur.state);
+      }
+      document.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]"),
+          st = e.target.closest("[data-state]");
+        if (go) {
+          e.preventDefault();
+          cur = { screen: go.dataset.go, state: 0 };
+        } else if (st) cur.state = +st.dataset.state;
+        else return;
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>

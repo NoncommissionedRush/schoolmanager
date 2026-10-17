@@ -16,11 +16,11 @@ weekly timetable grid. Tokens: `docs/design/tokens.md`. Clickable wireframe:
 
 ## 2. Roles
 
-| Role    | Primary device                           | Main jobs (roadmap)                                                                          |
-| ------- | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Admin   | Desktop (≥ 1280)                         | Set up school data, build timetable, review absences/replacements, people, payments, reports |
-| Teacher | Desktop or tablet; phone between lessons | See own lessons, write lesson logs & homework, report absence                                |
-| Student | Phone (≈ 390 × 844)                      | See next lesson & timetable, homework, report absence, book replacement                      |
+| Role    | Primary device                           | Main jobs (roadmap)                                                                |
+| ------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| Admin   | Desktop (≥ 1280)                         | Set up school data, build timetable, review absences/replacements, people, reports |
+| Teacher | Desktop or tablet; phone between lessons | See own lessons, write lesson logs & homework, report absence                      |
+| Student | Phone (≈ 390 × 844)                      | See next lesson & timetable, homework, report absence, book replacement            |
 
 **One role per user** (decided 2026-10-14): a person is admin, teacher or student — never several. No role switcher.
 
@@ -116,12 +116,10 @@ Admin
 | Schedule                  | Auto-generate                                     | `nav.autoGenerate`  | `wand-sparkles`    | P4    |
 | People                    | Students                                          | `nav.students`      | `graduation-cap`   | P1    |
 | People                    | Teachers                                          | `nav.teachers`      | `presentation`     | P1    |
-| People                    | Parents                                           | `nav.parents`       | `users-round`      | P6    |
 | Academics                 | Courses & groups                                  | `nav.courses`       | `book-open`        | P1    |
 | Academics                 | Skill levels                                      | `nav.levels`        | `signal`           | P1    |
 | Academics                 | Ratings                                           | `nav.ratings`       | `star`             | P5    |
-| Finance                   | Payments                                          | `nav.payments`      | `wallet`           | P6    |
-| Finance                   | Reports                                           | `nav.reports`       | `chart-column`     | P6    |
+| Reports                   | Reports                                           | `nav.reports`       | `chart-column`     | P6    |
 | (bottom)                  | Settings — school, terms & holidays, rooms, users | `nav.settings`      | `settings`         | P1    |
 
 Teacher
@@ -135,6 +133,8 @@ Teacher
 | Me       | My absences          | `nav.myAbsences`    | `calendar-x`       | P3    |
 | Me       | Substitutions        | `nav.substitutions` | `user-round-cog`   | P5    |
 
+No _Parents_ item: parent accounts are out of scope (owner decision 2026-10-16). No _Payments_ item for any role: payments are out of scope until they are specified again (owner decision 2026-10-17, `reports.md`). Reports are admin-only.
+
 Teachers have no _Ratings_ item: only admins see ratings (owner decision 2026-10-15, `notifications-substitutes.md` §2).
 
 Student (bottom tabs marked ★)
@@ -145,7 +145,6 @@ Student (bottom tabs marked ★)
 | ★ Timetable               | `nav.timetable`                  | `calendar-days`  | P1                              |
 | ★ Homework                | `nav.homework`                   | `clipboard-list` | P2                              |
 | ★ Absences & replacements | `nav.absencesShort` → "Absences" | `calendar-x`     | P3                              |
-| Payments                  | `nav.payments`                   | `wallet`         | P6                              |
 | ★/More                    | `nav.more`                       | `menu`           | P0 (shown once > 4 items exist) |
 
 Until P1 ships, the student bottom bar is hidden (only one destination).
