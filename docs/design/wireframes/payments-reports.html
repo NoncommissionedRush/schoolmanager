@@ -450,7 +450,7 @@
         ]);
         rows.push([
           `<span class="tnum">16 Oct</span>`,
-          `B1 Evening · Autumn 2026 materials fee (term)`,
+          `Conversation Club · Autumn 2026 fee (10 of 16 lessons)`,
           `<span class="tnum">30 Oct</span>`,
           LINE.UNPAID(),
           "€30.00",
@@ -490,7 +490,7 @@
           "col-span-2",
         );
         const priceCard = card(
-          `<h2 class="text-lg font-semibold">Price</h2><p class="text-muted-foreground">Autumn 2026</p><p class="mt-2">B1 Evening: group price</p><p class="tnum text-muted-foreground">€15.00 per lesson</p><div class="mt-4">${btn("Set student price…", "outline")}</div>`,
+          `<h2 class="text-lg font-semibold">Price</h2><p class="text-muted-foreground">Autumn 2026</p><p class="mt-2">B1 Evening: group price</p><p class="tnum text-muted-foreground">€15.00 per lesson</p><p class="mt-2">Conversation Club: course price</p><p class="tnum text-muted-foreground">€48.00 per term</p><div class="mt-4">${btn("Set student price…", "outline")}</div>`,
         );
         let menu = "";
         if (st === 2)
@@ -851,7 +851,12 @@
           ["You're in credit", "€20.00", STATUS.IN_CREDIT(), ""],
         ][st];
         const charges = [
-          ["Materials fee · B1 Evening", "Due 30 Oct", "€30.00", LINE.UNPAID()],
+          [
+            "Conversation Club · Autumn 2026 fee (10 of 16 lessons)",
+            "Due 30 Oct",
+            "€30.00",
+            LINE.UNPAID(),
+          ],
           [
             "B1 Evening · Wed 15 Oct",
             "Waived",
