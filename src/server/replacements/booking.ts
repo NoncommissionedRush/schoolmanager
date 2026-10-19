@@ -1045,6 +1045,15 @@ export async function overrideReplacement(
     throw notFound();
   }
   return inLockedTransaction(db, async (tx, school) => {
+    // Every id resolves in this school before any state is checked: another
+    // school's lesson is not found, whatever state the booking is in.
+    const moveTo = input.targetLessonId
+      ? await tx.lesson.findFirst({
+          where: { id: input.targetLessonId },
+          select: targetSelect,
+        })
+      : null;
+    if (input.targetLessonId && !moveTo) throw notFound();
     const booking = await loadForReview(
       tx,
       input.bookingId,
@@ -1052,15 +1061,7 @@ export async function overrideReplacement(
       now,
     );
     if (booking === "changed") return { status: "changed" };
-    let target = booking.targetLesson;
-    if (input.targetLessonId && input.targetLessonId !== target.id) {
-      const row = await tx.lesson.findFirst({
-        where: { id: input.targetLessonId },
-        select: targetSelect,
-      });
-      if (!row) throw notFound();
-      target = row;
-    }
+    const target = moveTo ?? booking.targetLesson;
     // Moving into a lesson that has started is never allowed.
     const reasons = await reviewBooking(tx, booking, target, now);
     if (target.startsAt.getTime() <= now.getTime()) {

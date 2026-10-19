@@ -854,6 +854,25 @@ describe.skipIf(!url)("replacements & reschedules (database)", () => {
         NOW,
       ),
     ).toMatchObject({ status: "done" });
+    // Another school's lesson is not found, also once the booking's own
+    // lesson has started: nothing about the booking's state leaks first.
+    for (const now of [NOW, local("2026-10-22", "12:30")]) {
+      expect(
+        await refusal(() =>
+          overrideReplacement(
+            db,
+            admin(),
+            {
+              bookingId,
+              targetLessonId: lessons.foreign,
+              acknowledgedKeys: [],
+              note: "x",
+            },
+            now,
+          ),
+        ),
+      ).toBe("common.error.notFound");
+    }
     bookings.overridden = bookingId;
   });
 
