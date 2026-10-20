@@ -16,8 +16,12 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     // CI runs against a production build; locally reuse `pnpm dev` if running.
+    // Node closes idle keep-alive sockets after 5 s. Specs keep signed-in
+    // request contexts across slow steps (fingerprints, other tests), and a
+    // request sent on a socket the server is closing fails with ECONNRESET.
+    // Keep idle sockets open longer than any pause inside the suite.
     command: process.env.CI
-      ? `pnpm start --port ${PORT}`
+      ? `pnpm start --port ${PORT} --keepAliveTimeout 120000`
       : `pnpm dev --port ${PORT}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
