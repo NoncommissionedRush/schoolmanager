@@ -325,20 +325,29 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
       createdAt: new Date(absenceLesson.startsAt.getTime() - 2 * 86_400_000),
     },
   });
+  // Fixture data: the credit stays available until the term is over, not
+  // 30 days after the September lesson. An expired AVAILABLE credit is
+  // flipped to EXPIRED by the first absences page any worker loads, which
+  // changes school B under the cross-school fingerprint checks (CARM-84).
+  const available = {
+    status: "AVAILABLE" as const,
+    usedAt: null,
+    expiresAt: creditExpiry(
+      fromIsoDate(TERM.endDate),
+      30,
+      SECOND_SCHOOL.timezone,
+    ).expiresAt,
+  };
   await db.makeupCredit.upsert({
     where: { id: id("makeup-credit", "bauer") },
-    update: {},
+    update: available,
     create: {
       id: id("makeup-credit", "bauer"),
       schoolId,
       studentId: student.id,
       sourceLessonId: lessonIds[1],
       absenceReportId: absenceId,
-      expiresAt: creditExpiry(
-        absenceLesson.startsAt,
-        30,
-        SECOND_SCHOOL.timezone,
-      ).expiresAt,
+      ...available,
     },
   });
 
