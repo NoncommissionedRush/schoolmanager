@@ -2,12 +2,9 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import {
-  addDays,
-  toZonedDateTime,
-  zonedTimeToUtc,
-} from "../src/server/scheduling/time";
+import { addDays, zonedTimeToUtc } from "../src/server/scheduling/time";
 import { mondayOf } from "../src/server/timetable/week";
+import { TODAY } from "./clock";
 import { currentTermId, DEMO_LOGINS, signIn, sql } from "./helpers";
 
 // Happy path of CARM-65 notifications (docs/design/notifications-substitutes.md
@@ -31,7 +28,7 @@ test.describe("notifications › bell, popover and inbox", () => {
     student: randomUUID(),
     lesson: randomUUID(),
   };
-  const today = toZonedDateTime(new Date(), TZ).date;
+  const today = TODAY;
   const date = addDays(today, 3);
   const startsAt = zonedTimeToUtc(date, 10 * 60, TZ);
 

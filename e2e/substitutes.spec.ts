@@ -2,11 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import {
-  addDays,
-  toZonedDateTime,
-  zonedTimeToUtc,
-} from "../src/server/scheduling/time";
+import { addDays, zonedTimeToUtc } from "../src/server/scheduling/time";
+import { TODAY } from "./clock";
 import { currentTermId, DEMO_LOGINS, signIn, sql } from "./helpers";
 
 // Happy path of CARM-65 substitutes (docs/design/notifications-substitutes.md
@@ -36,7 +33,7 @@ test.describe("substitutes › find, assign and see the cover", () => {
     student: randomUUID(),
     lesson: randomUUID(),
   };
-  const today = toZonedDateTime(new Date(), TZ).date;
+  const today = TODAY;
   const date = addDays(today, 3);
   // 06:00–06:45: outside every seeded lesson, so the substitute is free.
   const startsAt = zonedTimeToUtc(date, 6 * 60, TZ);

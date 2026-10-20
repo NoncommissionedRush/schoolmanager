@@ -9,11 +9,7 @@ import {
 } from "@playwright/test";
 
 import { hashPassword } from "../../src/server/auth/password";
-import {
-  addDays,
-  toZonedDateTime,
-  zonedTimeToUtc,
-} from "../../src/server/scheduling/time";
+import { addDays, zonedTimeToUtc } from "../../src/server/scheduling/time";
 import { DEMO_PASSWORD, sql } from "../helpers";
 import {
   type ActionResponse,
@@ -22,6 +18,7 @@ import {
   PLACEHOLDER_ID,
   serverActionsIn,
 } from "../server-actions";
+import { currentTime, TODAY } from "../clock";
 import {
   expectNoneOf,
   isNotFound,
@@ -63,7 +60,7 @@ const INBOX = "src/components/notifications/actions.ts";
 const FORBIDDEN = "You don't have access to this page";
 
 const suffix = randomUUID().slice(0, 8);
-const today = toZonedDateTime(new Date(), TZ).date;
+const today = TODAY;
 
 type Who =
   | "admin"
@@ -630,7 +627,9 @@ test.describe("phase 5 permissions", () => {
       const all = await callAction(
         page,
         [INBOX, "markAllReadAction"],
-        [`${new Date(Date.now() + 60_000).toISOString()}|${PLACEHOLDER_ID}`],
+        [
+          `${new Date(currentTime().getTime() + 60_000).toISOString()}|${PLACEHOLDER_ID}`,
+        ],
         inboxOf("student"),
       );
       expect(all.result).toEqual({ ok: true, unread: 0 });

@@ -7,6 +7,7 @@ import {
 } from "@playwright/test";
 
 import { hashPassword } from "../../src/server/auth/password";
+import { currentTime, seedDate } from "../clock";
 import { DEMO_LOGINS, DEMO_PASSWORD, signIn, sql } from "../helpers";
 import {
   actionResult,
@@ -110,7 +111,7 @@ const ATTACKS: Attack[] = [
       null,
       new FormFields({
         studentIds: [NEW_MEMBER.profile],
-        startDate: "2026-09-01",
+        startDate: seedDate("2026-09-01"),
       }),
     ],
   },
@@ -120,13 +121,17 @@ const ATTACKS: Attack[] = [
     args: [
       NEW_MEMBER.profile,
       null,
-      new FormFields({ groupId: GROUP, startDate: "2026-09-01" }),
+      new FormFields({ groupId: GROUP, startDate: seedDate("2026-09-01") }),
     ],
   },
   {
     action: "removeMemberAction",
     file: GROUPS,
-    args: [GROUP_MEMBERSHIP, null, new FormFields({ date: "2026-09-02" })],
+    args: [
+      GROUP_MEMBERSHIP,
+      null,
+      new FormFields({ date: seedDate("2026-09-02") }),
+    ],
   },
   {
     action: "createAdminAction",
@@ -239,7 +244,7 @@ async function createFixtures() {
         email,
         `E2E ${email.split("@")[0]}`,
         hash,
-        archived ? new Date() : null,
+        archived ? currentTime() : null,
       ],
     );
     await sql(
@@ -302,8 +307,8 @@ async function createFixtures() {
   );
   await sql(
     `INSERT INTO group_memberships (id, school_id, group_id, student_id, joined_at, updated_at)
-     VALUES ($1, $2, $3, $4, '2026-09-01', now())`,
-    [GROUP_MEMBERSHIP, school, GROUP, STUDENT.profile],
+     VALUES ($1, $2, $3, $4, $5, now())`,
+    [GROUP_MEMBERSHIP, school, GROUP, STUDENT.profile, seedDate("2026-09-01")],
   );
 }
 

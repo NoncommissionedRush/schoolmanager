@@ -9,6 +9,7 @@ import {
   schoolIds,
   serverResponse,
   signedIn,
+  WEEK,
 } from "./fixtures";
 
 // Teacher internal notes never reach a student (project invariant,
@@ -35,7 +36,7 @@ async function noteWeeks(schoolId: string) {
      WHERE n.school_id = $1`,
     [schoolId],
   );
-  return [...new Set(["2026-10-12", ...rows.map((r) => r.week)])];
+  return [...new Set([WEEK, ...rows.map((r) => r.week)])];
 }
 
 /** Lessons with notes on them (their teacher and admin pages show them). */

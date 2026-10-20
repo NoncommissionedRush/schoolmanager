@@ -3,11 +3,8 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
-import {
-  addDays,
-  toZonedDateTime,
-  zonedTimeToUtc,
-} from "../src/server/scheduling/time";
+import { addDays, zonedTimeToUtc } from "../src/server/scheduling/time";
+import { TODAY } from "./clock";
 import { DEMO_LOGINS, signIn, sql } from "./helpers";
 
 // Happy path of CARM-73 (docs/design/reports.md §4): the admin opens the
@@ -20,7 +17,7 @@ test.describe("reports", () => {
   test.describe.configure({ mode: "serial" });
   const TZ = "Europe/Bratislava";
   const suffix = randomUUID().slice(0, 8);
-  const today = toZonedDateTime(new Date(), TZ).date;
+  const today = TODAY;
   const emails = {
     admin: `e2e-rep-a-${suffix}@demo-school.test`,
     teacher: `e2e-rep-t-${suffix}@demo-school.test`,

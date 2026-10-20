@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 import { DEMO_LOGINS, signIn } from "../helpers";
@@ -6,7 +8,7 @@ test.describe("admin › students", () => {
   test("create a student in a group, then remove them from it", async ({
     page,
   }) => {
-    const stamp = Date.now();
+    const stamp = randomUUID().slice(0, 8);
     const name = `E2E Student ${stamp}`;
     const email = `e2e.student.${stamp}@example.test`;
     await signIn(page, DEMO_LOGINS.admin);

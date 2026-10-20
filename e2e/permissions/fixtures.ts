@@ -1,6 +1,7 @@
 import { type Browser, expect, type Page } from "@playwright/test";
 
 import { SECOND_LOGINS, SECOND_NAMES } from "../../prisma/seed/second-school";
+import { seedDate } from "../clock";
 import { DEMO_LOGINS, signIn, sql } from "../helpers";
 
 export { SECOND_LOGINS, SECOND_NAMES };
@@ -12,7 +13,7 @@ export const SCHOOL_A = "demo-language-school";
 export const SCHOOL_B = "northbridge-language-academy";
 
 /** A week with lessons in both schools' published terms (seed DEMO_TODAY). */
-export const WEEK = "2026-10-12";
+export const WEEK = seedDate("2026-10-12");
 
 export const LOGINS = {
   A: DEMO_LOGINS,

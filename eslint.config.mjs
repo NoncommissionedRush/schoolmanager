@@ -56,6 +56,25 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // e2e fixtures and seed data read the clock in one place each, so a
+    // fixture can't drift from the seed or from the other workers (CARM-85).
+    files: ["e2e/**/*.ts", "prisma/**/*.ts"],
+    ignores: ["e2e/clock.ts", "e2e/global-setup.ts", "prisma/seed/clock.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...[
+          "NewExpression[callee.name='Date'][arguments.length=0]",
+          "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+        ].map((selector) => ({
+          selector,
+          message:
+            "Don't read the wall clock here. In e2e/ use TODAY, currentTime() or seedDate() from e2e/clock.ts; in the seed, seedDate() from prisma/seed/clock.ts.",
+        })),
+      ],
+    },
+  },
   globalIgnores([
     ".next/**",
     "out/**",

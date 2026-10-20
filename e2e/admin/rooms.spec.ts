@@ -1,10 +1,12 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 import { DEMO_LOGINS, signIn } from "../helpers";
 
 test.describe("admin › rooms", () => {
   test("create, edit, archive and restore a room", async ({ page }) => {
-    const name = `E2E Room ${Date.now()}`;
+    const name = `E2E Room ${randomUUID().slice(0, 8)}`;
     await signIn(page, DEMO_LOGINS.admin);
     await page.waitForURL("/admin");
     await page.goto("/admin/settings/rooms");

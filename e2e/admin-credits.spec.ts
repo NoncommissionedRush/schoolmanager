@@ -2,11 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { expect, type Page, test } from "@playwright/test";
 
-import {
-  addDays,
-  toZonedDateTime,
-  zonedTimeToUtc,
-} from "../src/server/scheduling/time";
+import { addDays, zonedTimeToUtc } from "../src/server/scheduling/time";
+import { TODAY } from "./clock";
 import { currentTermId, DEMO_LOGINS, signIn, sql } from "./helpers";
 
 // Happy path of CARM-47: an admin spends a student's makeup credits for
@@ -39,7 +36,7 @@ test.describe("admin spends a student's credits; teacher Today counts", () => {
     oneMissed: randomUUID(), // 1-on-1, in three days 16:00: 1-on-1 credit
     today: randomUUID(), // own group, today 23:00: the student cancelled
   };
-  const today = toZonedDateTime(new Date(), TZ).date;
+  const today = TODAY;
   const missedDate = addDays(today, 3);
   const newDate = addDays(today, 5);
   // The credits are valid until the day before this (expiry at its start).

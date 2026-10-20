@@ -1,10 +1,13 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
+import { seedDate } from "../clock";
 import { DEMO_LOGINS, signIn } from "../helpers";
 
 test.describe("admin › teachers", () => {
   test("create a teacher, edit availability, archive", async ({ page }) => {
-    const stamp = Date.now();
+    const stamp = randomUUID().slice(0, 8);
     const name = `E2E Teacher ${stamp}`;
     const email = `e2e.teacher.${stamp}@Example.test`;
     await signIn(page, DEMO_LOGINS.admin);
@@ -109,15 +112,17 @@ test.describe("admin › teachers", () => {
     // Exceptions: range limit, "no effect" warning, then a whole-day one.
     await page.getByRole("button", { name: "Add exception" }).click();
     const exception = page.getByRole("dialog", { name: "Add exception" });
-    await exception.getByLabel("Date", { exact: true }).fill("2026-12-01");
-    await exception.getByLabel("To date").fill("2027-01-15");
+    await exception
+      .getByLabel("Date", { exact: true })
+      .fill(seedDate("2026-12-01"));
+    await exception.getByLabel("To date").fill(seedDate("2027-01-15"));
     await exception.getByRole("button", { name: "Save" }).click();
     await expect(
       exception.getByText(
         "Choose 31 days or fewer. Add longer absences in parts.",
       ),
     ).toBeVisible();
-    await exception.getByLabel("To date").fill("2026-12-02");
+    await exception.getByLabel("To date").fill(seedDate("2026-12-02"));
     await exception.getByLabel("To date").blur();
     // 1–2 Dec 2026 are a Tuesday and a Wednesday: no weekly rule left.
     await exception
