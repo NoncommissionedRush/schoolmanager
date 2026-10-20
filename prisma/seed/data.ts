@@ -1,5 +1,9 @@
 // Static fixtures for the demo school. Times are minutes since midnight in the
-// school's timezone; weekdays are ISO (1 = Monday … 7 = Sunday).
+// school's timezone; weekdays are ISO (1 = Monday … 7 = Sunday). Dates are
+// written around BASE_TODAY and moved by whole weeks to the week the seed
+// runs in (`seedDate`, see ./clock.ts).
+
+import { BASE_TERM_START, BASE_TODAY, seedDate as d } from "./clock";
 
 const h = (hours: number, minutes = 0) => hours * 60 + minutes;
 
@@ -11,7 +15,7 @@ export const SCHOOL = {
 export const EMAIL_DOMAIN = "demo-school.test";
 
 /** Lessons before this date are seeded as COMPLETED, later ones SCHEDULED. */
-export const DEMO_TODAY = "2026-10-14";
+export const DEMO_TODAY = d(BASE_TODAY);
 
 export const ADMIN = { key: "admin", name: "Alexandra Admin" };
 
@@ -111,21 +115,21 @@ export const TEACHER_AVAILABILITY: {
     key: "brown-wed-exception",
     teacher: "t-brown",
     kind: "DATE_AVAILABLE",
-    date: "2026-11-04",
+    date: d("2026-11-04"),
     note: "Can cover this Wednesday",
   },
   {
     key: "kovac-conference",
     teacher: "t-kovac",
     kind: "DATE_UNAVAILABLE",
-    date: "2026-10-21",
+    date: d("2026-10-21"),
     note: "Teacher training conference",
   },
   {
     key: "varga-doctor",
     teacher: "t-varga",
     kind: "DATE_UNAVAILABLE",
-    date: "2026-10-27",
+    date: d("2026-10-27"),
     startMinute: h(8),
     endMinute: h(12),
     note: "Doctor's appointment",
@@ -135,7 +139,7 @@ export const TEACHER_AVAILABILITY: {
     key: "horvath-sick",
     teacher: "t-horvath",
     kind: "DATE_UNAVAILABLE",
-    date: "2026-10-27",
+    date: d("2026-10-27"),
     note: "Off sick",
   },
 ];
@@ -197,12 +201,12 @@ export const ARCHIVED_AT = new Date("2026-06-30T00:00:00Z");
 export const TERM = {
   key: "autumn-2026",
   name: "Autumn 2026",
-  startDate: "2026-09-14",
-  endDate: "2027-01-29",
+  startDate: d(BASE_TERM_START),
+  endDate: d("2027-01-29"),
 };
 
 /** Lessons are generated for the first weeks only (covers DEMO_TODAY). */
-export const LESSON_GENERATION_END = "2026-11-08";
+export const LESSON_GENERATION_END = d("2026-11-08");
 
 export const HOLIDAYS: {
   key: string;
@@ -214,22 +218,22 @@ export const HOLIDAYS: {
   {
     key: "autumn-break",
     name: "Autumn break",
-    startDate: "2026-10-29",
-    endDate: "2026-10-30",
+    startDate: d("2026-10-29"),
+    endDate: d("2026-10-30"),
   },
   {
     // Public holiday: school-wide (`termId` null), applies to every term.
     key: "nov-17",
     schoolWide: true,
     name: "Struggle for Freedom and Democracy Day",
-    startDate: "2026-11-17",
-    endDate: "2026-11-17",
+    startDate: d("2026-11-17"),
+    endDate: d("2026-11-17"),
   },
   {
     key: "christmas",
     name: "Christmas break",
-    startDate: "2026-12-21",
-    endDate: "2027-01-06",
+    startDate: d("2026-12-21"),
+    endDate: d("2027-01-06"),
   },
 ];
 
@@ -293,8 +297,8 @@ export const GROUPS: GroupSpec[] = [
     // continues, exactly as the timetable editor records such an edit.
     slots: [
       { weekday: 2, start: h(9), end: h(10, 30) },
-      { weekday: 4, start: h(9), end: h(10, 30), validUntil: "2026-10-25" },
-      { weekday: 5, start: h(9), end: h(10, 30), validFrom: "2026-10-26" },
+      { weekday: 4, start: h(9), end: h(10, 30), validUntil: d("2026-10-25") },
+      { weekday: 5, start: h(9), end: h(10, 30), validFrom: d("2026-10-26") },
     ],
   },
   {

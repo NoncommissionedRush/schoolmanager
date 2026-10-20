@@ -3,6 +3,7 @@ import { toSchoolSlug } from "../../src/server/schools";
 import { generateLessonOccurrences } from "../../src/server/scheduling/generate-lessons";
 import { creditExpiry } from "../../src/server/scheduling/replacements";
 import { fromIsoDate } from "../../src/server/scheduling/time";
+import { BASE_TERM_START, baseDate, seedDate } from "./clock";
 import { LESSON_GENERATION_END } from "./data";
 import { seedId } from "./ids";
 
@@ -44,7 +45,10 @@ export const SECOND_NAMES = {
   availabilityNote: "Northbridge staff meeting",
 } as const;
 
-const TERM = { startDate: "2026-09-14", endDate: "2027-01-29" };
+const TERM = {
+  startDate: seedDate(BASE_TERM_START),
+  endDate: seedDate("2027-01-29"),
+};
 const h = (hours: number) => hours * 60;
 
 export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
@@ -163,7 +167,7 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
   const termData = {
     startDate: fromIsoDate(TERM.startDate),
     endDate: fromIsoDate(TERM.endDate),
-    timetablePublishedAt: new Date("2026-09-01T08:00:00Z"),
+    timetablePublishedAt: new Date(`${seedDate("2026-09-01")}T08:00:00Z`),
   };
   const term = await db.term.upsert({
     where: { schoolId_name: { schoolId, name: SECOND_NAMES.term } },
@@ -178,8 +182,8 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
   const holiday = {
     key: "founders-day",
     name: SECOND_NAMES.holiday,
-    startDate: "2026-10-23",
-    endDate: "2026-10-23",
+    startDate: seedDate("2026-10-23"),
+    endDate: seedDate("2026-10-23"),
   };
   const holidayData = {
     schoolId,
@@ -253,7 +257,7 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
   });
   const lessonIds: string[] = [];
   for (const o of occurrences) {
-    const lessonId = id("lesson", o.timetableSlotId, o.date);
+    const lessonId = id("lesson", o.timetableSlotId, baseDate(o.date));
     const data = {
       groupId: o.groupId,
       teacherId: o.teacherId,
@@ -309,8 +313,13 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
   });
 
   // A cancellation with its makeup credit (Phase 3), so absences and
-  // credits have rows in both schools.
-  const absenceLesson = occurrences[1];
+  // credits have rows in both schools. A week before BASE_TODAY: the credit
+  // (30 days) is still available on every day of the seed week. An expired
+  // one would flip to EXPIRED whenever a school B list loads (CARM-85).
+  const absenceIndex = occurrences.findIndex(
+    (o) => o.date === seedDate("2026-10-06"),
+  );
+  const absenceLesson = occurrences[absenceIndex];
   const absenceId = id("absence", "bauer");
   await db.absenceReport.upsert({
     where: { id: absenceId },
@@ -318,7 +327,7 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
     create: {
       id: absenceId,
       schoolId,
-      lessonId: lessonIds[1],
+      lessonId: lessonIds[absenceIndex],
       studentId: student.id,
       reportedById: student.userId,
       reason: SECOND_NAMES.absenceReason,
@@ -332,7 +341,7 @@ export async function seedSecondSchool(db: PrismaClient, passwordHash: string) {
       id: id("makeup-credit", "bauer"),
       schoolId,
       studentId: student.id,
-      sourceLessonId: lessonIds[1],
+      sourceLessonId: lessonIds[absenceIndex],
       absenceReportId: absenceId,
       expiresAt: creditExpiry(
         absenceLesson.startsAt,
