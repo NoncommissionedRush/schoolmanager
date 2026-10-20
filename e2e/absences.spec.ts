@@ -148,8 +148,12 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
     ).toBeVisible();
 
     // The lesson now reads "Not attending"; it can't be cancelled twice.
+    // The toast shows before the refreshed timetable renders: wait for the
+    // card to change, or the sheet opens on the old lesson.
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: block("10:00") }).click();
+    const earlyCard = page.getByRole("button", { name: block("10:00") });
+    await expect(earlyCard).toHaveAccessibleName(/Not attending/);
+    await earlyCard.click();
     await expect(sheet.getByText("You got a makeup credit.")).toBeVisible();
     await expect(
       sheet.getByRole("button", { name: "Can't attend?" }),

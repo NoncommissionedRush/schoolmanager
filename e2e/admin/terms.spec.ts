@@ -15,8 +15,9 @@ test.describe("admin › terms & holidays", () => {
     const term = `E2E Term ${stamp}`;
     const termHoliday = `E2E Term break ${stamp}`;
     const schoolHoliday = `E2E Public holiday ${stamp}`;
-    // Far from the seeded (published) term, so no lessons change.
-    const year = 2040 + (stamp % 50);
+    // Far from the seeded (published) term, so no lessons change, and past
+    // the 2041 term of assign-teachers.spec.ts, which runs in parallel.
+    const year = 2050 + (stamp % 40);
 
     await signIn(page, DEMO_LOGINS.admin);
     await page.waitForURL("/admin");
@@ -48,8 +49,12 @@ test.describe("admin › terms & holidays", () => {
       dialog.getByText("The last day must be on or after the first day."),
     ).toBeVisible();
     await dialog.getByLabel("Last day").fill(`${year}-06-30`);
-    // Blur first: clearing the error resizes the dialog under the pointer.
+    // Blur first and wait for the error to go: clearing it resizes the
+    // dialog, and a click during that misses the button.
     await dialog.getByLabel("Last day").blur();
+    await expect(
+      dialog.getByText("The last day must be on or after the first day."),
+    ).toBeHidden();
     await dialog.getByRole("button", { name: "Create term" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText(`${term} created`)).toBeVisible();
@@ -79,6 +84,7 @@ test.describe("admin › terms & holidays", () => {
       .getByLabel("Term", { exact: true })
       .selectOption({ label: `Only ${term}` });
     await newHoliday.getByLabel("Term", { exact: true }).blur();
+    await expect(newHoliday.getByText("Choose term.")).toBeHidden();
     await newHoliday.getByRole("button", { name: "Add holiday" }).click();
     await expect(newHoliday).toBeHidden();
     await expect(page.getByText(`${termHoliday} created`)).toBeVisible();
