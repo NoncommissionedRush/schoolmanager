@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 import { DEMO_LOGINS, signIn, sql } from "../helpers";
@@ -40,7 +42,7 @@ test.describe("admin › assign teachers", () => {
 
   let school: string;
   let termId: string;
-  const stamp = Date.now();
+  const stamp = randomUUID().slice(0, 8);
   const groupName = `E2E Assign Group ${stamp}`;
   const teacherName = `E2E Assign Teacher ${stamp}`;
 

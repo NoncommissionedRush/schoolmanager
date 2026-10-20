@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
+import { seedDate } from "./clock";
 import { DEMO_LOGINS, insertOwnTerm, signIn, sql } from "./helpers";
 
 // Happy path of the timetable editor (CARM-25): create a slot, hit a
 // conflict, override a warning, publish, and see the lesson as the teacher
 // and as a student of the group. Runs in its own draft term in March 2027,
 // far from the seeded Autumn 2026 term.
-const TERM_START = "2027-03-01"; // Monday
+const TERM_START = seedDate("2027-03-01"); // Monday
 const TERM_DAYS = 28;
 
 async function removeTerm(name: string) {
@@ -24,7 +25,7 @@ async function removeTerm(name: string) {
 }
 
 test.describe("timetable editor › create, override, publish", () => {
-  const termName = `E2E Timetable ${Date.now()}`;
+  const termName = `E2E Timetable ${randomUUID().slice(0, 8)}`;
   let termId: string;
   /** TERM_START, or a later Monday if those dates are taken. */
   let termStart: string;

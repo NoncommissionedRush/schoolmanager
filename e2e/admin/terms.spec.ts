@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { DEMO_LOGINS, signIn } from "../helpers";
+import { DEMO_LOGINS, signIn, sql } from "../helpers";
+import { createOwnSchool, removeSchool } from "../own-school";
 
 async function openMenu(page: Page, name: string, item: string | RegExp) {
   await page.getByRole("button", { name: `Actions for ${name}` }).click();
@@ -8,17 +9,31 @@ async function openMenu(page: Page, name: string, item: string | RegExp) {
 }
 
 test.describe("admin › terms & holidays", () => {
+  // Its own school with one published term: other specs add terms to the
+  // demo school in parallel, and their dates could clash with ours.
+  let school: Awaited<ReturnType<typeof createOwnSchool>>;
+  test.beforeAll(async () => {
+    school = await createOwnSchool("Terms");
+    await sql(
+      `INSERT INTO terms (id, school_id, name, start_date, end_date, timetable_published_at, updated_at)
+       VALUES (gen_random_uuid(), $1, 'Autumn 2026', '2026-09-14', '2027-01-29', now(), now())`,
+      [school.id],
+    );
+  });
+  test.afterAll(async () => {
+    await removeSchool(school.id);
+  });
+
   test("create a draft term, add holidays, edit and delete it", async ({
     page,
   }) => {
-    const stamp = Date.now();
-    const term = `E2E Term ${stamp}`;
-    const termHoliday = `E2E Term break ${stamp}`;
-    const schoolHoliday = `E2E Public holiday ${stamp}`;
-    // Far from the seeded (published) term, so no lessons change.
-    const year = 2040 + (stamp % 50);
+    const term = "E2E Term";
+    const termHoliday = "E2E Term break";
+    const schoolHoliday = "E2E Public holiday";
+    // Far from the published term, so no lessons change.
+    const year = 2040;
 
-    await signIn(page, DEMO_LOGINS.admin);
+    await signIn(page, school.adminEmail);
     await page.waitForURL("/admin");
     await page.goto("/admin/settings/terms");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(

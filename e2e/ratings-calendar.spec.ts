@@ -2,11 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import {
-  addDays,
-  toZonedDateTime,
-  zonedTimeToUtc,
-} from "../src/server/scheduling/time";
+import { addDays, zonedTimeToUtc } from "../src/server/scheduling/time";
+import { TODAY } from "./clock";
 import { DEMO_LOGINS, signIn, sql } from "./helpers";
 
 // Happy path of CARM-66 (docs/design/notifications-substitutes.md §6, §7):
@@ -19,7 +16,7 @@ test.describe("ratings and calendar subscription", () => {
   test.describe.configure({ mode: "serial" });
   const TZ = "Europe/Bratislava";
   const suffix = randomUUID().slice(0, 8);
-  const today = toZonedDateTime(new Date(), TZ).date;
+  const today = TODAY;
   const emails = {
     admin: `e2e-rate-a-${suffix}@demo-school.test`,
     teacher: `e2e-rate-t-${suffix}@demo-school.test`,

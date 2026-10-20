@@ -31,6 +31,7 @@ import {
   TEACHERS_WITH_MAX_HOURS,
   TERM,
 } from "./seed/data";
+import { baseDate, seedDate } from "./seed/clock";
 import { seedId } from "./seed/ids";
 import { seedSecondSchool } from "./seed/second-school";
 
@@ -204,7 +205,7 @@ async function main() {
     name: TERM.name,
     startDate: fromIsoDate(TERM.startDate),
     endDate: fromIsoDate(TERM.endDate),
-    timetablePublishedAt: new Date("2026-09-01T08:00:00Z"),
+    timetablePublishedAt: new Date(`${seedDate("2026-09-01")}T08:00:00Z`),
   };
   const term = await db.term.upsert({
     where: { schoolId_name: { schoolId, name: TERM.name } },
@@ -388,7 +389,8 @@ async function main() {
   type SeededLesson = (typeof occurrences)[number] & { id: string };
   const lessons: SeededLesson[] = [];
   for (const o of occurrences) {
-    const lessonId = id("lesson", o.timetableSlotId, o.date);
+    // By the date as written, so a re-seed in a later week moves the rows.
+    const lessonId = id("lesson", o.timetableSlotId, baseDate(o.date));
     const data = {
       groupId: o.groupId,
       teacherId: o.teacherId,
@@ -415,8 +417,10 @@ async function main() {
     lessons.push({ ...o, id: lessonId });
   }
 
-  const lessonOf = (groupKey: string, date: string) => {
+  /** The group's lesson on `baseDay`, a date as written in this file. */
+  const lessonOf = (groupKey: string, baseDay: string) => {
     const groupId = groupIds.get(groupKey)!;
+    const date = seedDate(baseDay);
     const lesson = lessons.find(
       (l) => l.groupId === groupId && l.date === date,
     );
@@ -424,7 +428,7 @@ async function main() {
     return lesson;
   };
 
-  // Kováčová is at a conference on 2026-10-21: Smith substitutes.
+  // Kováčová is at a conference on 21 Oct (as written): Smith substitutes.
   await db.lesson.update({
     where: { id: lessonOf("b1-evening", "2026-10-21").id },
     data: { substituteTeacherId: teacherIds.get("t-smith")! },
@@ -537,16 +541,17 @@ async function main() {
         note: "Moved to B2 Late on request; group was over capacity on Thursday.",
       },
     },
-    // Upcoming absence, replacement auto-approved.
+    // Upcoming absence, replacement auto-approved. Upcoming events are at
+    // least a week after BASE_TODAY: upcoming on every day of the seed week.
     {
       key: "kollar",
       student: "Adam Kollár",
       group: "a1-morning",
-      date: "2026-10-19",
+      date: "2026-10-26",
       reason: "Dentist appointment",
       replacement: {
         group: "a1-evening",
-        date: "2026-10-19",
+        date: "2026-10-26",
         status: "AUTO_APPROVED" as const,
       },
     },
@@ -555,7 +560,7 @@ async function main() {
       key: "benko",
       student: "Igor Benko",
       group: "a2-morning",
-      date: "2026-10-15",
+      date: "2026-10-22",
       reason: "Sick",
     },
   ];
@@ -609,7 +614,7 @@ async function main() {
         makeupCreditId: credit.id,
         status: r.status,
         reviewedById: reviewed ? admin.id : null,
-        reviewedAt: reviewed ? new Date(`${a.date}T09:00:00Z`) : null,
+        reviewedAt: reviewed ? new Date(`${seedDate(a.date)}T09:00:00Z`) : null,
         reviewNote: "note" in r ? r.note : null,
       };
       await db.replacementRequest.upsert({

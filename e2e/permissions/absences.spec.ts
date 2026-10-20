@@ -9,6 +9,7 @@ import {
 } from "../../src/server/scheduling/time";
 import { currentTermId, DEMO_LOGINS, sql } from "../helpers";
 import { callAction, FormFields, serverActionsIn } from "../server-actions";
+import { currentTime } from "../clock";
 import {
   expectNoneOf,
   isNotFound,
@@ -114,7 +115,7 @@ const ids = {
   },
 };
 
-const now = new Date();
+const now = currentTime();
 const today = toZonedDateTime(now, TZ).date;
 const at = (days: number, minute: number) =>
   zonedTimeToUtc(addDays(today, days), minute, TZ);
@@ -921,7 +922,7 @@ test.describe("phase 3 permissions", () => {
          WHERE id = $1`,
         [target, startsAt],
       );
-    const startedAgo = new Date(Date.now() - 2 * HOUR);
+    const startedAgo = new Date(currentTime().getTime() - 2 * HOUR);
     const originalStart = at(4, 14 * 60);
 
     await sql(

@@ -11,13 +11,10 @@ import {
 } from "@playwright/test";
 
 import { hashPassword } from "../../src/server/auth/password";
-import {
-  addDays,
-  toZonedDateTime,
-  zonedTimeToUtc,
-} from "../../src/server/scheduling/time";
+import { addDays, zonedTimeToUtc } from "../../src/server/scheduling/time";
 import { DEMO_PASSWORD, sql } from "../helpers";
 import { pagesIn, PLACEHOLDER_ID, serverActionsIn } from "../server-actions";
+import { TODAY } from "../clock";
 import {
   expectNoneOf,
   isNotFound,
@@ -50,7 +47,7 @@ const TZ = "Europe/Bratislava";
 const FORBIDDEN = "You don't have access to this page";
 
 const suffix = randomUUID().slice(0, 8);
-const today = toZonedDateTime(new Date(), TZ).date;
+const today = TODAY;
 
 type Who =
   | "admin"

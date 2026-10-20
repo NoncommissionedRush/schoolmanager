@@ -8,6 +8,7 @@ import {
   zonedTimeToUtc,
 } from "../src/server/scheduling/time";
 import { mondayOf } from "../src/server/timetable/week";
+import { currentTime } from "./clock";
 import { currentTermId, DEMO_LOGINS, signIn, sql } from "./helpers";
 
 // Happy path of CARM-42 (absences.md §5): a student cancels an upcoming
@@ -22,6 +23,8 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
   const suffix = randomUUID().slice(0, 8);
   const group = `E2E Absence ${suffix}`;
   const studentEmail = `e2e-absence-${suffix}@demo-school.test`;
+  // Unique: the admin picks the student by name from the whole school.
+  const student = `Alena Absent ${suffix}`;
   const ids = {
     term: "", // the current term (beforeAll)
     group: randomUUID(),
@@ -30,7 +33,7 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
     early: randomUUID(), // in three days, 10:00: earns a credit
     late: randomUUID(), // in two hours: after the 24-hour cutoff
   };
-  const now = new Date();
+  const now = currentTime();
   const today = toZonedDateTime(now, TZ).date;
   const earlyDate = addDays(today, 3);
   const earlyStart = zonedTimeToUtc(earlyDate, 10 * 60, TZ);
@@ -70,8 +73,8 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
     );
     await sql(
       `INSERT INTO users (id, email, name, password_hash, updated_at)
-       VALUES ($1, $2, 'Alena Absent', $3, now())`,
-      [ids.user, studentEmail, row.hash],
+       VALUES ($1, $2, $3, $4, now())`,
+      [ids.user, studentEmail, student, row.hash],
     );
     await sql(
       `INSERT INTO memberships (id, school_id, user_id, role, updated_at)
@@ -205,7 +208,7 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
     await teacher.goto(`/teacher/lessons/${ids.early}`);
     await expect(teacher.getByText("Not coming (1)")).toBeVisible();
     const row = teacher.getByRole("listitem").filter({ hasText: REASON });
-    await expect(row).toContainText("Alena Absent");
+    await expect(row).toContainText(student);
     await expect(row).toContainText("cancelled");
     await teacherContext.close();
   });
@@ -219,7 +222,7 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Absences & replacements" }),
     ).toBeVisible();
-    const rows = page.getByRole("row").filter({ hasText: "Alena Absent" });
+    const rows = page.getByRole("row").filter({ hasText: student });
     await expect(rows).toHaveCount(2);
     const late = rows.filter({ hasText: "Late — no credit" });
     await late.getByRole("button", { name: "Actions" }).click();
@@ -234,18 +237,18 @@ test.describe("absences › student cancels and gets a makeup credit", () => {
     // The office reports it again: still after the cutoff, so no credit.
     await page.getByRole("button", { name: "Report absence" }).click();
     const dialog = page.getByRole("dialog", { name: "Report an absence" });
-    await dialog.getByLabel("Student").selectOption({ label: "Alena Absent" });
+    await dialog.getByLabel("Student").selectOption({ label: student });
     const lesson = dialog.getByLabel("Lesson");
     await expect(lesson.locator("option")).toHaveCount(3);
     await lesson.selectOption({ index: 1 });
     await expect(
       dialog.getByText(
-        "It's after the cutoff, so Alena Absent won't get a makeup credit.",
+        `It's after the cutoff, so ${student} won't get a makeup credit.`,
       ),
     ).toBeVisible();
     await dialog.getByRole("button", { name: "Report absence" }).click();
     await expect(
-      page.getByText("Absence reported for Alena Absent."),
+      page.getByText(`Absence reported for ${student}.`),
     ).toBeVisible();
     await expect(rows).toHaveCount(2);
     await expect(rows.filter({ hasText: "By " })).toHaveCount(1);

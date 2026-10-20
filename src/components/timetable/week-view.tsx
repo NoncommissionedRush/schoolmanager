@@ -86,7 +86,10 @@ export function WeekView({
   const href = useHref();
   const router = useRouter();
   const lessonText = useLessonText(role);
-  const [selected, setSelected] = useState<LessonView | null>(null);
+  // The open sheet follows the latest data by id, so a refresh that lands
+  // after it opened (e.g. right after cancelling) shows the new state.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = data.lessons.find((l) => l.id === selectedId) ?? null;
 
   const inWeek = today >= data.week && today <= addDays(data.week, 6);
   const firstWithLessons = data.days.find((d) =>
@@ -313,7 +316,7 @@ export function WeekView({
                 <button
                   type="button"
                   aria-label={blockLabel(lesson)}
-                  onClick={() => setSelected(lesson)}
+                  onClick={() => setSelectedId(lesson.id)}
                   className={cn(
                     "w-full rounded-xl border border-l-4 p-3 text-left",
                     toneClasses[lessonTone(lesson)],
@@ -445,7 +448,7 @@ export function WeekView({
                   startMinute: lesson.startMinute,
                   endMinute: lesson.endMinute,
                   overflowLabel: `${lessonText(lesson).time} ${lessonText(lesson).title}`,
-                  onOverflowSelect: () => setSelected(lesson),
+                  onOverflowSelect: () => setSelectedId(lesson.id),
                   render: ({ style, compact, ...rest }) => (
                     <button
                       type="button"
@@ -453,7 +456,7 @@ export function WeekView({
                       style={style}
                       aria-label={blockLabel(lesson)}
                       title={blockLabel(lesson)}
-                      onClick={() => setSelected(lesson)}
+                      onClick={() => setSelectedId(lesson.id)}
                       className={cn(
                         "overflow-hidden rounded-md border border-l-4 px-1.5 py-1 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                         toneClasses[lessonTone(lesson)],
@@ -475,7 +478,7 @@ export function WeekView({
       <LessonDetailsSheet
         lesson={selected}
         role={role}
-        onOpenChange={(open) => !open && setSelected(null)}
+        onOpenChange={(open) => !open && setSelectedId(null)}
       />
     </div>
   );

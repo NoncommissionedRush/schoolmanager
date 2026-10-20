@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 import { DEMO_LOGINS, signIn } from "../helpers";
@@ -6,7 +8,7 @@ test.describe("admin › groups", () => {
   test("create a group, fill it up to capacity, then a 1-on-1", async ({
     page,
   }) => {
-    const stamp = Date.now();
+    const stamp = randomUUID().slice(0, 8);
     const name = `E2E Group ${stamp}`;
     await signIn(page, DEMO_LOGINS.admin);
     await page.waitForURL("/admin");
@@ -115,7 +117,7 @@ test.describe("admin › groups", () => {
   });
 
   test("courses: create, then delete while unused", async ({ page }) => {
-    const name = `E2E Course ${Date.now()}`;
+    const name = `E2E Course ${randomUUID().slice(0, 8)}`;
     await signIn(page, DEMO_LOGINS.admin);
     await page.waitForURL("/admin");
     await page.goto("/admin/groups?tab=courses");

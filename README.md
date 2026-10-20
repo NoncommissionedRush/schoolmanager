@@ -36,7 +36,10 @@ need an `AUTH_SECRET` line, and `.env` files from before CARM-66 an
 `pnpm db:seed` is idempotent and creates "Demo Language School": 1 admin,
 8 teachers, 40 students, levels A1–C1, group and 1-on-1 lessons, rooms, the
 "Autumn 2026" term with holidays and a published timetable with generated
-lessons. Data model: `docs/architecture/data-model.md`. It also seeds a
+lessons. Its dates follow the week you seed in (the data is written around
+14 Oct 2026 and moved by whole weeks; set `SEED_TODAY=YYYY-MM-DD` to pin
+it), so re-seed when it gets old — the e2e suite refuses a seed older than
+a week. Data model: `docs/architecture/data-model.md`. It also seeds a
 small second school, "Northbridge Language Academy", used by the e2e
 permission suite (`docs/architecture/testing.md`).
 
@@ -66,7 +69,8 @@ administrators). Spec: `docs/design/admin-data.md`; server code in
 Every role has a bell in the header and an inbox at `/{role}/notifications`
 (in-app only; rows older than 90 days are removed, also by
 `pnpm notifications:purge`). Admins arrange cover under _Schedule ›
-Substitutions_: in the demo data Peter Horváth is away on 27 Oct, so his
+Substitutions_: in the demo data Peter Horváth is away on Tuesday in two weeks' time
+(27 Oct as written), so his
 lesson is listed under _Needs cover_. Teachers see their cover under _Me ›
 Substitutions_. Rules: `docs/architecture/phase5-rules.md`; spec:
 `docs/design/notifications-substitutes.md`.
@@ -76,8 +80,9 @@ Substitutions_. Rules: `docs/architecture/phase5-rules.md`; spec:
 Students rate their teachers under _Rate your teachers_ (student _More_
 menu) once they've attended 3 lessons with them, from half-term until 14
 days after the term ends; only admins see ratings (_Academics › Ratings_),
-teachers never do. In the demo data rating for "Autumn 2026" opens on 21
-Nov 2026, so students see "You can rate … from 21 Nov" until then.
+teachers never do. In the demo data rating for "Autumn 2026" opens about five weeks
+after the seed week (21 Nov as written), so students see "You can rate …
+from …" until then.
 Teachers and students get a private calendar link (iCal) under _Calendar
 subscription_ in the account menu; the feed is served at
 `/api/calendar/<token>.ics` and needs `ICAL_TOKEN_SECRET`. Admins can turn a

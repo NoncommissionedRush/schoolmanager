@@ -2,12 +2,9 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import {
-  addDays,
-  toZonedDateTime,
-  zonedTimeToUtc,
-} from "../src/server/scheduling/time";
+import { addDays, zonedTimeToUtc } from "../src/server/scheduling/time";
 import { mondayOf } from "../src/server/timetable/week";
+import { currentTime, TODAY } from "./clock";
 import { currentTermId, DEMO_LOGINS, signIn, sql } from "./helpers";
 import { callAction, serverActionsIn } from "./server-actions";
 
@@ -36,7 +33,7 @@ test.describe("replacements › cancel, book, teacher sees, admin overrides", ()
     target: randomUUID(), // other group, in four days 14:00
     moved: randomUUID(), // other group, in five days 14:00
   };
-  const today = toZonedDateTime(new Date(), TZ).date;
+  const today = TODAY;
   const missedDate = addDays(today, 3);
   const targetDate = addDays(today, 4);
   const movedDate = addDays(today, 5);
@@ -261,7 +258,7 @@ test.describe("replacements › cancel, book, teacher sees, admin overrides", ()
       ["loadRescheduleSheetAction", [{ lessonId: ids.missed }]],
       [
         "rescheduleLessonAction",
-        [{ lessonId: ids.missed, startsAt: new Date().toISOString() }],
+        [{ lessonId: ids.missed, startsAt: currentTime().toISOString() }],
       ],
     ];
     // Every absence action is listed here. The rating action (CARM-66)

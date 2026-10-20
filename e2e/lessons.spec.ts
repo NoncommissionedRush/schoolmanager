@@ -17,7 +17,7 @@ test.describe("teacher lesson page › log, homework and internal notes", () => 
   // Its own published term (dated in January, away from the weeks other
   // specs look at), so specs that digest the seeded term's lessons aren't
   // disturbed. The lesson itself ended an hour ago.
-  const termName = `E2E Lesson log ${Date.now()}`;
+  const termName = `E2E Lesson log ${randomUUID().slice(0, 8)}`;
 
   test.beforeAll(async () => {
     const [row] = await sql<{ school: string; group: string; teacher: string }>(

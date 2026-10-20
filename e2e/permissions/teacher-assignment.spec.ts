@@ -6,7 +6,6 @@ import { hashPassword } from "../../src/server/auth/password";
 import {
   addDays,
   isoWeekday,
-  toZonedDateTime,
   zonedTimeToUtc,
 } from "../../src/server/scheduling/time";
 import { DEMO_PASSWORD, sql } from "../helpers";
@@ -15,6 +14,7 @@ import {
   callAction,
   serverActionsIn,
 } from "../server-actions";
+import { TODAY } from "../clock";
 import {
   expectNoneOf,
   isNotFound,
@@ -76,7 +76,7 @@ const WHO: Record<Who, Role> = {
 };
 const emailOf = (who: Who) => `e2e-p4-${who}-${suffix}@phase4.test`;
 
-const today = toZonedDateTime(new Date(), TZ).date;
+const today = TODAY;
 /** The term: four weeks from the first Monday at least two weeks away. */
 let termStart = addDays(today, 14);
 while (isoWeekday(termStart) !== 1) termStart = addDays(termStart, 1);

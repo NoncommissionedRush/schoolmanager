@@ -1,5 +1,7 @@
-import type { SchoolIds } from "./fixtures";
+import { zonedTimeToUtc } from "../../src/server/scheduling/time";
+import { seedDate, TZ } from "../clock";
 import { FormFields } from "../server-actions";
+import type { SchoolIds } from "./fixtures";
 
 // Every admin server action, called with ids from `target` by an admin of
 // `own`'s school. Forms are valid, so the only reason left to refuse is the
@@ -21,11 +23,13 @@ const SUBSTITUTES = "src/app/admin/substitutions/actions.ts";
 const RATINGS = "src/app/admin/ratings/actions.ts";
 const CALENDAR = "src/app/admin/_people/calendar-actions.ts";
 
+const DATE = seedDate("2026-10-20");
+
 /** A substitute action's input for `lessonId` (the lesson as last seen). */
 const substitute = (lessonId: string, extra: Record<string, unknown>) => ({
   lessonId,
   expectedSubstituteId: null,
-  expectedStartsAt: "2026-10-20T16:00:00.000Z",
+  expectedStartsAt: zonedTimeToUtc(DATE, 18 * 60, TZ).toISOString(),
   acknowledgedKeys: [],
   reason: null,
   ...extra,
@@ -43,8 +47,6 @@ export type ActionCase = {
 };
 
 const form = (fields: Record<string, string>) => new FormFields(fields);
-const DATE = "2026-10-20";
-
 export function crossSchoolCases(
   target: SchoolIds,
   own: SchoolIds,
@@ -312,8 +314,8 @@ export function crossSchoolCases(
         null,
         form({
           name: "Cross School",
-          startDate: "2026-09-14",
-          endDate: "2027-01-29",
+          startDate: seedDate("2026-09-14"),
+          endDate: seedDate("2027-01-29"),
         }),
       ],
     },

@@ -5,6 +5,8 @@ const baseURL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Pins the run's reference time and reads the seed's week (e2e/clock.ts).
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -16,8 +18,10 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     // CI runs against a production build; locally reuse `pnpm dev` if running.
+    // Node closes idle keep-alive sockets after 5 s; a test that reuses one
+    // just then gets ECONNRESET. Keep them open longer than any test runs.
     command: process.env.CI
-      ? `pnpm start --port ${PORT}`
+      ? `pnpm start --port ${PORT} --keepAliveTimeout 120000`
       : `pnpm dev --port ${PORT}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
