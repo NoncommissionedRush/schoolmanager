@@ -11,6 +11,37 @@ CI (`.github/workflows/ci.yml`) runs all of them except the opt-in database
 tests: it migrates and seeds Postgres, builds the app and runs Playwright
 against `pnpm start`.
 
+## Time and parallel workers in e2e (CARM-85)
+
+The app runs on the real clock, so the e2e data is placed relative to it,
+never on fixed dates near "now":
+
+- **Seed.** `prisma/seed/data.ts` is written around 2026-10-14
+  (`BASE_TODAY`, a Wednesday). `prisma/seed/clock.ts` moves every seeded
+  date by whole weeks so the seed's "today" is the latest Wednesday on or
+  before the day it runs (or `SEED_TODAY=YYYY-MM-DD`, to pin it). Upcoming
+  events in the seed are at least 7 days after `BASE_TODAY`, so they are
+  still upcoming on every day of that week. Row ids use the dates as
+  written, so a re-seed in a later week moves the rows instead of adding
+  new ones.
+- **Run.** `e2e/global-setup.ts` pins the run's start time for all workers
+  and reads the seed's week from the database. It fails fast when the seed
+  is more than a week old: re-seed (`pnpm db:reset`) and run again.
+- **Specs** read the clock only through `e2e/clock.ts`: `TODAY` (the run's
+  reference day), `currentTime()` (for "an hour ago" fixtures) and
+  `seedDate("2026-10-12")` for a date of the seed as written. ESLint rejects
+  `new Date()` and `Date.now()` anywhere else in `e2e/` and `prisma/`.
+
+Workers share one database and one server, so a spec:
+
+- never changes seeded rows that other specs read; it creates its own
+  (group, student, lessons) with a random suffix in names and emails;
+- runs in a school of its own (`createOwnSchool` in `e2e/own-school.ts`)
+  when it changes school-wide lists that other specs count or order, such
+  as levels or terms;
+- waits for what the user would wait for (the refreshed list, the updated
+  sheet), not for a fixed time, and never relies on retries.
+
 ## Permission suite (`e2e/permissions/`)
 
 The project's access rules are enforced by tests, not only by review:
