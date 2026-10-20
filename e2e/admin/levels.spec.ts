@@ -1,6 +1,9 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { DEMO_LOGINS, signIn } from "../helpers";
+import { randomUUID } from "node:crypto";
+
+import { DEMO_LOGINS, signIn, sql } from "../helpers";
+import { createOwnSchool, removeSchool } from "../own-school";
 
 async function rowCodes(page: Page) {
   return page
@@ -16,13 +19,28 @@ async function openMenu(page: Page, code: string, item: string | RegExp) {
 }
 
 test.describe("admin › skill levels", () => {
+  // Its own school: other specs add levels to the demo school in parallel
+  // (they would land between ours) and count its levels (ours would change
+  // their counts).
+  let school: Awaited<ReturnType<typeof createOwnSchool>>;
+  test.beforeAll(async () => {
+    school = await createOwnSchool("Levels");
+    await sql(
+      `INSERT INTO levels (id, school_id, code, name, rank, updated_at)
+       VALUES ($1, $3, 'A1', 'Beginner', 1, now()), ($2, $3, 'A2', 'Elementary', 2, now())`,
+      [randomUUID(), randomUUID(), school.id],
+    );
+  });
+  test.afterAll(async () => {
+    await removeSchool(school.id);
+  });
+
   test("create, reorder, archive, restore and delete levels", async ({
     page,
   }) => {
-    const suffix = String(Date.now()).slice(-6);
-    const first = `X${suffix}`;
-    const second = `Y${suffix}`;
-    await signIn(page, DEMO_LOGINS.admin);
+    const first = "X1";
+    const second = "Y1";
+    await signIn(page, school.adminEmail);
     await page.waitForURL("/admin");
     await page.goto("/admin/levels");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
@@ -39,8 +57,12 @@ test.describe("admin › skill levels", () => {
       await expect(dialog).toBeHidden();
       await expect(page.getByText(`${code} created`)).toBeVisible();
     }
-    let codes = await rowCodes(page);
-    expect(codes.indexOf(second)).toBe(codes.indexOf(first) + 1);
+    // The toast comes before the refreshed list.
+    let codes: string[] = [];
+    await expect(async () => {
+      codes = await rowCodes(page);
+      expect(codes).toEqual(["A1", "A2", first, second]);
+    }).toPass();
 
     // Codes are unique, case-insensitively.
     await page.getByRole("button", { name: "New level" }).click();
