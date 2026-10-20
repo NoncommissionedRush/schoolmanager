@@ -1,52 +1,54 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
-import { DEMO_LOGINS, signIn, sql } from "../helpers";
+import {
+  insertOwnSchool,
+  removeSchool,
+  signIn,
+  sql,
+  usersOf,
+} from "../helpers";
 
 /**
  * Assign teachers (docs/design/timetable-generator.md): set a group's
  * lesson times and a teacher's levels, generate a draft for a term of its
  * own, pick a teacher by hand, then publish.
  *
- * The term is far in the future so the draft, slots and lessons it creates
- * never meet another spec's data; it is removed afterwards.
+ * Runs in a school of its own: the generator assigns every group of the
+ * school and offers every teacher, and other specs add (and hard-delete)
+ * teachers and groups in the seeded school while this one runs.
  */
 
 const TERM_NAME = "E2E Assign teachers term";
 const TERM_START = "2041-01-07";
 const TERM_END = "2041-02-24";
 
-async function schoolId() {
-  const [row] = await sql<{ id: string }>(
-    `SELECT s.id FROM schools s JOIN memberships m ON m.school_id = s.id
-     JOIN users u ON u.id = m.user_id WHERE u.email = $1`,
-    [DEMO_LOGINS.admin],
-  );
-  return row.id;
-}
-
-async function removeTerm(school: string) {
-  const terms = await sql<{ id: string }>(
-    `SELECT id FROM terms WHERE school_id = $1 AND name = $2`,
-    [school, TERM_NAME],
-  );
-  for (const { id } of terms) {
-    await sql(`DELETE FROM lessons WHERE term_id = $1`, [id]);
-    await sql(`DELETE FROM terms WHERE id = $1`, [id]);
-  }
-}
-
 test.describe("admin › assign teachers", () => {
   test.describe.configure({ mode: "serial" });
 
-  let school: string;
+  let own: Awaited<ReturnType<typeof insertOwnSchool>>;
   let termId: string;
   const stamp = Date.now();
   const groupName = `E2E Assign Group ${stamp}`;
   const teacherName = `E2E Assign Teacher ${stamp}`;
 
   test.beforeAll(async () => {
-    school = await schoolId();
-    await removeTerm(school);
+    own = await insertOwnSchool(randomUUID().slice(0, 8), "Ada Assign");
+    const school = own.school;
+    await sql(
+      `INSERT INTO levels (id, school_id, code, name, rank, updated_at)
+       VALUES (gen_random_uuid(), $1, 'A1', 'Beginner', 1, now()),
+              (gen_random_uuid(), $1, 'A2', 'Elementary', 2, now()),
+              (gen_random_uuid(), $1, 'B1', 'Intermediate', 3, now()),
+              (gen_random_uuid(), $1, 'B2', 'Upper intermediate', 4, now())`,
+      [school],
+    );
+    await sql(
+      `INSERT INTO rooms (id, school_id, name, kind, updated_at)
+       VALUES (gen_random_uuid(), $1, 'Online classroom', 'ONLINE', now())`,
+      [school],
+    );
     const [term] = await sql<{ id: string }>(
       `INSERT INTO terms (id, school_id, name, start_date, end_date, updated_at)
        VALUES (gen_random_uuid(), $1, $2, $3, $4, now()) RETURNING id`,
@@ -62,24 +64,19 @@ test.describe("admin › assign teachers", () => {
   });
 
   test.afterAll(async () => {
-    await removeTerm(school);
-    await sql(`DELETE FROM groups WHERE school_id = $1 AND name = $2`, [
-      school,
-      groupName,
-    ]);
-    // Archived, so later runs of the generator don't pick the teacher.
-    await sql(`UPDATE users SET deleted_at = now() WHERE name = $1`, [
-      teacherName,
-    ]);
+    const users = await usersOf(own.school);
+    await removeSchool(own.school);
+    await sql("DELETE FROM users WHERE id = ANY($1::uuid[])", [users]);
   });
 
   test("set the levels a teacher teaches and their weekly maximum", async ({
     page,
   }) => {
-    await signIn(page, DEMO_LOGINS.admin);
+    await signIn(page, own.adminEmail);
     await page.waitForURL("/admin");
     await page.goto("/admin/teachers");
-    await page.getByRole("button", { name: "New teacher" }).click();
+    // The school has no teachers yet: the empty state's button.
+    await page.getByRole("button", { name: "Add teacher" }).click();
     const dialog = page.getByRole("dialog", { name: "New teacher" });
     await dialog.getByLabel("Full name").fill(teacherName);
     await dialog.getByLabel("Email").fill(`e2e.assign.${stamp}@example.test`);
@@ -128,7 +125,7 @@ test.describe("admin › assign teachers", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    await signIn(page, DEMO_LOGINS.admin);
+    await signIn(page, own.adminEmail);
     await page.waitForURL("/admin");
 
     // ① The new group has no lesson times yet: it is skipped.

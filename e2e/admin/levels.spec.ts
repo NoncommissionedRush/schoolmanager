@@ -1,6 +1,15 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, type Page, test } from "@playwright/test";
 
-import { DEMO_LOGINS, signIn } from "../helpers";
+import {
+  DEMO_LOGINS,
+  insertOwnSchool,
+  removeSchool,
+  signIn,
+  sql,
+  usersOf,
+} from "../helpers";
 
 async function rowCodes(page: Page) {
   return page
@@ -16,13 +25,33 @@ async function openMenu(page: Page, code: string, item: string | RegExp) {
 }
 
 test.describe("admin › skill levels", () => {
+  // The reorder test runs in a school of its own: Move up swaps with the
+  // nearest level, and other specs add levels to the seeded school while
+  // it runs (E2E-LEAK, E2E-P3-…).
+  let own: Awaited<ReturnType<typeof insertOwnSchool>>;
+
+  test.beforeAll(async () => {
+    own = await insertOwnSchool(randomUUID().slice(0, 8), "Lea Levels");
+    await sql(
+      `INSERT INTO levels (id, school_id, code, name, rank, updated_at)
+       VALUES (gen_random_uuid(), $1, 'A1', 'Beginner', 1, now())`,
+      [own.school],
+    );
+  });
+
+  test.afterAll(async () => {
+    const users = await usersOf(own.school);
+    await removeSchool(own.school);
+    await sql("DELETE FROM users WHERE id = ANY($1::uuid[])", [users]);
+  });
+
   test("create, reorder, archive, restore and delete levels", async ({
     page,
   }) => {
-    const suffix = String(Date.now()).slice(-6);
-    const first = `X${suffix}`;
-    const second = `Y${suffix}`;
-    await signIn(page, DEMO_LOGINS.admin);
+    const stamp = String(Date.now()).slice(-6);
+    const first = `X${stamp}`;
+    const second = `Y${stamp}`;
+    await signIn(page, own.adminEmail);
     await page.waitForURL("/admin");
     await page.goto("/admin/levels");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
@@ -39,8 +68,14 @@ test.describe("admin › skill levels", () => {
       await expect(dialog).toBeHidden();
       await expect(page.getByText(`${code} created`)).toBeVisible();
     }
-    let codes = await rowCodes(page);
-    expect(codes.indexOf(second)).toBe(codes.indexOf(first) + 1);
+    // The toast shows before the revalidated list renders, so read the rows
+    // until both are there.
+    let codes: string[] = [];
+    await expect(async () => {
+      codes = await rowCodes(page);
+      expect(codes).toContain(first);
+      expect(codes.indexOf(second)).toBe(codes.indexOf(first) + 1);
+    }).toPass();
 
     // Codes are unique, case-insensitively.
     await page.getByRole("button", { name: "New level" }).click();

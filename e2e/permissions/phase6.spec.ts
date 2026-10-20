@@ -16,7 +16,7 @@ import {
   toZonedDateTime,
   zonedTimeToUtc,
 } from "../../src/server/scheduling/time";
-import { DEMO_PASSWORD, sql } from "../helpers";
+import { DEMO_PASSWORD, removeSchool, sql } from "../helpers";
 import { pagesIn, PLACEHOLDER_ID, serverActionsIn } from "../server-actions";
 import {
   expectNoneOf,
@@ -172,29 +172,6 @@ const exportsAudited = async (schoolId: string) => {
   );
   return Number(row.count);
 };
-
-/** Removes a school of this spec: rows that block others go first. */
-async function removeSchool(schoolId: string) {
-  const tables = (
-    await sql<{ table_name: string }>(
-      `SELECT table_name FROM information_schema.columns
-       WHERE table_schema = current_schema() AND column_name = 'school_id'`,
-    )
-  ).map((r) => r.table_name);
-  // Restrict FKs between tenant tables: retry until every table is empty.
-  for (let pass = 0; pass < 10; pass++) {
-    let blocked = 0;
-    for (const table of tables) {
-      try {
-        await sql(`DELETE FROM ${table} WHERE school_id = $1`, [schoolId]);
-      } catch {
-        blocked++;
-      }
-    }
-    if (!blocked) break;
-  }
-  await sql("DELETE FROM schools WHERE id = $1", [schoolId]);
-}
 
 test.describe("phase 6 permissions", () => {
   test.describe.configure({ mode: "serial" });

@@ -1,9 +1,12 @@
 import "dotenv/config";
 
+import { randomUUID } from "node:crypto";
+
 import { expect, type Page } from "@playwright/test";
 import { Client } from "pg";
 
 import { DEMO_LOGINS, DEMO_PASSWORD } from "../prisma/seed/data";
+import { hashPassword } from "../src/server/auth/password";
 import { addDays } from "../src/server/scheduling/time";
 
 export { DEMO_LOGINS, DEMO_PASSWORD };
@@ -114,4 +117,63 @@ export async function insertOwnTerm(term: {
     }
   }
   throw new Error(`No free dates for term ${term.name}`);
+}
+
+/**
+ * A school of a spec's own with one admin (password `DEMO_PASSWORD`), for
+ * specs whose UI flow reads school-wide lists (levels, teachers) that other
+ * specs add to in parallel. Remove it with `removeSchool`, then its users.
+ */
+export async function insertOwnSchool(suffix: string, adminName: string) {
+  const school = randomUUID();
+  const adminUser = randomUUID();
+  const adminEmail = `e2e-admin-${suffix}@own-school.test`;
+  await sql(
+    `INSERT INTO schools (id, name, slug, timezone, updated_at)
+     VALUES ($1, $2, $3, 'Europe/Bratislava', now())`,
+    [school, `E2E School ${suffix}`, `e2e-school-${suffix}`],
+  );
+  await sql(
+    `INSERT INTO users (id, email, name, password_hash, updated_at)
+     VALUES ($1, $2, $3, $4, now())`,
+    [adminUser, adminEmail, adminName, await hashPassword(DEMO_PASSWORD)],
+  );
+  await sql(
+    `INSERT INTO memberships (id, school_id, user_id, role, updated_at)
+     VALUES (gen_random_uuid(), $1, $2, 'ADMIN', now())`,
+    [school, adminUser],
+  );
+  return { school, adminUser, adminEmail };
+}
+
+/** Ids of every user with a membership in `schoolId`. */
+export async function usersOf(schoolId: string): Promise<string[]> {
+  const rows = await sql<{ id: string }>(
+    "SELECT user_id AS id FROM memberships WHERE school_id = $1",
+    [schoolId],
+  );
+  return rows.map((r) => r.id);
+}
+
+/** Removes a spec's own school: rows that block others go first. */
+export async function removeSchool(schoolId: string) {
+  const tables = (
+    await sql<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.columns
+       WHERE table_schema = current_schema() AND column_name = 'school_id'`,
+    )
+  ).map((r) => r.table_name);
+  // Restrict FKs between tenant tables: retry until every table is empty.
+  for (let pass = 0; pass < 10; pass++) {
+    let blocked = 0;
+    for (const table of tables) {
+      try {
+        await sql(`DELETE FROM ${table} WHERE school_id = $1`, [schoolId]);
+      } catch {
+        blocked++;
+      }
+    }
+    if (!blocked) break;
+  }
+  await sql("DELETE FROM schools WHERE id = $1", [schoolId]);
 }
