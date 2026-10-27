@@ -5,6 +5,7 @@ import adminAbsences from "./adminAbsences.json";
 import admins from "./admins.json";
 import auth from "./auth.json";
 import availability from "./availability.json";
+import availabilityRequests from "./availabilityRequests.json";
 import bookings from "./bookings.json";
 import calendarFeed from "./calendarFeed.json";
 import common from "./common.json";
@@ -46,6 +47,7 @@ const messages = {
   admins,
   auth,
   availability,
+  availabilityRequests,
   bookings,
   calendarFeed,
   common,

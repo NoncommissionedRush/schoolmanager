@@ -28,7 +28,8 @@
     "timetable": "Open timetable",
     "review": "Review",
     "absences": "Open absences",
-    "calendar": "Open calendar settings"
+    "calendar": "Open calendar settings",
+    "availability": "Open availability"
   },
   "empty": {
     "title": "No notifications yet",
@@ -81,6 +82,13 @@
     },
     "REPLACEMENT_REVIEW_PENDING": {
       "admin": "{count, plural, one {# new replacement booking to review} other {# new replacement bookings to review}}"
+    },
+    "AVAILABILITY_REQUEST_PENDING": {
+      "admin": "{count, plural, one {{teacher} asked to change their availability} other {{teacher} sent # availability changes to review}}"
+    },
+    "AVAILABILITY_REQUEST_DECIDED": {
+      "approved": "The school approved your availability change",
+      "rejected": "The school declined your availability change"
     },
     "TIMETABLE_PUBLISHED": {
       "teacher": "The timetable for {term} is ready"

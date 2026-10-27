@@ -24,6 +24,8 @@ export const NOTIFICATION_TYPES = [
   "REPLACEMENT_ENDED",
   "REPLACEMENT_MOVED",
   "REPLACEMENT_REVIEW_PENDING",
+  "AVAILABILITY_REQUEST_PENDING",
+  "AVAILABILITY_REQUEST_DECIDED",
   "TIMETABLE_PUBLISHED",
   "TIMETABLE_CHANGED",
   "CALENDAR_FEED_REVOKED",
@@ -45,7 +47,8 @@ export type NotificationLink =
   | { kind: "timetable"; date: IsoDate }
   | { kind: "replacementReview" }
   | { kind: "absences" }
-  | { kind: "calendarFeed" };
+  | { kind: "calendarFeed" }
+  | { kind: "availability"; teacherId: string };
 
 /** ICU params; instants are ISO strings, display names are snapshots. */
 export type NotificationParams = Record<string, string | number | null>;
@@ -162,6 +165,21 @@ export type NotificationEvent =
       note: string | null;
     }
   | { type: "REPLACEMENT_REVIEW_PENDING"; adminIds: readonly string[] }
+  | {
+      /** A teacher asked to change their availability. */
+      type: "AVAILABILITY_REQUEST_PENDING";
+      adminIds: readonly string[];
+      /** `TeacherProfile.id` and display name. */
+      teacher: { id: string; name: string };
+    }
+  | {
+      /** An admin approved or rejected the teacher's request. */
+      type: "AVAILABILITY_REQUEST_DECIDED";
+      userId: string;
+      teacherId: string;
+      outcome: "approved" | "rejected";
+      note: string | null;
+    }
   | {
       type: "TIMETABLE_PUBLISHED";
       term: TermFacts;
@@ -473,6 +491,30 @@ function draftsFor(
       }
       return out;
     }
+    case "AVAILABILITY_REQUEST_PENDING": {
+      const { teacher } = event;
+      for (const id of event.adminIds) {
+        add(
+          id,
+          "admin",
+          { teacher: teacher.name, count: 1 },
+          { kind: "availability", teacherId: teacher.id },
+          `availability:${teacher.id}`,
+          `availability:${teacher.id}:pending`,
+        );
+      }
+      return out;
+    }
+    case "AVAILABILITY_REQUEST_DECIDED": {
+      add(
+        event.userId,
+        "teacher",
+        { outcome: event.outcome, note: event.note },
+        { kind: "availability", teacherId: event.teacherId },
+        `availability:${event.teacherId}`,
+      );
+      return out;
+    }
     case "TIMETABLE_PUBLISHED": {
       const { term } = event;
       for (const r of event.recipients) {
@@ -598,6 +640,7 @@ export function coalesce(
       };
     }
     case "REPLACEMENT_REVIEW_PENDING":
+    case "AVAILABILITY_REQUEST_PENDING":
       return {
         ...incoming,
         params: {

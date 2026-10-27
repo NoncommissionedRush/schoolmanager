@@ -13,6 +13,7 @@ export type NavIcon =
   | "house"
   | "calendar-days"
   | "calendar-x"
+  | "calendar-clock"
   | "user-round-cog"
   | "wand-sparkles"
   | "graduation-cap"
@@ -193,6 +194,15 @@ const NAVIGATION: Record<Role, NavItem[]> = {
       href: "/teacher/substitutions",
       icon: "user-round-cog",
       phase: 5,
+      enabled: true,
+      section: "me",
+    },
+    // Changes go to the admins for approval (CARM-86).
+    {
+      label: "myAvailability",
+      href: "/teacher/availability",
+      icon: "calendar-clock",
+      phase: 1,
       enabled: true,
       section: "me",
     },

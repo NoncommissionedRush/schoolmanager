@@ -5,7 +5,11 @@ import { type Browser, expect, type Page, test } from "@playwright/test";
 import { insertOwnTerm, signIn, sql } from "../helpers";
 import { addDays } from "../../src/server/scheduling/time";
 import { callAction, pagesIn, serverActionsIn } from "../server-actions";
-import { teacherLessonCases } from "./action-cases";
+import {
+  TEACHER_AVAILABILITY_OWN_ONLY,
+  teacherAvailabilityCases,
+  teacherLessonCases,
+} from "./action-cases";
 import {
   expectNoneOf,
   isNotFound,
@@ -378,9 +382,13 @@ async function compileLessonActions(browser: Browser) {
 
 test("the cases cover every teacher server action; students have none", () => {
   const covered = new Set(
-    teacherLessonCases({ lesson: "", teacherNote: "", student: "" }).map(
-      ({ action }) => action.join("#"),
-    ),
+    [
+      ...teacherLessonCases({ lesson: "", teacherNote: "", student: "" }),
+      // CARM-86: availability-requests.spec.ts.
+      ...teacherAvailabilityCases({ availability: "", request: "" }),
+    ]
+      .map(({ action }) => action.join("#"))
+      .concat(TEACHER_AVAILABILITY_OWN_ONLY.map((a) => a.join("#"))),
   );
   const declared = serverActionsIn("src/app/teacher");
   expect(declared.length).toBeGreaterThan(0);

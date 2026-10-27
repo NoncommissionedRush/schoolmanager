@@ -26,6 +26,11 @@ import {
   updateTeacher,
 } from "@/server/admin/teachers/service";
 import { formDataToObject, parseInput } from "@/server/admin/validation";
+import { rejectSchema } from "@/server/availability-requests/schema";
+import {
+  approveRequest,
+  rejectRequest,
+} from "@/server/availability-requests/service";
 import { needsCoverTag } from "@/server/substitutes/cache";
 
 const PATH = "/admin/teachers";
@@ -140,5 +145,54 @@ export async function saveTeacherLevelsAction(
     revalidatePath(PATH, "layout");
     revalidatePath("/admin/timetable", "layout");
     return ok(undefined, msg("teachers.levels.saved", { name: saved.name }));
+  });
+}
+
+/** A teacher's availability change request (availability-requests.md §4). */
+export async function approveAvailabilityRequestAction(
+  teacherId: string,
+  requestId: string,
+): Promise<ActionResult<{ affected: number }>> {
+  return runAdminAction(async (scope) => {
+    assertIds(teacherId, requestId);
+    const result = await approveRequest(
+      scope,
+      teacherId,
+      requestId,
+      scope.viewer.school.timezone,
+      new Date(),
+    );
+    updateTag(needsCoverTag(scope.viewer.school.id));
+    revalidatePath(PATH, "layout");
+    revalidatePath("/teacher/availability");
+    return ok(
+      result,
+      result.affected > 0
+        ? undefined
+        : msg("availabilityRequests.toast.approved"),
+    );
+  });
+}
+
+export async function rejectAvailabilityRequestAction(
+  teacherId: string,
+  requestId: string,
+  _previous: unknown,
+  formData: FormData,
+): Promise<ActionResult<undefined>> {
+  return runAdminAction(async (scope) => {
+    assertIds(teacherId, requestId);
+    const parsed = parseInput(rejectSchema, formDataToObject(formData));
+    if (!parsed.ok) return { ok: false, fieldErrors: parsed.fieldErrors };
+    await rejectRequest(
+      scope,
+      teacherId,
+      requestId,
+      parsed.data.note,
+      new Date(),
+    );
+    revalidatePath(PATH, "layout");
+    revalidatePath("/teacher/availability");
+    return ok(undefined, msg("availabilityRequests.toast.rejected"));
   });
 }

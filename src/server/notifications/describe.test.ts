@@ -79,6 +79,19 @@ describe("messageVariant", () => {
     ["TIMETABLE_CHANGED", "student", {}, "teacher"],
     ["TIMETABLE_PUBLISHED", "student", {}, "teacher"],
     ["REPLACEMENT_REVIEW_PENDING", "admin", {}, "admin"],
+    ["AVAILABILITY_REQUEST_PENDING", "admin", {}, "admin"],
+    [
+      "AVAILABILITY_REQUEST_DECIDED",
+      "teacher",
+      { outcome: "approved" },
+      "approved",
+    ],
+    [
+      "AVAILABILITY_REQUEST_DECIDED",
+      "teacher",
+      { outcome: "rejected" },
+      "rejected",
+    ],
   ] as const)("%s for %s → %s", (type, audience, params, variant) => {
     expect(messageVariant(n(type, audience, params))).toBe(variant);
   });
@@ -223,6 +236,33 @@ describe("describeNotification", () => {
     ).toBe("3 new replacement bookings to review");
   });
 
+  it("availability requests name the teacher and carry the admin's note", () => {
+    expect(
+      text(
+        n("AVAILABILITY_REQUEST_PENDING", "admin", {
+          teacher: "Tomas",
+          count: 1,
+        }),
+      ).title,
+    ).toBe("Tomas asked to change their availability");
+    expect(
+      text(
+        n("AVAILABILITY_REQUEST_PENDING", "admin", {
+          teacher: "Tomas",
+          count: 2,
+        }),
+      ).title,
+    ).toBe("Tomas sent 2 availability changes to review");
+    const decided = text(
+      n("AVAILABILITY_REQUEST_DECIDED", "teacher", {
+        outcome: "rejected",
+        note: "Exam week",
+      }),
+    );
+    expect(decided.title).toBe("The school declined your availability change");
+    expect(decided.details).toEqual(["Note from the school: Exam week"]);
+  });
+
   it("every type renders for every audience it is sent to", () => {
     const cases: [NotificationType, Audience, NotificationParams][] = [
       ["LESSON_CANCELLED", "teacher", { reason: "HOLIDAY" }],
@@ -274,6 +314,13 @@ describe("describeNotification", () => {
         { term: "Autumn", firstStartsAt: null },
       ],
       ["CALENDAR_FEED_REVOKED", "student", {}],
+      ["AVAILABILITY_REQUEST_PENDING", "admin", { teacher: "T", count: 1 }],
+      ["AVAILABILITY_REQUEST_DECIDED", "teacher", { outcome: "approved" }],
+      [
+        "AVAILABILITY_REQUEST_DECIDED",
+        "teacher",
+        { outcome: "rejected", note: "No" },
+      ],
     ];
     for (const [type, audience, params] of cases) {
       const out = text(n(type, audience, params));

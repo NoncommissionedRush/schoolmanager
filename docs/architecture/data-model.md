@@ -127,6 +127,10 @@ checks; the draft is then deleted.
 | `DATE_UNAVAILABLE`   | `date`, optional `startMinute`/`endMinute` | One-off; whole day when minutes are null |
 | `DATE_AVAILABLE`     | `date`, optional `startMinute`/`endMinute` | One-off exception to a weekly rule       |
 
+Teachers don't write these rows: they file an `AvailabilityRequest`, which an
+admin approves (applying it here) or declines. See
+`docs/design/availability-requests.md`.
+
 ## Privacy
 
 `TeacherNote` is internal: readable by teachers and admins only, never by

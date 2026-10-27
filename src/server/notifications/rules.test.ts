@@ -311,6 +311,40 @@ describe("recipientsFor", () => {
     });
   });
 
+  it("AVAILABILITY_REQUEST_PENDING: every admin, coalesced per teacher", () => {
+    const drafts = recipientsFor(
+      {
+        type: "AVAILABILITY_REQUEST_PENDING",
+        adminIds: ["a1", "a2"],
+        teacher: { id: "t1", name: "Tomas" },
+      },
+      { ...ctx, actorId: "u-t1" },
+    );
+    expect(who(drafts)).toEqual(["a1:admin", "a2:admin"]);
+    expect(drafts[0]).toMatchObject({
+      params: { teacher: "Tomas", count: 1 },
+      coalesceKey: "availability:t1:pending",
+      link: { kind: "availability", teacherId: "t1" },
+    });
+  });
+
+  it("AVAILABILITY_REQUEST_DECIDED tells the teacher, not the deciding admin", () => {
+    const event = {
+      type: "AVAILABILITY_REQUEST_DECIDED" as const,
+      userId: "u-t1",
+      teacherId: "t1",
+      outcome: "rejected" as const,
+      note: "Exam week",
+    };
+    const drafts = recipientsFor(event, { ...ctx, actorId: "a1" });
+    expect(who(drafts)).toEqual(["u-t1:teacher"]);
+    expect(drafts[0]).toMatchObject({
+      params: { outcome: "rejected", note: "Exam week" },
+      coalesceKey: null,
+    });
+    expect(recipientsFor(event, { ...ctx, actorId: "u-t1" })).toEqual([]);
+  });
+
   it("TIMETABLE_PUBLISHED links to each person's first lesson week", () => {
     const drafts = recipientsFor(
       {
@@ -480,6 +514,16 @@ describe("coalesce", () => {
       link: { kind: "replacementReview" },
     });
     expect(coalesce(pending(3), pending(1), "a1")?.params.count).toBe(4);
+  });
+
+  it("AVAILABILITY_REQUEST_PENDING adds one per request", () => {
+    const pending = (count: number): Coalescible => ({
+      type: "AVAILABILITY_REQUEST_PENDING",
+      audience: "admin",
+      params: { teacher: "Tomas", count },
+      link: { kind: "availability", teacherId: "t1" },
+    });
+    expect(coalesce(pending(1), pending(1), "a1")?.params.count).toBe(2);
   });
 
   it("LESSON_CANCELLED supersedes unread moved and substitute items", () => {
