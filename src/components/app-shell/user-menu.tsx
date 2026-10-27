@@ -1,8 +1,16 @@
 "use client";
 
-import { CalendarSync, ChevronDown, LogOut } from "lucide-react";
+import {
+  CalendarSync,
+  ChevronDown,
+  LogOut,
+  Monitor,
+  Moon,
+  Sun,
+} from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { useTransition } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -11,13 +19,23 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Role } from "@/generated/prisma/enums";
 
 import { signOutAction } from "./actions";
+
+const THEMES = [
+  { value: "light", icon: Sun },
+  { value: "dark", icon: Moon },
+  { value: "system", icon: Monitor },
+] as const;
 
 export function UserMenu({
   name,
@@ -35,6 +53,7 @@ export function UserMenu({
   const t = useTranslations("layout");
   const tn = useTranslations("nav");
   const [signingOut, startSignOut] = useTransition();
+  const { theme, setTheme } = useTheme();
 
   return (
     <DropdownMenu>
@@ -67,19 +86,39 @@ export function UserMenu({
         </div>
         <DropdownMenuSeparator />
         {role !== "ADMIN" && (
-          <DropdownMenuItem
-            render={
-              <Link
-                href={
-                  role === "TEACHER" ? "/teacher/calendar" : "/student/calendar"
-                }
-              />
-            }
-          >
-            <CalendarSync aria-hidden="true" />
-            {tn("calendar")}
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuItem
+              render={
+                <Link
+                  href={
+                    role === "TEACHER"
+                      ? "/teacher/calendar"
+                      : "/student/calendar"
+                  }
+                />
+              }
+            >
+              <CalendarSync aria-hidden="true" />
+              {tn("calendar")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
         )}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t("userMenu.theme.label")}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={theme ?? "system"}
+            onValueChange={(value) => setTheme(value)}
+          >
+            {THEMES.map(({ value, icon: Icon }) => (
+              <DropdownMenuRadioItem key={value} value={value}>
+                <Icon aria-hidden="true" />
+                {t(`userMenu.theme.${value}`)}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={signingOut}
           onClick={() => startSignOut(() => signOutAction())}

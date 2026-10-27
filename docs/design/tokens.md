@@ -69,11 +69,13 @@ Lesson blocks use a tinted surface, a 3 px left border and dark text. The
 
 All text/surface pairs above are ≥ 7:1.
 
-### 1.3 Dark mode (not in v1 — reference only)
+### 1.3 Dark mode
 
-Decided 2026-10-14: v1 ships light only. Kept for later; when implemented, use `next-themes`
-with `class` strategy and these values; status/lesson tokens swap to their
-`-300` text on `-950`/`/20` surfaces.
+Added 2026-10-27 (CARM-88; replaces the 2026-10-14 "light only" decision).
+`next-themes` with the `class` strategy; the default follows the OS setting and
+users pick Light / Dark / System in the account menu (stored per browser). The
+full token set lives in the `.dark` block of `src/app/globals.css`;
+status/lesson tokens swap to `-300`/`-200` text on `-950` surfaces.
 
 | Token                    | Value               | Token         | Value               |
 | ------------------------ | ------------------- | ------------- | ------------------- |

@@ -92,7 +92,7 @@ export function InternalSection({
     <section
       aria-labelledby={headingId}
       data-internal="true"
-      className="overflow-hidden rounded-xl border border-dashed border-internal bg-internal-surface text-slate-900"
+      className="overflow-hidden rounded-xl border border-dashed border-internal bg-internal-surface text-foreground"
     >
       <p className="flex items-center gap-2 bg-internal-band px-4 py-2 text-sm font-medium text-white">
         <Lock aria-hidden="true" className="size-4 shrink-0" />
@@ -117,7 +117,7 @@ function AboutChip({ note }: { note: NoteView }) {
         ? t("about.group", { group: note.about.name })
         : t("chip.lesson");
   return (
-    <Badge variant="outline" className="bg-white">
+    <Badge variant="outline" className="bg-background">
       {label}
     </Badge>
   );
@@ -179,7 +179,7 @@ function NoteItem({
   }
 
   return (
-    <li className="flex flex-col gap-1.5 rounded-lg border border-slate-300 bg-white p-3">
+    <li className="flex flex-col gap-1.5 rounded-lg border border-slate-300 bg-background p-3 dark:border-slate-700">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         <span className="font-medium">{note.author.name}</span>
         <time
@@ -188,11 +188,13 @@ function NoteItem({
             dateStyle: "full",
             timeStyle: "short",
           })}
-          className="text-slate-600"
+          className="text-muted-foreground"
         >
           {format.relativeTime(created, now)}
         </time>
-        {note.edited && <span className="text-slate-600">· {t("edited")}</span>}
+        {note.edited && (
+          <span className="text-muted-foreground">· {t("edited")}</span>
+        )}
         <AboutChip note={note} />
         {note.own && actions && !editing && (
           <DropdownMenu>
@@ -228,7 +230,7 @@ function NoteItem({
         )}
       </div>
       {showLessonDate && note.lessonStartsAt && (
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-muted-foreground">
           {t("fromLesson", {
             date: format.dateTime(new Date(note.lessonStartsAt), {
               weekday: "short",
@@ -252,7 +254,7 @@ function NoteItem({
             id={fieldId}
             value={draft}
             rows={3}
-            className="bg-white"
+            className="bg-background"
             disabled={pending}
             aria-invalid={error ? true : undefined}
             aria-describedby={`${fieldId}-count`}
@@ -368,7 +370,7 @@ function AddNoteForm({
         <Label htmlFor={`${ids}-about`}>{t("about.label")}</Label>
         <NativeSelect
           id={`${ids}-about`}
-          className="w-full bg-white"
+          className="w-full bg-background"
           value={about}
           disabled={pending}
           onChange={(event) => setAbout(event.target.value)}
@@ -391,7 +393,7 @@ function AddNoteForm({
         <Textarea
           id={`${ids}-body`}
           rows={3}
-          className="bg-white"
+          className="bg-background"
           value={body}
           disabled={pending}
           aria-invalid={error ? true : undefined}
@@ -479,7 +481,9 @@ export function InternalNotesCard({
         />
       )}
       {empty ? (
-        <p className="text-sm text-slate-700">{t("empty")}</p>
+        <p className="text-sm text-slate-700 dark:text-slate-300">
+          {t("empty")}
+        </p>
       ) : (
         <>
           {onLesson.length > 0 && (
@@ -579,7 +583,7 @@ export function ReadOnlyNotesCard({
   return (
     <InternalSection headingId={`${ids}-heading`} heading={heading}>
       {notes.length === 0 ? (
-        <p className="text-sm text-slate-700">{empty}</p>
+        <p className="text-sm text-slate-700 dark:text-slate-300">{empty}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {notes.map((note) => (
