@@ -296,6 +296,8 @@ actions: _Set new password_ (`outline`) + overflow menu (_Archive_).
 
 Two cards. Explains itself: lead text `availability.lead` "The timetable
 editor warns you when a lesson is planned while {firstName} is unavailable."
+Teachers propose changes to their own availability; pending ones appear in a
+_Change requests_ card above these two (availability-requests.md, CARM-86).
 
 **Card A — Weekly unavailability** (`WEEKLY_UNAVAILABLE`)
 

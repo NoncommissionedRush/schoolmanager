@@ -15,7 +15,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AvailabilityEditor } from "@/components/availability/availability-editor";
 import { listAvailability } from "@/server/admin/availability/service";
+import { listRequests } from "@/server/availability-requests/service";
 import { adminContext } from "@/server/admin/context";
 import { param } from "@/server/admin/list";
 import { lastPasswordChange } from "@/server/admin/people/service";
@@ -30,7 +32,6 @@ import {
 import { minutesToHours } from "@/server/admin/teachers/levels";
 import { formatMinutes, toIsoDate } from "@/server/scheduling/time";
 
-import { AvailabilityTab } from "./availability-client";
 import { TeacherLevelsForm } from "./levels-client";
 import { parseTeacherTab } from "./tabs";
 import {
@@ -62,15 +63,23 @@ async function TeacherPage({
   const todayIso = toIsoDate(today);
 
   const tf = await getTranslations("calendarFeed.admin");
-  const [availability, passwordSetAt, terms, school, levels, calendarLink] =
-    await Promise.all([
-      listAvailability(db, teacher.id),
-      lastPasswordChange({ db, ...scope }, teacher.userId),
-      listTerms(db),
-      db.school.findFirstOrThrow({ select: { teachingWeekdays: true } }),
-      rankedLevels(db),
-      hasActiveFeed(db, teacher.userId),
-    ]);
+  const [
+    availability,
+    passwordSetAt,
+    terms,
+    school,
+    levels,
+    calendarLink,
+    requests,
+  ] = await Promise.all([
+    listAvailability(db, teacher.id),
+    lastPasswordChange({ db, ...scope }, teacher.userId),
+    listTerms(db),
+    db.school.findFirstOrThrow({ select: { teachingWeekdays: true } }),
+    rankedLevels(db),
+    hasActiveFeed(db, teacher.userId),
+    listRequests(db, teacher.id, new Date()),
+  ]);
   const termParam = param(query, "term");
   const term =
     terms.find((candidate) => candidate.id === termParam) ??
@@ -246,7 +255,8 @@ async function TeacherPage({
         panels={{
           profile,
           availability: (
-            <AvailabilityTab
+            <AvailabilityEditor
+              mode="admin"
               teacherId={teacher.id}
               name={teacher.name}
               teachingWeekdays={school.teachingWeekdays}
@@ -255,6 +265,7 @@ async function TeacherPage({
                 ...exception,
                 past: exception.date < todayIso,
               }))}
+              requests={requests}
             />
           ),
           groups,

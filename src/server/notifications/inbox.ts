@@ -261,6 +261,11 @@ export async function resolveHrefs(
         return viewer.role === "STUDENT" ? "/student/absences" : null;
       case "calendarFeed":
         return viewer.role === "ADMIN" ? null : `${base}/calendar`;
+      case "availability":
+        if (viewer.role === "TEACHER") return "/teacher/availability";
+        return viewer.role === "ADMIN" && UUID.test(link.teacherId)
+          ? `/admin/teachers/${link.teacherId}?tab=availability`
+          : null;
     }
   });
 }

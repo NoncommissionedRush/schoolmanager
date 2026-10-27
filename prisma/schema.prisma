@@ -52,6 +52,25 @@ enum AvailabilityKind {
   DATE_AVAILABLE
 }
 
+/// What a teacher asks to change in their own availability
+/// (docs/design/availability-requests.md).
+enum AvailabilityRequestKind {
+  ADD_WEEKLY
+  /// Replaces the weekly rule `targetId`.
+  EDIT_WEEKLY
+  ADD_EXCEPTION
+  /// Removes the rule `targetId` (weekly or exception).
+  DELETE_RULE
+}
+
+enum AvailabilityRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  /// Withdrawn by the teacher before an admin decided.
+  WITHDRAWN
+}
+
 enum LessonStatus {
   SCHEDULED
   CANCELLED
@@ -108,6 +127,8 @@ enum NotificationType {
   REPLACEMENT_ENDED
   REPLACEMENT_MOVED
   REPLACEMENT_REVIEW_PENDING
+  AVAILABILITY_REQUEST_PENDING
+  AVAILABILITY_REQUEST_DECIDED
   TIMETABLE_PUBLISHED
   TIMETABLE_CHANGED
   CALENDAR_FEED_REVOKED
@@ -182,6 +203,7 @@ model School {
   teacherRatings         TeacherRating[]
   calendarFeeds          CalendarFeed[]
   revokedSessions        RevokedSession[]
+  availabilityRequests   AvailabilityRequest[]
 
   @@map("schools")
 }
@@ -212,12 +234,13 @@ model User {
   studentProfiles      StudentProfile[]
   reportedAbsences     AbsenceReport[]
   reviewedReplacements ReplacementRequest[]
+  reviewedAvailability AvailabilityRequest[]
   auditLogs            AuditLog[]
   groupTermSkips       GroupTermSkip[]
   timetableDrafts      TimetableDraft[]
   generatorRuns        GeneratorRun[]
-  notifications        Notification[]       @relation("NotificationRecipient")
-  actedNotifications   Notification[]       @relation("NotificationActor")
+  notifications        Notification[]        @relation("NotificationRecipient")
+  actedNotifications   Notification[]        @relation("NotificationActor")
   hiddenRatings        TeacherRating[]
   calendarFeeds        CalendarFeed[]
   revokedSessions      RevokedSession[]
@@ -299,16 +322,17 @@ model TeacherProfile {
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  availability      TeacherAvailability[]
-  timetableSlots    TimetableSlot[]
-  lessons           Lesson[]                   @relation("LessonTeacher")
-  substituteLessons Lesson[]                   @relation("LessonSubstitute")
-  lessonLogs        LessonLog[]                @relation("LessonLogAuthor")
-  editedLessonLogs  LessonLog[]                @relation("LessonLogEditor")
-  notes             TeacherNote[]
-  levels            TeacherLevel[]
-  draftAssignments  TimetableDraftAssignment[]
-  ratings           TeacherRating[]
+  availability         TeacherAvailability[]
+  availabilityRequests AvailabilityRequest[]
+  timetableSlots       TimetableSlot[]
+  lessons              Lesson[]                   @relation("LessonTeacher")
+  substituteLessons    Lesson[]                   @relation("LessonSubstitute")
+  lessonLogs           LessonLog[]                @relation("LessonLogAuthor")
+  editedLessonLogs     LessonLog[]                @relation("LessonLogEditor")
+  notes                TeacherNote[]
+  levels               TeacherLevel[]
+  draftAssignments     TimetableDraftAssignment[]
+  ratings              TeacherRating[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -585,6 +609,36 @@ model TeacherAvailability {
   @@unique([schoolId, id])
   @@index([schoolId, teacherId])
   @@map("teacher_availability")
+}
+
+/// A teacher's proposed change to their own availability. Nothing in
+/// `TeacherAvailability` changes until an admin approves it; approval applies
+/// `payload` through the same code as an admin edit. `payload` is the parsed
+/// form (`WeeklyInput` / `ExceptionInput`) or, for DELETE_RULE, a snapshot of
+/// the rule. `targetId` is not a foreign key: the rule may be deleted by an
+/// admin while the request waits.
+model AvailabilityRequest {
+  id           String                    @id @default(uuid()) @db.Uuid
+  schoolId     String                    @map("school_id") @db.Uuid
+  teacherId    String                    @map("teacher_id") @db.Uuid
+  kind         AvailabilityRequestKind
+  targetId     String?                   @map("target_id") @db.Uuid
+  payload      Json
+  status       AvailabilityRequestStatus @default(PENDING)
+  reviewedById String?                   @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime?                 @map("reviewed_at")
+  reviewNote   String?                   @map("review_note")
+  createdAt    DateTime                  @default(now()) @map("created_at")
+  updatedAt    DateTime                  @updatedAt @map("updated_at")
+
+  school     School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher    TeacherProfile @relation(fields: [schoolId, teacherId], references: [schoolId, id], onDelete: Cascade)
+  reviewedBy User?          @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, teacherId, status])
+  @@index([schoolId, status])
+  @@map("availability_requests")
 }
 
 /// A level the teacher may be given by the generator

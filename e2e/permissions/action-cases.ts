@@ -153,6 +153,19 @@ export function crossSchoolCases(
       action: [TEACHERS, "deleteAvailabilityAction"],
       args: [own.teacher, target.availability],
     },
+    // Availability change requests (CARM-86). The seed has none, so the
+    // request id is a guessed one; availability-requests.spec.ts aims at
+    // real requests.
+    {
+      name: "approve their teacher's availability request",
+      action: [TEACHERS, "approveAvailabilityRequestAction"],
+      args: [target.teacher, target.availability],
+    },
+    {
+      name: "decline their teacher's availability request",
+      action: [TEACHERS, "rejectAvailabilityRequestAction"],
+      args: [target.teacher, target.availability, null, form({ note: "x" })],
+    },
     // Groups & memberships
     {
       name: "edit a group",
@@ -696,3 +709,42 @@ export function teacherLessonCases(target: {
     },
   ];
 }
+
+const TEACHER_AVAILABILITY = "src/app/teacher/availability/actions.ts";
+
+/**
+ * Every teacher availability action (CARM-86), aimed at `target`'s rule and
+ * request. Inputs are valid, so a refusal can only come from who is asking
+ * or what they aim at.
+ */
+export function teacherAvailabilityCases(target: {
+  availability: string;
+  request: string;
+}): ActionCase[] {
+  return [
+    {
+      name: "ask to change another teacher's weekly time",
+      action: [TEACHER_AVAILABILITY, "requestWeeklyAction"],
+      args: [
+        target.availability,
+        null,
+        form({ weekdays: "3", from: "08:00", to: "10:00" }),
+      ],
+    },
+    {
+      name: "ask to remove another teacher's rule",
+      action: [TEACHER_AVAILABILITY, "requestDeleteAction"],
+      args: [target.availability],
+    },
+    {
+      name: "withdraw another teacher's request",
+      action: [TEACHER_AVAILABILITY, "withdrawRequestAction"],
+      args: [target.request],
+    },
+  ];
+}
+
+/** Teacher availability actions that aim at nothing of anyone else's. */
+export const TEACHER_AVAILABILITY_OWN_ONLY = [
+  [TEACHER_AVAILABILITY, "requestExceptionAction"],
+] as const;

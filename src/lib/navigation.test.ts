@@ -35,6 +35,7 @@ describe("navigationFor", () => {
       "/teacher/timetable",
       "/teacher/lessons",
       "/teacher/substitutions",
+      "/teacher/availability",
     ]);
     // The student Homework tab (CARM-36) and Absences tab (CARM-42) too.
     expect(navigationFor("STUDENT", 0).map((i) => i.href)).toEqual([

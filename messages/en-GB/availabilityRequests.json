@@ -1,0 +1,75 @@
+{
+  "page": {
+    "title": "My availability",
+    "noProfile": {
+      "title": "No teacher profile",
+      "description": "Your account isn't set up as a teacher in this school yet. Ask an admin."
+    }
+  },
+  "teacherLead": "Changes you make here are sent to the school for approval. Until an admin approves them, your timetable uses the times shown below.",
+  "send": "Send for approval",
+  "pendingBadge": "Change pending",
+  "summary": "{kind}: {detail}",
+  "requests": {
+    "title": "Change requests",
+    "teacherTitle": "Your requests",
+    "lead": "{firstName} asked for these changes. Approving one applies it right away.",
+    "empty": "No requests waiting for approval.",
+    "recent": "Decided in the last {days} days",
+    "sentOn": "Sent {date}",
+    "decidedOn": "{status, select, APPROVED {Approved} other {Declined}} {date}",
+    "reviewNote": "School's note: {note}",
+    "caption": "Availability change requests"
+  },
+  "kind": {
+    "ADD_WEEKLY": "Add weekly unavailability",
+    "EDIT_WEEKLY": "Change weekly unavailability",
+    "ADD_EXCEPTION": "Add exception",
+    "DELETE_RULE": "Remove"
+  },
+  "status": {
+    "PENDING": "Pending",
+    "APPROVED": "Approved",
+    "REJECTED": "Declined",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "detail": {
+    "weekly": "Every {weekdays} · {from}–{to}",
+    "was": "Was: {rule}",
+    "exception": "{kind, select, DATE_AVAILABLE {Available} other {Unavailable}} {range} · {time}",
+    "range": "{from} – {to}",
+    "exceptionRule": "{kind, select, DATE_AVAILABLE {Available} other {Unavailable}} on {date} · {time}",
+    "note": "Note: {note}"
+  },
+  "teacher": {
+    "weeklyEmpty": "You're available during all school hours.",
+    "deleteTitle": "Ask to remove {rule}?",
+    "deleteDescription": "An admin will review the request. Until then nothing changes.",
+    "deleteConfirm": "Send request"
+  },
+  "approve": "Approve",
+  "approveLabel": "Approve: {summary}",
+  "approveTitle": "Approve this change?",
+  "reject": "Decline",
+  "rejectLabel": "Decline: {summary}",
+  "rejectTitle": "Decline this change?",
+  "rejectDescription": "{firstName} will be told. Add a note to explain why (optional).",
+  "withdraw": "Withdraw",
+  "withdrawLabel": "Withdraw: {summary}",
+  "withdrawTitle": "Withdraw this request?",
+  "field": {
+    "note": "Note to the teacher"
+  },
+  "toast": {
+    "sent": "Sent for approval",
+    "withdrawn": "Request withdrawn",
+    "approved": "Approved and applied",
+    "rejected": "Request declined"
+  },
+  "error": {
+    "alreadyDecided": "This request has already been decided or withdrawn. Refresh the page.",
+    "alreadyPending": "There's already a pending request for this time. Withdraw it first or wait for an admin.",
+    "pastDate": "Choose today or a later date.",
+    "targetGone": "The time this request changes no longer exists. Decline the request instead."
+  }
+}

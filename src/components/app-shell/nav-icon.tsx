@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CalendarClock,
   CalendarDays,
   CalendarSync,
   CalendarX,
@@ -26,6 +27,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   house: House,
   "calendar-days": CalendarDays,
   "calendar-x": CalendarX,
+  "calendar-clock": CalendarClock,
   "user-round-cog": UserRoundCog,
   "wand-sparkles": WandSparkles,
   "graduation-cap": GraduationCap,

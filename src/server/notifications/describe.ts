@@ -99,7 +99,10 @@ export function messageVariant(n: StoredNotification): string {
     case "REPLACEMENT_MOVED":
       return "student";
     case "REPLACEMENT_REVIEW_PENDING":
+    case "AVAILABILITY_REQUEST_PENDING":
       return "admin";
+    case "AVAILABILITY_REQUEST_DECIDED":
+      return params.outcome === "rejected" ? "rejected" : "approved";
     case "TIMETABLE_PUBLISHED":
     case "TIMETABLE_CHANGED":
     case "CALENDAR_FEED_REVOKED":
@@ -121,6 +124,8 @@ const ICONS: Record<NotificationType, NotificationIcon> = {
   REPLACEMENT_ENDED: "repeat",
   REPLACEMENT_MOVED: "repeat",
   REPLACEMENT_REVIEW_PENDING: "repeat",
+  AVAILABILITY_REQUEST_PENDING: "calendar-clock",
+  AVAILABILITY_REQUEST_DECIDED: "calendar-check",
   TIMETABLE_PUBLISHED: "calendar-check",
   TIMETABLE_CHANGED: "calendar-days",
   CALENDAR_FEED_REVOKED: "link",
@@ -247,6 +252,11 @@ export function describeNotification(
         details.push(msg("detail.note", { note: s(params.note) }));
       break;
     case "REPLACEMENT_REVIEW_PENDING":
+    case "AVAILABILITY_REQUEST_PENDING":
+      break;
+    case "AVAILABILITY_REQUEST_DECIDED":
+      if (params.note)
+        details.push(msg("detail.note", { note: s(params.note) }));
       break;
     case "TIMETABLE_PUBLISHED":
       details.push(
@@ -307,5 +317,7 @@ export function openLabel(link: NotificationLink): Message {
       return msg("open.absences");
     case "calendarFeed":
       return msg("open.calendar");
+    case "availability":
+      return msg("open.availability");
   }
 }
