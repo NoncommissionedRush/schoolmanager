@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createPgAdapter } from "../src/lib/pg-adapter";
 
 import { PrismaClient } from "../src/generated/prisma/client";
 import { hashPassword } from "../src/server/auth/password";
@@ -39,7 +39,7 @@ import { seedSecondSchool } from "./seed/second-school";
 // upserted, so re-running `pnpm db:seed` converges to the same state.
 
 const db = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  adapter: createPgAdapter(process.env.DATABASE_URL),
 });
 
 const emailFor = (name: string) =>

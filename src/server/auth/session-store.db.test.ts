@@ -4,10 +4,10 @@
 
 import { randomUUID } from "node:crypto";
 
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PrismaClient } from "@/generated/prisma/client";
+import { createPgAdapter } from "@/lib/pg-adapter";
 
 import type { TokenIdentity } from "./credentials";
 import { findSessionMembership, revokeSession } from "./session-store";
@@ -23,7 +23,7 @@ describe.skipIf(!url)("session store (database)", () => {
 
   beforeAll(async () => {
     client = new PrismaClient({
-      adapter: new PrismaPg({ connectionString: url }),
+      adapter: createPgAdapter(url),
     });
     const school = await client.school.create({
       data: { name: `Sess ${suffix}`, slug: `sess-${suffix}`, timezone: "UTC" },
