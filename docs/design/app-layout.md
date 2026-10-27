@@ -336,6 +336,6 @@ States: loading (grid skeleton with 3–4 grey blocks) · empty week
 3. **Passwords**: admins set passwords in v1; _Forgot password?_ is not rendered until email exists (P5).
 4. **School week**: Mon–Sat, 07:00–21:00 by default (stored as a school setting, so other schools can change it).
 5. **Branding**: no school logos. The product is multi-school, so the UI stays neutral: the shared blue theme plus the school name and an initials tile. No per-school theming in v1.
-6. **Dark mode**: not in v1. Light theme only; the dark values in `tokens.md` stay as reference for later.
+6. **Dark mode** (updated 2026-10-27, CARM-88): supported. Follows the OS by default; Light / Dark / System switch in the account menu. Values in `tokens.md` §1.3.
 
 No open questions remain for this spec.

@@ -1,7 +1,13 @@
 {
   "userMenu": {
     "label": "Account menu for {name}",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "theme": {
+      "label": "Theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    }
   },
   "role": {
     "ADMIN": "Admin",
