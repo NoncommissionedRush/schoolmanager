@@ -4,7 +4,7 @@
 // do. Run with `pnpm notifications:purge`.
 import "dotenv/config";
 
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createPgAdapter } from "../src/lib/pg-adapter";
 
 import { PrismaClient } from "../src/generated/prisma/client";
 import {
@@ -14,7 +14,7 @@ import {
 
 async function main() {
   const db = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+    adapter: createPgAdapter(process.env.DATABASE_URL),
   });
   try {
     const { count } = await db.notification.deleteMany({

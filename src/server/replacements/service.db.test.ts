@@ -5,10 +5,10 @@
 
 import { randomUUID } from "node:crypto";
 
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PrismaClient } from "@/generated/prisma/client";
+import { createPgAdapter } from "@/lib/pg-adapter";
 import { AdminError } from "@/server/admin/result";
 import { scopeToSchool } from "@/server/db/school-scope";
 import { zonedTimeToUtc } from "@/server/scheduling";
@@ -77,7 +77,7 @@ describe.skipIf(!url)("absences & makeup credits (database)", () => {
 
   beforeAll(async () => {
     client = new PrismaClient({
-      adapter: new PrismaPg({ connectionString: url }),
+      adapter: createPgAdapter(url),
     });
     const suffix = randomUUID().slice(0, 8);
     const school = await client.school.create({

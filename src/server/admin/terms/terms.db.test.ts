@@ -5,10 +5,10 @@
 
 import { randomUUID } from "node:crypto";
 
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PrismaClient } from "@/generated/prisma/client";
+import { createPgAdapter } from "@/lib/pg-adapter";
 import { scopeToSchool } from "@/server/db/school-scope";
 import { fromIsoDate } from "@/server/scheduling";
 
@@ -75,7 +75,7 @@ describe.skipIf(!url)("terms don't overlap (database)", () => {
 
   beforeAll(async () => {
     client = new PrismaClient({
-      adapter: new PrismaPg({ connectionString: url }),
+      adapter: createPgAdapter(url),
     });
     scope = await newSchool("Terms A");
     other = await newSchool("Terms B");
