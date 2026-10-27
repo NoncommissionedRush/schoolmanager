@@ -129,6 +129,21 @@ async function tenantTables(): Promise<string[]> {
 }
 
 /**
+ * Rows as compared by `schoolFingerprint`, where the app legitimately
+ * rewrites them on reads. Loading /admin/absences or /student/absences runs
+ * `expireCredits` for the viewer's school, which stores AVAILABLE -> EXPIRED
+ * (and bumps updated_at) for credits past expiry; specs running in parallel
+ * load school B's lists at any time (CARM-82). So credits are compared by
+ * their effective state (`creditState`), without updated_at: the sweep
+ * changes nothing, every other write still does.
+ */
+const ROW_TEXT: Record<string, string> = {
+  makeup_credits: `(to_jsonb(t) - 'updated_at' || jsonb_build_object('status',
+    CASE WHEN t.status = 'AVAILABLE' AND t.expires_at <= now()
+      THEN 'EXPIRED' ELSE t.status::text END))::text`,
+};
+
+/**
  * A digest of everything a school owns: each tenant table's rows, the
  * school row and its members' user rows (passwords, archive state). Equal
  * before and after means nothing in the school changed.
@@ -139,7 +154,7 @@ export async function schoolFingerprint(
   const digest: Record<string, string> = {};
   for (const table of await tenantTables()) {
     const [row] = await sql<{ digest: string | null }>(
-      `SELECT md5(string_agg(t::text, '|' ORDER BY t.id)) AS digest
+      `SELECT md5(string_agg(${ROW_TEXT[table] ?? "t::text"}, '|' ORDER BY t.id)) AS digest
        FROM ${table} t WHERE school_id = $1`,
       [schoolId],
     );
